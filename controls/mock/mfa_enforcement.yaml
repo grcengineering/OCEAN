@@ -1,0 +1,13 @@
+id: mock.mfa_enforcement
+name: MFA Enforcement
+description: Verify MFA is enforced for all users
+threat_mitigated: Unauthorized access via credential theft
+framework_mappings:
+  - framework: SOC2
+    control: CC6.1
+collectors:
+  - module_id: mock.test
+testers:
+  - module_id: mock.safety_test
+evaluation:
+  preset: all_effective

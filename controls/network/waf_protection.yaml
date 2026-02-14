@@ -1,0 +1,31 @@
+id: network.waf_protection
+name: Web Application Firewall Protection
+description: >
+  Composite control verifying that a Web Application Firewall (WAF) is deployed,
+  correctly configured, and actively filtering malicious traffic across all
+  public-facing endpoints. Evidence is gathered from multiple sources including
+  WAF configuration APIs, traffic logs, and active bypass testing.
+threat_mitigated: >
+  Exploitation of web application vulnerabilities (OWASP Top 10) including SQL
+  injection, cross-site scripting (XSS), and remote code execution when HTTP
+  traffic reaches application servers unfiltered.
+framework_mappings:
+  - framework: soc2
+    control: CC6.6
+  - framework: iso27001
+    control: A.13.1.3
+  - framework: nist_csf
+    control: PR.DS-2
+  - framework: cis_controls
+    control: "13.10"
+evidence_requirements:
+  - waf_configuration_status
+  - waf_rule_coverage
+  - waf_bypass_test_result
+collectors:
+  - module_id: cloudflare.waf_config
+  - module_id: aws.waf_rules
+testers:
+  - module_id: waf.bypass_test
+evaluation:
+  cel: "status_counts.effective > 0 && status_counts.ineffective == 0 && evidence.size() >= 2"

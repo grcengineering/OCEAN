@@ -1,0 +1,782 @@
+openapi: "3.0.3"
+info:
+  title: OCEAN REST API
+  description: |
+    Open Control Evidence Acquisition Normalizer - REST API contract.
+
+    This API is exposed when OCEAN runs in server mode (`ocean serve`).
+    It enables external GRC platforms to query evidence, inspect control
+    effectiveness, and independently verify cryptographic provenance.
+
+    Spec reference: US7 - Export Evidence for External Systems.
+  version: "0.1.0"
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: evidence
+    description: Query and retrieve evidence records with provenance
+  - name: controls
+    description: Control definitions, current status, and historical effectiveness
+  - name: attestations
+    description: Cryptographic provenance (DSSE envelopes)
+  - name: modules
+    description: Available collector and tester modules
+  - name: health
+    description: Server health
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Evidence
+  # ---------------------------------------------------------------------------
+  /api/v1/evidence:
+    get:
+      operationId: listEvidence
+      tags: [evidence]
+      summary: Query evidence with filters
+      description: |
+        Returns evidence records matching the supplied filters.
+        Supports cursor-based pagination. Results are ordered by
+        collection time descending (newest first).
+      parameters:
+        - $ref: "#/components/parameters/ControlIdFilter"
+        - $ref: "#/components/parameters/SourceFilter"
+        - $ref: "#/components/parameters/FromTime"
+        - $ref: "#/components/parameters/ToTime"
+        - $ref: "#/components/parameters/MinConfidence"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated evidence list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedEvidenceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/evidence/{id}:
+    get:
+      operationId: getEvidence
+      tags: [evidence]
+      summary: Get a single evidence record
+      description: |
+        Returns the full evidence record including its attestation
+        reference so the consumer can independently verify provenance.
+      parameters:
+        - $ref: "#/components/parameters/EvidenceId"
+      responses:
+        "200":
+          description: Evidence record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/evidence/{id}/provenance:
+    get:
+      operationId: getEvidenceProvenance
+      tags: [attestations]
+      summary: Get full provenance chain for evidence
+      description: |
+        Returns the complete provenance chain for a piece of evidence:
+        the Collection Attestation, and if an evaluation has been run,
+        the Evaluation Attestation that references this evidence.
+      parameters:
+        - $ref: "#/components/parameters/EvidenceId"
+      responses:
+        "200":
+          description: Provenance chain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvenanceChain"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Controls
+  # ---------------------------------------------------------------------------
+  /api/v1/controls:
+    get:
+      operationId: listControls
+      tags: [controls]
+      summary: List all controls
+      responses:
+        "200":
+          description: Control list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Control"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/controls/{id}:
+    get:
+      operationId: getControl
+      tags: [controls]
+      summary: Get control definition
+      parameters:
+        - $ref: "#/components/parameters/ControlId"
+      responses:
+        "200":
+          description: Control definition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Control"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/controls/{id}/status:
+    get:
+      operationId: getControlStatus
+      tags: [controls]
+      summary: Get current effectiveness status
+      description: |
+        Returns the latest evaluated effectiveness status for a control,
+        including confidence level derived from available evidence types.
+      parameters:
+        - $ref: "#/components/parameters/ControlId"
+      responses:
+        "200":
+          description: Current control status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControlStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/controls/{id}/history:
+    get:
+      operationId: getControlHistory
+      tags: [controls]
+      summary: Get historical effectiveness data
+      description: |
+        Returns time-series effectiveness data for the control over
+        the requested window, bucketed by the requested granularity.
+        Includes uptime percentage for the period.
+      parameters:
+        - $ref: "#/components/parameters/ControlId"
+        - $ref: "#/components/parameters/FromTime"
+        - $ref: "#/components/parameters/ToTime"
+        - name: granularity
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: daily
+      responses:
+        "200":
+          description: Historical effectiveness data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControlHistory"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Attestations
+  # ---------------------------------------------------------------------------
+  /api/v1/attestations/{id}:
+    get:
+      operationId: getAttestation
+      tags: [attestations]
+      summary: Get DSSE envelope for an attestation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: DSSE envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attestation"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Modules
+  # ---------------------------------------------------------------------------
+  /api/v1/modules:
+    get:
+      operationId: listModules
+      tags: [modules]
+      summary: List available modules
+      description: |
+        Returns all loaded collector and tester modules with their
+        capabilities and (for testers) safety classification.
+      responses:
+        "200":
+          description: Module list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Module"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ---------------------------------------------------------------------------
+  # Health
+  # ---------------------------------------------------------------------------
+  /api/v1/health:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, version]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: "0.1.0"
+                  storage:
+                    type: string
+                    enum: [ok, degraded, unavailable]
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+
+  # ---------------------------------------------------------------------------
+  # Reusable parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    EvidenceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    ControlId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        description: Dotted control identifier (e.g. mfa.enforcement)
+
+    ControlIdFilter:
+      name: control_id
+      in: query
+      schema:
+        type: string
+      description: Filter by control identifier
+
+    SourceFilter:
+      name: source
+      in: query
+      schema:
+        type: string
+      description: Filter by source system (e.g. okta, aws, github)
+
+    FromTime:
+      name: from_time
+      in: query
+      schema:
+        type: string
+        format: date-time
+      description: Inclusive start of time range (RFC 3339)
+
+    ToTime:
+      name: to_time
+      in: query
+      schema:
+        type: string
+        format: date-time
+      description: Exclusive end of time range (RFC 3339)
+
+    MinConfidence:
+      name: min_confidence
+      in: query
+      schema:
+        type: string
+        enum: [passive_observation, active_verification]
+      description: |
+        Minimum confidence level. `active_verification` returns only
+        evidence produced by active tests.
+
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: Opaque cursor for pagination (from previous response)
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 50
+
+  # ---------------------------------------------------------------------------
+  # Reusable responses
+  # ---------------------------------------------------------------------------
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+
+    # -- Evidence -------------------------------------------------------------
+    Evidence:
+      type: object
+      required:
+        - id
+        - class_uid
+        - category_uid
+        - activity_id
+        - time
+        - confidence_level
+        - status_id
+        - status
+        - metadata
+        - attestation
+      properties:
+        id:
+          type: string
+          format: uuid
+        class_uid:
+          type: integer
+          description: Evidence class (e.g. 1001 = IAM Policy)
+        category_uid:
+          type: integer
+          description: Control domain (e.g. 1 = Identity & Access)
+        activity_id:
+          type: integer
+          description: "1 = Config Check, 2 = Active Test"
+        time:
+          type: string
+          format: date-time
+        confidence_level:
+          type: string
+          enum: [passive_observation, active_verification]
+        status_id:
+          type: integer
+          description: "0=Unknown, 1=Effective, 2=Ineffective, 99=Other"
+        status:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/EvidenceMetadata"
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+        test_transcript:
+          $ref: "#/components/schemas/TestTranscript"
+          description: Present only for active_verification evidence
+        attestation:
+          $ref: "#/components/schemas/AttestationRef"
+
+    EvidenceMetadata:
+      type: object
+      required: [module, source]
+      properties:
+        module:
+          type: object
+          required: [name, version, type]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            type:
+              type: string
+              enum: [collector, tester, dual]
+        source:
+          type: object
+          required: [system]
+          properties:
+            system:
+              type: string
+            api_version:
+              type: string
+            endpoint:
+              type: string
+        original_time:
+          type: string
+          format: date-time
+        processed_time:
+          type: string
+          format: date-time
+        safety_classification:
+          type: string
+          enum: [safe, observable, reversible, destructive]
+          description: Present only for tester-produced evidence
+
+    Finding:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        severity_id:
+          type: integer
+
+    TestTranscript:
+      type: object
+      properties:
+        actions_attempted:
+          type: array
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+              parameters:
+                type: object
+        observations:
+          type: array
+          items:
+            type: object
+            properties:
+              observation:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+              expected:
+                type: boolean
+        cleanup_actions:
+          type: array
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+              success:
+                type: boolean
+
+    AttestationRef:
+      type: object
+      required: [type, dsse_envelope_ref, digest]
+      properties:
+        type:
+          type: string
+          enum: [collection, evaluation]
+        dsse_envelope_ref:
+          type: string
+          description: Content-addressable reference to DSSE envelope
+        digest:
+          type: string
+          description: SHA-256 of this evidence record
+        signer:
+          type: string
+          description: Key identifier
+
+    # -- Control --------------------------------------------------------------
+    Control:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Dotted identifier (e.g. mfa.enforcement)
+        name:
+          type: string
+        description:
+          type: string
+        threat_mitigated:
+          type: string
+        framework_mappings:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: "Map of framework to control IDs (e.g. {soc2: [CC6.1]})"
+        collectors:
+          type: array
+          items:
+            type: string
+          description: Module IDs for passive evidence
+        testers:
+          type: array
+          items:
+            type: string
+          description: Module IDs for active verification
+        evaluation_logic:
+          type: object
+          properties:
+            cel:
+              type: string
+              description: CEL expression
+            preset:
+              type: string
+              description: Named YAML preset
+
+    # -- ControlStatus --------------------------------------------------------
+    ControlStatus:
+      type: object
+      required: [control_id, timestamp, status, confidence]
+      properties:
+        control_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+          description: Time of last evaluation
+        status:
+          type: string
+          enum: [effective, ineffective, unknown, partial]
+        confidence:
+          type: string
+          enum: [high, medium, low]
+          description: |
+            high = passive + active evidence agree.
+            medium = passive-only.
+            low = insufficient evidence.
+        evidence_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        evaluation_details:
+          type: string
+          description: Human-readable evaluation summary
+
+    # -- ControlHistory -------------------------------------------------------
+    ControlHistory:
+      type: object
+      required: [control_id, from_time, to_time, granularity, uptime_pct, buckets]
+      properties:
+        control_id:
+          type: string
+        from_time:
+          type: string
+          format: date-time
+        to_time:
+          type: string
+          format: date-time
+        granularity:
+          type: string
+          enum: [daily, weekly, monthly]
+        uptime_pct:
+          type: number
+          format: double
+          description: Effectiveness percentage over the period (e.g. 99.94)
+        buckets:
+          type: array
+          items:
+            type: object
+            required: [time, status]
+            properties:
+              time:
+                type: string
+                format: date-time
+                description: Start of bucket
+              status:
+                type: string
+                enum: [effective, ineffective, unknown, partial, gap]
+              confidence:
+                type: string
+                enum: [high, medium, low]
+              evidence_count:
+                type: integer
+
+    # -- Attestation (DSSE envelope) ------------------------------------------
+    Attestation:
+      type: object
+      required: [dsse_envelope]
+      properties:
+        dsse_envelope:
+          type: object
+          description: Full in-toto DSSE envelope
+          required: [payloadType, payload, signatures]
+          properties:
+            payloadType:
+              type: string
+              example: application/vnd.in-toto+json
+            payload:
+              type: string
+              description: Base64-encoded in-toto statement
+            signatures:
+              type: array
+              items:
+                type: object
+                required: [sig]
+                properties:
+                  keyid:
+                    type: string
+                  sig:
+                    type: string
+        predicate_type:
+          type: string
+          enum: [collection, evaluation]
+        subject_digests:
+          type: array
+          items:
+            type: string
+        signer_identity:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    # -- Provenance chain -----------------------------------------------------
+    ProvenanceChain:
+      type: object
+      required: [evidence_id, collection_attestation]
+      properties:
+        evidence_id:
+          type: string
+          format: uuid
+        collection_attestation:
+          $ref: "#/components/schemas/Attestation"
+        evaluation_attestation:
+          $ref: "#/components/schemas/Attestation"
+          description: Present if evidence has been evaluated
+
+    # -- Module ---------------------------------------------------------------
+    Module:
+      type: object
+      required: [id, name, version, type, source_system]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        type:
+          type: string
+          enum: [collector, tester, dual]
+        source_system:
+          type: string
+        evidence_types:
+          type: array
+          items:
+            type: string
+        safety_classification:
+          type: string
+          enum: [safe, observable, reversible, destructive]
+          description: Present only for tester or dual modules
+
+    # -- Pagination -----------------------------------------------------------
+    PaginatedEvidenceResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Evidence"
+        next_cursor:
+          type: string
+          description: Opaque cursor for next page. Absent on last page.
+        total_count:
+          type: integer
+          description: Total matching records (may be approximate for large sets)
+
+    # -- Error ----------------------------------------------------------------
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              example: invalid_parameter
+            message:
+              type: string
+              description: Human-readable description
+              example: "from_time must be before to_time"
+            details:
+              type: object
+              description: Additional context (field-level errors, etc.)
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token required for all endpoints except /health
+
+security:
+  - BearerAuth: []

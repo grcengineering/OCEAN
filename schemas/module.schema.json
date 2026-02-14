@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ocean.grc.engineering/schemas/module.schema.json",
+  "title": "OCEAN Module Metadata",
+  "description": "Schema for OCEAN module metadata — describes collectors, testers, and dual modules that produce evidence from target systems.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "type",
+    "source_system",
+    "evidence_types",
+    "credential_requirements"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique module identifier (e.g., 'okta_mfa_collector')."
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable module name."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "description": "Semantic version of the module (semver 2.0.0)."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["collector", "tester", "dual"],
+      "description": "Module type — collector (passive observation), tester (active verification), or dual (both)."
+    },
+    "source_system": {
+      "type": "string",
+      "description": "Target system this module interacts with (e.g., 'okta', 'aws', 'github')."
+    },
+    "evidence_types": {
+      "type": "array",
+      "description": "OCSF class UIDs this module can produce evidence for.",
+      "items": {
+        "type": "integer"
+      },
+      "minItems": 1
+    },
+    "credential_requirements": {
+      "type": "array",
+      "description": "Credentials this module needs to operate.",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "description", "required"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Credential name (e.g., 'OKTA_API_TOKEN')."
+          },
+          "type": {
+            "type": "string",
+            "description": "Credential type (e.g., 'api_key', 'oauth2', 'aws_role')."
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of what this credential is used for."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether this credential is required for the module to function."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rate_limits": {
+      "type": "object",
+      "description": "Rate limiting configuration for API interactions.",
+      "properties": {
+        "requests_per_second": {
+          "type": "number",
+          "description": "Maximum requests per second.",
+          "minimum": 0,
+          "exclusiveMinimum": true
+        },
+        "burst": {
+          "type": "integer",
+          "description": "Maximum burst size for rate limiter.",
+          "minimum": 1
+        },
+        "backoff_strategy": {
+          "type": "string",
+          "description": "Backoff strategy when rate limited (e.g., 'exponential', 'linear', 'fixed')."
+        }
+      },
+      "additionalProperties": false
+    },
+    "safety_classification": {
+      "type": "string",
+      "enum": ["safe", "observable", "reversible", "destructive"],
+      "description": "Safety classification of actions this module performs. Required for tester and dual modules."
+    },
+    "environment_scope": {
+      "type": "string",
+      "enum": ["production", "staging", "isolated"],
+      "description": "Environment scope where this module operates. Required for tester and dual modules."
+    },
+    "pre_flight_checks": {
+      "type": "array",
+      "description": "Checks to perform before executing tests. Required for tester and dual modules.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cleanup_procedures": {
+      "type": "array",
+      "description": "Procedures to restore state after test execution. Required for tester and dual modules.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "tester" }
+        }
+      },
+      "then": {
+        "required": [
+          "safety_classification",
+          "environment_scope",
+          "pre_flight_checks",
+          "cleanup_procedures"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "dual" }
+        }
+      },
+      "then": {
+        "required": [
+          "safety_classification",
+          "environment_scope",
+          "pre_flight_checks",
+          "cleanup_procedures"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

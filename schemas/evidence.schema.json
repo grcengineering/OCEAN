@@ -1,0 +1,299 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ocean.grc.engineering/schemas/evidence.schema.json",
+  "title": "OCEAN Evidence Record",
+  "description": "Schema for OCEAN evidence records — immutable, provenance-tracked observations and test results collected from target systems.",
+  "type": "object",
+  "required": [
+    "id",
+    "control_id",
+    "class_uid",
+    "category_uid",
+    "activity_id",
+    "time",
+    "confidence_level",
+    "metadata",
+    "observables",
+    "status_id",
+    "status",
+    "raw_data",
+    "findings",
+    "attestation"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this evidence record."
+    },
+    "control_id": {
+      "type": "string",
+      "description": "Dot-separated control identifier this evidence maps to (e.g., 'iam.mfa.enforcement')."
+    },
+    "class_uid": {
+      "type": "integer",
+      "description": "OCSF-inspired class UID identifying the evidence class."
+    },
+    "category_uid": {
+      "type": "integer",
+      "enum": [1, 2, 3, 4, 5, 6, 7, 8],
+      "description": "OCSF-inspired category UID. 1=Identity, 2=Network, 3=Cloud, 4=Application, 5=Endpoint, 6=Data, 7=Compliance, 8=Other."
+    },
+    "activity_id": {
+      "type": "integer",
+      "description": "Activity identifier within the class."
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the evidence was collected or the test was executed."
+    },
+    "confidence_level": {
+      "type": "string",
+      "enum": ["passive_observation", "active_verification"],
+      "description": "Indicates whether evidence was passively collected or actively verified via testing."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Provenance metadata about the collection or test execution.",
+      "required": ["module", "source", "processed_time"],
+      "properties": {
+        "module": {
+          "type": "object",
+          "description": "Information about the module that produced this evidence.",
+          "required": ["name", "version", "type"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Module identifier (e.g., 'okta_mfa_collector')."
+            },
+            "version": {
+              "type": "string",
+              "description": "Semantic version of the module."
+            },
+            "type": {
+              "type": "string",
+              "enum": ["collector", "tester", "dual"],
+              "description": "Module type — collector (passive), tester (active), or dual."
+            }
+          },
+          "additionalProperties": false
+        },
+        "source": {
+          "type": "object",
+          "description": "Information about the source system and API used.",
+          "required": ["system", "api_version", "endpoint"],
+          "properties": {
+            "system": {
+              "type": "string",
+              "description": "Source system name (e.g., 'okta', 'aws', 'github')."
+            },
+            "api_version": {
+              "type": "string",
+              "description": "API version used for collection (e.g., 'v1', '2024-01-01')."
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "API endpoint or resource path queried."
+            }
+          },
+          "additionalProperties": false
+        },
+        "original_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Original timestamp from the source system, if different from collection time."
+        },
+        "processed_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of when evidence was processed and normalized."
+        },
+        "safety_classification": {
+          "type": "string",
+          "enum": ["safe", "observable", "reversible", "destructive"],
+          "description": "Safety classification of the action that produced this evidence."
+        }
+      },
+      "additionalProperties": false
+    },
+    "observables": {
+      "type": "array",
+      "description": "Key-value pairs of observable entities found in the evidence.",
+      "items": {
+        "type": "object",
+        "required": ["type", "value"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Observable type (e.g., 'user', 'ip_address', 'policy_id')."
+          },
+          "value": {
+            "type": "string",
+            "description": "Observable value."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "status_id": {
+      "type": "integer",
+      "enum": [0, 1, 2, 99],
+      "description": "Numeric status code. 0=Unknown, 1=Success/Pass, 2=Failure/Fail, 99=Error."
+    },
+    "status": {
+      "type": "string",
+      "description": "Human-readable status string (e.g., 'pass', 'fail', 'error', 'unknown')."
+    },
+    "raw_data": {
+      "type": "object",
+      "description": "Original unmodified response data from the source system."
+    },
+    "findings": {
+      "type": "array",
+      "description": "Structured findings derived from the evidence.",
+      "items": {
+        "type": "object",
+        "required": ["title", "description", "severity_id"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Short title of the finding."
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of the finding."
+          },
+          "severity_id": {
+            "type": "integer",
+            "description": "Severity level. 0=Unknown, 1=Informational, 2=Low, 3=Medium, 4=High, 5=Critical."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "test_transcript": {
+      "type": "object",
+      "description": "Detailed transcript of a test execution (present only for tester-produced evidence).",
+      "properties": {
+        "actions_attempted": {
+          "type": "array",
+          "description": "Sequence of actions the tester attempted.",
+          "items": {
+            "type": "object",
+            "required": ["action", "timestamp"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "description": "Description of the action attempted."
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the action was attempted."
+              },
+              "parameters": {
+                "type": "object",
+                "description": "Parameters used for the action."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "observations": {
+          "type": "array",
+          "description": "Observations made during test execution.",
+          "items": {
+            "type": "object",
+            "required": ["observation", "timestamp", "expected"],
+            "properties": {
+              "observation": {
+                "type": "string",
+                "description": "What was observed."
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the observation was made."
+              },
+              "expected": {
+                "type": "boolean",
+                "description": "Whether this observation matched expectations."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cleanup_actions": {
+          "type": "array",
+          "description": "Cleanup actions performed after test execution.",
+          "items": {
+            "type": "object",
+            "required": ["action", "timestamp", "success"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "description": "Cleanup action performed."
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the cleanup was performed."
+              },
+              "success": {
+                "type": "boolean",
+                "description": "Whether the cleanup succeeded."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "attestation": {
+      "type": "object",
+      "description": "Cryptographic attestation linking this evidence to a DSSE envelope.",
+      "required": ["type", "dsse_envelope_ref", "digest", "signer"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["collection", "evaluation"],
+          "description": "Attestation type — whether this attests to collection or evaluation."
+        },
+        "dsse_envelope_ref": {
+          "type": "string",
+          "description": "Reference to the DSSE envelope containing the full attestation."
+        },
+        "digest": {
+          "type": "string",
+          "description": "Cryptographic digest of the evidence payload."
+        },
+        "signer": {
+          "type": "string",
+          "description": "Identity of the signer (e.g., module identity or operator)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "enrichments": {
+      "type": "array",
+      "description": "Optional enrichment data added post-collection.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Enrichment source name."
+          },
+          "data": {
+            "type": "object",
+            "description": "Enrichment data payload."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

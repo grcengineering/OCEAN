@@ -1,0 +1,41 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+ocean
+
+# Test binaries
+*.test
+*.out
+
+# Build output
+/dist/
+/build/
+
+# Go workspace
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# OCEAN runtime
+.ocean/
+*.key
+
+# Environment
+.env
+.env.*
+
+# Coverage
+coverage.out
+coverage.html

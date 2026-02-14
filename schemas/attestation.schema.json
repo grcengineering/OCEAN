@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ocean.grc.engineering/schemas/attestation.schema.json",
+  "title": "OCEAN Attestation Record",
+  "description": "Schema for OCEAN attestation records — DSSE-based cryptographic attestations providing tamper-evident provenance for evidence collection and evaluation.",
+  "type": "object",
+  "required": [
+    "dsse_envelope",
+    "predicate_type",
+    "subject_digests",
+    "signer_identity",
+    "timestamp"
+  ],
+  "properties": {
+    "dsse_envelope": {
+      "type": "object",
+      "description": "Dead Simple Signing Envelope (DSSE) containing the signed attestation.",
+      "required": ["payloadType", "payload", "signatures"],
+      "properties": {
+        "payloadType": {
+          "type": "string",
+          "const": "application/vnd.in-toto+json",
+          "description": "DSSE payload type — always in-toto JSON for OCEAN attestations."
+        },
+        "payload": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "description": "Base64-encoded in-toto statement."
+        },
+        "signatures": {
+          "type": "array",
+          "description": "One or more signatures over the payload.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["keyid", "sig"],
+            "properties": {
+              "keyid": {
+                "type": "string",
+                "description": "Identifier of the signing key."
+              },
+              "sig": {
+                "type": "string",
+                "description": "Cryptographic signature value."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "predicate_type": {
+      "type": "string",
+      "enum": ["collection", "evaluation"],
+      "description": "Type of attestation predicate — collection for evidence gathering, evaluation for control assessment."
+    },
+    "subject_digests": {
+      "type": "array",
+      "description": "Cryptographic digests of the subjects this attestation covers.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["algorithm", "value"],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "description": "Hash algorithm used (e.g., 'sha256', 'sha512')."
+          },
+          "value": {
+            "type": "string",
+            "description": "Hex-encoded digest value."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "signer_identity": {
+      "type": "string",
+      "description": "Identity of the entity that produced this attestation (e.g., module identity, operator email)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the attestation was created."
+    }
+  },
+  "additionalProperties": false
+}

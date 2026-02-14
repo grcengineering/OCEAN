@@ -1,0 +1,29 @@
+id: iam.mfa_enforcement
+name: MFA Enforcement Policy
+description: >
+  Verifies that multi-factor authentication (MFA) is enforced for all user
+  accounts, with no policy exceptions or bypass routes. This control ensures
+  that credential theft alone is insufficient to gain access to protected
+  systems.
+threat_mitigated: >
+  Unauthorized access through stolen, guessed, or brute-forced credentials
+  when MFA is not enforced, allowing attackers to compromise accounts with
+  only a single authentication factor.
+framework_mappings:
+  - framework: soc2
+    control: CC6.1
+  - framework: iso27001
+    control: A.9.4.2
+  - framework: nist_csf
+    control: PR.AC-7
+  - framework: cis_controls
+    control: "6.3"
+evidence_requirements:
+  - mfa_policy_configuration
+  - mfa_bypass_test_result
+collectors:
+  - module_id: okta.mfa_policy
+testers:
+  - module_id: okta.mfa_bypass
+evaluation:
+  cel: "status_counts.effective > 0 && status_counts.ineffective == 0 && has_active"

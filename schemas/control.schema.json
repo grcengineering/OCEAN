@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ocean.grc.engineering/schemas/control.schema.json",
+  "title": "OCEAN Control Definition",
+  "description": "Schema for OCEAN control definitions — declarative specifications of what to monitor, how to collect evidence, and how to evaluate control effectiveness.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "description",
+    "threat_mitigated",
+    "evidence_requirements",
+    "evaluation_logic"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$",
+      "description": "Dot-separated control identifier (e.g., 'iam.mfa.enforcement')."
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable control name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of what this control does and why it matters."
+    },
+    "threat_mitigated": {
+      "type": "string",
+      "description": "Description of the threat or risk this control mitigates."
+    },
+    "framework_mappings": {
+      "type": "array",
+      "description": "Mappings to external compliance frameworks (SOC 2, ISO 27001, etc.).",
+      "items": {
+        "type": "object",
+        "required": ["framework_id", "control_ref"],
+        "properties": {
+          "framework_id": {
+            "type": "string",
+            "description": "Framework identifier (e.g., 'soc2', 'iso27001', 'nist-csf')."
+          },
+          "control_ref": {
+            "type": "string",
+            "description": "Control reference within the framework (e.g., 'CC6.1', 'A.9.4.2')."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evidence_requirements": {
+      "type": "array",
+      "description": "List of evidence types required to evaluate this control.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "collectors": {
+      "type": "array",
+      "description": "Collector modules configured for this control.",
+      "items": {
+        "type": "object",
+        "required": ["module_id"],
+        "properties": {
+          "module_id": {
+            "type": "string",
+            "description": "Reference to a registered collector module."
+          }
+        },
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "testers": {
+      "type": "array",
+      "description": "Tester modules configured for this control.",
+      "items": {
+        "type": "object",
+        "required": ["module_id"],
+        "properties": {
+          "module_id": {
+            "type": "string",
+            "description": "Reference to a registered tester module."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evaluation_logic": {
+      "type": "object",
+      "description": "Logic used to evaluate control effectiveness from evidence.",
+      "oneOf": [
+        {
+          "required": ["cel_expression"],
+          "properties": {
+            "cel_expression": {
+              "type": "string",
+              "description": "CEL (Common Expression Language) expression for custom evaluation logic."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["preset"],
+          "properties": {
+            "preset": {
+              "type": "string",
+              "description": "Named preset evaluation strategy (e.g., 'all_pass', 'any_pass', 'threshold')."
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "evaluation_expression_hash": {
+      "type": "string",
+      "description": "Hash of the evaluation expression for integrity verification."
+    }
+  },
+  "anyOf": [
+    {
+      "properties": {
+        "collectors": {
+          "minItems": 1
+        }
+      },
+      "required": ["collectors"]
+    },
+    {
+      "properties": {
+        "testers": {
+          "minItems": 1
+        }
+      },
+      "required": ["testers"]
+    }
+  ],
+  "additionalProperties": false
+}
