@@ -14,10 +14,31 @@ OCEAN uses a Metasploit-style module system. Each module:
 ```
 modules/
   collectors/
-    mock/          # Reference implementation
-    okta/          # Real-world example (future)
+    aws/             AWS IAM collector
+    github/          GitHub branch protection collector
+    mock/            Reference collector implementation
+    okta/            Okta MFA policy collector
   testers/
-    mock/          # Reference implementation
+    aws/             S3 public access tester
+    github/          Secret push protection tester
+    mock/            Reference tester implementation
+    okta/            MFA bypass tester
+```
+
+## Module Interface
+
+All modules implement the base `Module` interface:
+
+```go
+// From internal/module/module.go
+type Module interface {
+    ID() string                              // Unique identifier (e.g., "okta.mfa_policy")
+    Name() string                            // Human-readable name
+    Version() string                         // Semantic version
+    SourceSystem() string                    // External system name (e.g., "okta")
+    EvidenceTypes() []int                    // OCSF class UIDs produced
+    CredentialRequirements() []CredentialReq // Required credentials
+}
 ```
 
 ## Collector Interface
@@ -32,23 +53,9 @@ type Collector interface {
 }
 ```
 
-The base `Module` interface that all modules must implement:
-
-```go
-// From internal/module/module.go
-type Module interface {
-    ID() string                              // Unique identifier (e.g., "okta.mfa_policy")
-    Name() string                            // Human-readable name
-    Version() string                         // Semantic version
-    SourceSystem() string                    // External system name (e.g., "okta")
-    EvidenceTypes() []int                    // OCSF class UIDs produced
-    CredentialRequirements() []CredentialReq // Required credentials
-}
-```
-
 ### Creating a Collector
 
-Here is a walkthrough using the mock collector as reference:
+Here is a walkthrough based on the real Okta MFA policy collector:
 
 **Step 1: Define the struct and implement the Module interface.**
 
@@ -109,12 +116,12 @@ func (c *MFAPolicyCollector) Collect(ctx context.Context, config map[string]stri
         ConfidenceLevel: evidence.PassiveObservation,
         Metadata: evidence.Metadata{
             Module: evidence.ModuleInfo{
-                Name:    "okta.mfa_policy",
-                Version: "0.1.0",
+                Name:    c.ID(),
+                Version: c.Version(),
                 Type:    "collector",
             },
             Source: evidence.SourceInfo{
-                System:     "okta",
+                System:     c.SourceSystem(),
                 APIVersion: "v1",
                 Endpoint:   fmt.Sprintf("https://%s/api/v1/policies", domain),
             },
@@ -123,16 +130,15 @@ func (c *MFAPolicyCollector) Collect(ctx context.Context, config map[string]stri
         StatusID: evidence.StatusEffective,
         Status:   "MFA enforcement is required for all users",
         RawData:  rawJSON,
-        // ... populate remaining fields
     }
 
     return []evidence.Evidence{ev}, nil
 }
 ```
 
-**Step 3: Register the module.**
+**Step 3: Create a registration function.**
 
-Create a `register.go` file that registers the collector with the module registry:
+Every module package must export a `RegisterAll` function:
 
 ```go
 package okta
@@ -144,9 +150,19 @@ func RegisterAll(reg *module.Registry) {
 }
 ```
 
-**Step 4: Wire it into the application.**
+**Step 4: Wire it into the CLI.**
 
-Add the registration call in `cmd/ocean/main.go` where modules are loaded.
+Add the import and registration call in the CLI files (`internal/cli/collect.go`, `internal/cli/modules.go`, etc.):
+
+```go
+import (
+    oktacollector "github.com/grcengineering/ocean/modules/collectors/okta"
+)
+
+// In the command's RunE function:
+reg := module.NewRegistry()
+oktacollector.RegisterAll(reg)
+```
 
 ## Tester Interface
 
@@ -175,12 +191,6 @@ Every tester MUST declare a safety classification that determines when and where
 | `reversible` | Makes changes that can be rolled back | Staging, Isolated | Explicit approval |
 | `destructive` | Irreversible changes | Isolated only | Warning + approval |
 
-```go
-func (t *MyTester) SafetyClass() module.SafetyClassification {
-    return module.SafetyClassObservable
-}
-```
-
 ### Environment Scopes
 
 Testers declare their intended operating environment:
@@ -189,57 +199,128 @@ Testers declare their intended operating environment:
 - `staging` -- Pre-production environments
 - `isolated` -- Fully isolated test environments
 
-### Pre-Flight Checks and Cleanup
+### Creating a Tester
 
-Testers must declare what they need before running and how they clean up after:
+Based on the real Okta MFA bypass tester:
 
 ```go
-func (t *MyTester) PreFlightChecks() []string {
-    return []string{
-        "verify target system is reachable",
-        "confirm test user account exists",
+package okta
+
+import "github.com/grcengineering/ocean/internal/module"
+
+type MFABypassTester struct{}
+
+var _ module.Tester = (*MFABypassTester)(nil)
+
+func (t *MFABypassTester) ID() string            { return "okta.mfa_bypass" }
+func (t *MFABypassTester) Name() string          { return "Okta MFA Bypass Tester" }
+func (t *MFABypassTester) Version() string       { return "0.1.0" }
+func (t *MFABypassTester) SourceSystem() string  { return "okta" }
+func (t *MFABypassTester) EvidenceTypes() []int  { return []int{1001} }
+
+func (t *MFABypassTester) CredentialRequirements() []module.CredentialReq {
+    return []module.CredentialReq{
+        {Name: "OKTA_DOMAIN", Type: "string", Required: true},
+        {Name: "OKTA_API_TOKEN", Type: "api_key", Required: true},
+        {Name: "OKTA_TEST_USER", Type: "string", Required: true},
+        {Name: "OKTA_TEST_PASSWORD", Type: "string", Required: true},
     }
 }
 
-func (t *MyTester) CleanupProcedures() []string {
+func (t *MFABypassTester) SafetyClass() module.SafetyClassification {
+    return module.SafetyClassSafe
+}
+
+func (t *MFABypassTester) EnvironmentScope() module.EnvironmentScope {
+    return module.ScopeProduction
+}
+
+func (t *MFABypassTester) PreFlightChecks() []string {
     return []string{
-        "reset test user password",
-        "remove temporary MFA enrollment",
+        "verify Okta domain is reachable",
+        "verify test user credentials are valid",
     }
+}
+
+func (t *MFABypassTester) CleanupProcedures() []string {
+    return nil // safe test, no cleanup needed
 }
 ```
 
 ### Test Transcripts
 
-Active tests should record their actions using the transcript recorder:
+Active tests record their actions using the transcript recorder for full auditability:
 
 ```go
-func (t *MyTester) Test(ctx context.Context, config map[string]string) ([]evidence.Evidence, error) {
+func (t *MFABypassTester) Test(ctx context.Context, config map[string]string) ([]evidence.Evidence, error) {
     recorder := evidence.NewTranscriptRecorder()
 
     // Record actions taken.
     recorder.RecordAction("submit login without MFA", map[string]string{
-        "target": "auth.example.com",
-        "user":   "test-user@example.com",
+        "target": config["OKTA_DOMAIN"],
+        "user":   config["OKTA_TEST_USER"],
     })
+
+    // Make the actual API call...
+    // ... your test logic here ...
 
     // Record observations.
     recorder.RecordObservation("MFA challenge presented", true)
-    recorder.RecordObservation("login blocked without MFA", true)
+    recorder.RecordObservation("login blocked without MFA token", true)
 
-    // Record cleanup.
+    // Record cleanup (if any).
     recorder.RecordCleanup("remove test artifacts", true)
 
     transcript := recorder.Finalize()
 
     ev := evidence.Evidence{
-        // ... standard fields ...
+        ID:              uuid.New(),
+        ControlID:       "iam.mfa_enforcement",
+        ClassUID:        1001,
+        CategoryUID:     1,
+        ActivityID:      2, // Active Test
+        Time:            time.Now().UTC(),
         ConfidenceLevel: evidence.ActiveVerification,
         TestTranscript:  transcript,
+        Metadata: evidence.Metadata{
+            Module: evidence.ModuleInfo{
+                Name:    t.ID(),
+                Version: t.Version(),
+                Type:    "tester",
+            },
+            SafetyClassification: string(t.SafetyClass()),
+        },
+        StatusID: evidence.StatusEffective,
+        Status:   "MFA bypass attempt was correctly blocked",
     }
 
     return []evidence.Evidence{ev}, nil
 }
+```
+
+### Registering Testers
+
+Same pattern as collectors:
+
+```go
+package okta
+
+import "github.com/grcengineering/ocean/internal/module"
+
+func RegisterAll(reg *module.Registry) {
+    reg.RegisterTester(&MFABypassTester{})
+}
+```
+
+Wire into `internal/cli/test.go` and `internal/cli/modules.go`:
+
+```go
+import (
+    oktatester "github.com/grcengineering/ocean/modules/testers/okta"
+)
+
+// In RunE:
+oktatester.RegisterAll(reg)
 ```
 
 ## Evidence Schema
@@ -258,6 +339,23 @@ Every evidence record must populate these core fields:
 | `StatusID` | `StatusID` | 0=unknown, 1=effective, 2=ineffective, 99=other |
 | `Status` | `string` | Human-readable status description |
 | `RawData` | `json.RawMessage` | Original API response or test output |
+| `Findings` | `[]Finding` | Structured findings with title, description, severity |
+| `Observables` | `[]Observable` | Entities observed (users, resources, etc.) |
+
+## Module Validation
+
+OCEAN validates modules at runtime. Run validation with:
+
+```bash
+./ocean modules validate <module-id>
+```
+
+Validation checks:
+- ID is non-empty and follows `<source>.<name>` convention
+- Name, Version, SourceSystem are populated
+- EvidenceTypes list is non-empty
+- For testers: SafetyClass and EnvironmentScope are valid values
+- For testers: CanRunInEnvironment matrix is respected
 
 ## Testing Modules
 
@@ -269,25 +367,31 @@ Write tests that verify:
 4. Status mapping is correct for different scenarios
 5. Error handling works for API failures
 
-Example test structure:
+Use `net/http/httptest` to mock external APIs:
 
 ```go
-func TestMyCollector_ImplementsInterface(t *testing.T) {
-    var _ module.Collector = (*MyCollector)(nil)
-}
+func TestMFAPolicyCollector_Collect(t *testing.T) {
+    // Create a mock Okta API server.
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode([]map[string]interface{}{
+            {"id": "policy1", "status": "ACTIVE", "type": "MFA_ENROLL"},
+        })
+    }))
+    defer srv.Close()
 
-func TestMyCollector_Collect(t *testing.T) {
-    c := &MyCollector{}
+    c := &MFAPolicyCollector{}
     evs, err := c.Collect(context.Background(), map[string]string{
-        "API_TOKEN": "test-token",
+        "OKTA_DOMAIN":    strings.TrimPrefix(srv.URL, "http://"),
+        "OKTA_API_TOKEN": "test-token",
     })
     require.NoError(t, err)
     require.Len(t, evs, 1)
 
     ev := evs[0]
-    assert.Equal(t, "my.control_id", ev.ControlID)
-    assert.Equal(t, evidence.StatusEffective, ev.StatusID)
+    assert.Equal(t, "okta.mfa_policy", ev.Metadata.Module.Name)
     assert.Equal(t, evidence.PassiveObservation, ev.ConfidenceLevel)
+    assert.Equal(t, evidence.StatusEffective, ev.StatusID)
 }
 ```
 
@@ -299,16 +403,25 @@ Follow this convention for new modules:
 modules/
   collectors/
     <source_system>/
-      collector.go         # Main collector implementation
-      register.go          # Registry registration function
-      collector_test.go    # Tests
+      collector.go         # Base HTTP client and RegisterAll function
+      <feature>.go         # Feature-specific collector (e.g., mfa.go, iam.go)
+      collector_test.go    # Tests for base client
+      <feature>_test.go    # Tests for feature collector
   testers/
     <source_system>/
-      tester.go            # Main tester implementation
-      register.go          # Registry registration function
-      tester_test.go       # Tests
+      <feature>.go         # Feature-specific tester (e.g., mfa_bypass.go)
+      register.go          # RegisterAll function
+      <feature>_test.go    # Tests
 ```
 
 ## Reference Implementations
 
-The mock modules in `modules/collectors/mock/` and `modules/testers/mock/` serve as complete reference implementations. Study these before creating your own modules.
+Study these existing modules before creating your own:
+
+| Module | Files | Good Example Of |
+|--------|-------|-----------------|
+| `modules/collectors/mock/` | Simple, self-contained | Basic collector pattern |
+| `modules/testers/mock/` | Simple, self-contained | Basic tester with transcript |
+| `modules/collectors/okta/` | HTTP client + rate limiting | Real API integration |
+| `modules/collectors/aws/` | SigV4 signing, pagination | Complex auth, XML parsing |
+| `modules/testers/github/` | Observable safety class | Non-safe tester pattern |

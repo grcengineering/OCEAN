@@ -4,6 +4,8 @@ The OCEAN REST API is exposed when running in server mode (`ocean serve`). It en
 
 Full OpenAPI specification: [contracts/api.yaml](../.specify/specs/ocean-core/contracts/api.yaml)
 
+10 endpoints across evidence, controls, attestations, modules, and health.
+
 ## Base URL
 
 ```

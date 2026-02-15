@@ -10,7 +10,7 @@ The conversation that started it all: [LinkedIn post](https://www.linkedin.com/p
 
 ## What OCEAN Does
 
-1. **Collect** evidence from diverse systems (Okta, AWS, GitHub, Cloudflare, etc.) via pluggable collector modules
+1. **Collect** evidence from diverse systems (Okta, AWS, GitHub, etc.) via pluggable collector modules
 2. **Test** control effectiveness through active verification with safety-classified tester modules
 3. **Normalize** evidence to a consistent OCSF-inspired schema with full provenance
 4. **Evaluate** control effectiveness using flexible CEL expressions or built-in presets
@@ -26,17 +26,23 @@ git clone https://github.com/grcengineering/ocean.git
 cd ocean
 make build
 
+# Generate signing keys for cryptographic attestation
+./ocean keys generate
+
 # List available modules
 ./ocean modules list
 
-# Collect evidence using the mock module
-./ocean collect --module mock.test --control mock.mfa_enforcement
+# Collect evidence using the mock collector
+./ocean collect mock.test
 
 # Run an active control test
-./ocean test --module mock.safety_test --control mock.mfa_enforcement
+./ocean test mock.safety_test --target staging
 
-# Evaluate control effectiveness
-./ocean evaluate --control mock.mfa_enforcement
+# Dual-mode verification (collect + test + evaluate)
+./ocean verify mock.mfa_enforcement
+
+# Verify cryptographic provenance
+./ocean verify-provenance run --evidence <evidence-id>
 
 # Start the API server
 ./ocean serve --port 8080 --auth-token "your-token"
@@ -44,33 +50,58 @@ make build
 
 See [docs/quickstart.md](docs/quickstart.md) for a detailed walkthrough.
 
+## Modules
+
+OCEAN ships with 9 modules across 4 source systems:
+
+| Module | Type | Source | Safety Class | Description |
+|--------|------|--------|-------------|-------------|
+| `aws.iam` | collector | AWS | - | IAM user enumeration, MFA status, access key age |
+| `aws.s3_public_access` | tester | AWS | safe | Probes S3 buckets for public access |
+| `github.branch_protection` | collector | GitHub | - | Branch protection rule collection |
+| `github.secret_push` | tester | GitHub | observable | Tests secret push protection |
+| `mock.test` | collector | mock | - | Simulated MFA policy collection |
+| `mock.network` | collector | mock | - | Simulated network/WAF evidence |
+| `mock.safety_test` | tester | mock | safe | Simulated MFA bypass attempt |
+| `okta.mfa_policy` | collector | Okta | - | MFA enrollment policy collection |
+| `okta.mfa_bypass` | tester | Okta | safe | Attempts authentication without MFA |
+
 ## Architecture
 
 ```
 ocean
   cmd/ocean/           CLI entrypoint
   internal/
-    api/               REST API server (10 endpoints)
-    attestation/       Cryptographic provenance (in-toto DSSE)
+    api/               REST API server (11 endpoints)
+    attestation/       Cryptographic provenance (in-toto DSSE, Ed25519)
     cli/               Cobra command definitions
-    config/            Configuration management
-    control/           Control definitions, evaluation, framework mappings
+    config/            Configuration management (YAML + env vars)
+    control/           Control definitions, CEL evaluation, framework mappings
     eval/              CEL expression engine with presets and versioning
     evidence/          Core evidence schema (OCSF-inspired)
-    module/            Module interfaces, registry, safety classification
+    module/            Module interfaces, registry, executor, safety classification
     scheduler/         Cron-based continuous monitoring
-    secrets/           Credential resolution (env-based)
+    secrets/           Credential providers (env, Vault, AWS Secrets Manager)
     storage/           Persistence interface + SQLite implementation
   modules/
-    collectors/mock/   Reference collector implementation
-    testers/mock/      Reference tester implementation
+    collectors/
+      aws/             AWS IAM collector (SigV4 signing, stdlib only)
+      github/          GitHub branch protection collector (REST v3)
+      mock/            Reference collector implementation
+      okta/            Okta MFA policy collector (rate-limited)
+    testers/
+      aws/             S3 public access tester
+      github/          Secret push protection tester
+      mock/            Reference tester implementation
+      okta/            MFA bypass tester
   controls/
     iam/               IAM control definitions (MFA enforcement)
     network/           Network control definitions (WAF protection)
-    frameworks/        Framework mappings (SOC 2, ISO 27001, etc.)
+    frameworks/        Framework mappings (SOC 2, ISO 27001, NIST CSF, CIS)
   pkg/
     ocean/             Public Go library API for embedding
     schema/            Stable public types for library consumers
+  schemas/             JSON Schema definitions
   docs/                Documentation
 ```
 
@@ -78,7 +109,7 @@ ocean
 
 ### Evidence-First Design
 
-Every piece of data in OCEAN is an **evidence record** with cryptographic provenance. Evidence is immutable, content-addressed, and signed using in-toto DSSE envelopes.
+Every piece of data in OCEAN is an **evidence record** with cryptographic provenance. Evidence is immutable, content-addressed, and signed using in-toto DSSE envelopes with Ed25519 keys.
 
 ### Confidence Levels
 
@@ -125,6 +156,8 @@ framework_mappings:
     control: PR.AC-7
 ```
 
+Supported frameworks: SOC 2, ISO 27001, NIST CSF, CIS Controls.
+
 ## Building
 
 ```bash
@@ -134,12 +167,36 @@ make build
 # Run tests
 make test
 
-# Cross-compile for all platforms
-make cross-compile
+# Stripped release binary
+make release
+
+# Run linter
+make lint
 
 # Docker build
 docker build -t ocean .
 ```
+
+## Configuration
+
+OCEAN uses a YAML config file at `~/.ocean/config.yaml` with sensible defaults:
+
+```yaml
+storage_path: ~/.ocean/ocean.db
+log_level: info
+key_path: ~/.ocean/keys
+controls_dir: controls
+output_format: json
+server:
+  port: 8080
+  auth_token: ""  # Set via --auth-token or OCEAN_AUTH_TOKEN env var
+```
+
+Environment variables override config file values:
+- `OCEAN_STORAGE_PATH` -- SQLite database path
+- `OCEAN_LOG_LEVEL` -- Logging verbosity
+- `OCEAN_KEY_PATH` -- Directory for signing keys
+- `OCEAN_AUTH_TOKEN` -- Bearer token for API authentication
 
 ## Documentation
 
@@ -149,11 +206,12 @@ docker build -t ocean .
 
 ## Technology Stack
 
-- **Language**: Go (single binary, zero dependencies)
-- **Storage**: SQLite (default), PostgreSQL (enterprise)
+- **Language**: Go (single binary, zero runtime dependencies)
+- **Storage**: SQLite (via modernc.org/sqlite, pure Go)
 - **Evaluation**: CEL (Common Expression Language)
-- **Attestation**: in-toto DSSE (Dead Simple Signing Envelope)
+- **Attestation**: in-toto DSSE (Dead Simple Signing Envelope) with Ed25519
 - **Schema**: OCSF-inspired hierarchical taxonomy
+- **CLI**: Cobra + zerolog
 
 ## Contributing
 
