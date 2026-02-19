@@ -1,0 +1,14 @@
+[
+  {
+    "id": "pol001",
+    "status": "ACTIVE",
+    "name": "MFA Policy",
+    "type": "MFA_ENROLL",
+    "settings": {
+      "factors": {
+        "okta_otp": {"enroll": {"self": "REQUIRED"}},
+        "google_otp": {"enroll": {"self": "OPTIONAL"}}
+      }
+    }
+  }
+]

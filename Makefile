@@ -6,13 +6,38 @@ LDFLAGS=-ldflags "-s -w -X github.com/grcengineering/ocean/internal/cli.version=
 # Cross-compile target platforms
 PLATFORMS=linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: build test lint run install clean cross-compile release coverage docker
+# Test configuration
+COVERAGE_THRESHOLD ?= 55
+
+.PHONY: build test test-unit test-integration test-e2e test-all test-json \
+        lint run install clean cross-compile release coverage coverage-check \
+        coverage-report docker
 
 build:
 	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/ocean
 
 test:
 	go test -race -coverprofile=coverage.out ./...
+
+# Unit tests only (fast, no external deps, no build tags)
+test-unit:
+	go test -race -count=1 -coverprofile=coverage.out ./...
+
+# Integration tests (require //go:build integration tag)
+test-integration:
+	go test -race -count=1 -tags=integration ./...
+
+# End-to-end tests (require //go:build e2e tag)
+test-e2e:
+	go test -race -count=1 -tags=e2e ./...
+
+# All test tiers
+test-all:
+	go test -race -count=1 -tags="integration e2e" -coverprofile=coverage.out ./...
+
+# Machine-parseable JSON output (for CI)
+test-json:
+	go test -race -count=1 -json ./... 2>&1
 
 lint:
 	golangci-lint run ./...
@@ -47,6 +72,14 @@ release:
 
 coverage: test
 	go tool cover -html=coverage.out -o coverage.html
+
+# Coverage with threshold enforcement
+coverage-check: test-unit
+	@go tool cover -func=coverage.out | tail -1 | awk '{ gsub(/%/, "", $$3); if ($$3+0 < $(COVERAGE_THRESHOLD)) { print "FAIL: coverage " $$3 "% below threshold $(COVERAGE_THRESHOLD)%"; exit 1 } else { print "OK: coverage " $$3 "% meets threshold $(COVERAGE_THRESHOLD)%" } }'
+
+# Per-package coverage breakdown
+coverage-report: test-unit
+	@go tool cover -func=coverage.out
 
 # Build Docker image
 docker:

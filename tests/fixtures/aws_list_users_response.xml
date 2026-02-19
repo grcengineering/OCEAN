@@ -1,0 +1,19 @@
+<ListUsersResponse xmlns="https://iam.amazonaws.com/doc/2010-05-08/">
+  <ListUsersResult>
+    <Users>
+      <member>
+        <UserName>admin</UserName>
+        <UserId>AIDAEXAMPLE1</UserId>
+        <Arn>arn:aws:iam::123456789012:user/admin</Arn>
+        <CreateDate>2024-01-01T00:00:00Z</CreateDate>
+      </member>
+      <member>
+        <UserName>developer</UserName>
+        <UserId>AIDAEXAMPLE2</UserId>
+        <Arn>arn:aws:iam::123456789012:user/developer</Arn>
+        <CreateDate>2024-06-01T00:00:00Z</CreateDate>
+      </member>
+    </Users>
+    <IsTruncated>false</IsTruncated>
+  </ListUsersResult>
+</ListUsersResponse>

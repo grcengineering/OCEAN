@@ -1,0 +1,8 @@
+id: "test.mfa_enforcement"
+name: "MFA Enforcement Test Control"
+description: "Test control for verifying MFA enforcement"
+threat_mitigated: "Unauthorized access via compromised credentials"
+collectors:
+  - "mock.test"
+evaluation_logic:
+  preset: "any_effective"
