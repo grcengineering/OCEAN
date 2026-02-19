@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/grcengineering/ocean/internal/control"
 	"github.com/grcengineering/ocean/internal/evidence"
+	"github.com/grcengineering/ocean/internal/scheduler"
 	"github.com/grcengineering/ocean/internal/storage"
 )
 
@@ -474,6 +476,223 @@ func TestPruneOldEvidence_MultipleOldRecords(t *testing.T) {
 	results, err := s.QueryEvidence(ctx, storage.EvidenceQuery{ControlID: "ctrl"})
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
+}
+
+// --- Schedule CRUD tests ---
+
+func testSchedule(id string) scheduler.Schedule {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	lastRun := now.Add(-1 * time.Hour)
+	nextRun := now.Add(1 * time.Hour)
+	return scheduler.Schedule{
+		ID:               id,
+		ControlID:        "ctrl-" + id,
+		CronExpr:         "*/5 * * * *",
+		Modules:          []string{"mock.test", "mock.network"},
+		MaxSafetyLevel:   "safe",
+		EnvironmentScope: "production",
+		Enabled:          true,
+		CatchUp:          false,
+		LastRun:          &lastRun,
+		NextRun:          &nextRun,
+		CreatedAt:        now,
+	}
+}
+
+func TestStoreSchedule_RoundTrip(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	sched := testSchedule("sched-001")
+
+	err := s.StoreSchedule(ctx, sched)
+	require.NoError(t, err)
+
+	got, err := s.GetSchedule(ctx, "sched-001")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	assert.Equal(t, sched.ID, got.ID)
+	assert.Equal(t, sched.ControlID, got.ControlID)
+	assert.Equal(t, sched.CronExpr, got.CronExpr)
+	assert.Equal(t, sched.Modules, got.Modules)
+	assert.Equal(t, sched.MaxSafetyLevel, got.MaxSafetyLevel)
+	assert.Equal(t, sched.EnvironmentScope, got.EnvironmentScope)
+	assert.Equal(t, sched.Enabled, got.Enabled)
+	assert.Equal(t, sched.CatchUp, got.CatchUp)
+	assert.NotNil(t, got.LastRun)
+	assert.NotNil(t, got.NextRun)
+	assert.Equal(t, sched.LastRun.Format(time.RFC3339Nano), got.LastRun.Format(time.RFC3339Nano))
+	assert.Equal(t, sched.NextRun.Format(time.RFC3339Nano), got.NextRun.Format(time.RFC3339Nano))
+	assert.Equal(t, sched.CreatedAt.Format(time.RFC3339Nano), got.CreatedAt.Format(time.RFC3339Nano))
+	// UpdatedAt is set by StoreSchedule to time.Now(), so just verify it's non-zero.
+	assert.False(t, got.UpdatedAt.IsZero())
+}
+
+func TestListSchedules_Empty(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	results, err := s.ListSchedules(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestListSchedules_Multiple(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	for i, id := range []string{"sched-a", "sched-b", "sched-c"} {
+		sched := testSchedule(id)
+		// Stagger created_at so ordering is deterministic.
+		sched.CreatedAt = now.Add(time.Duration(i) * time.Second)
+		require.NoError(t, s.StoreSchedule(ctx, sched))
+	}
+
+	results, err := s.ListSchedules(ctx)
+	require.NoError(t, err)
+	require.Len(t, results, 3)
+
+	// ListSchedules orders by created_at ASC.
+	assert.Equal(t, "sched-a", results[0].ID)
+	assert.Equal(t, "sched-b", results[1].ID)
+	assert.Equal(t, "sched-c", results[2].ID)
+}
+
+func TestDeleteSchedule_Success(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	sched := testSchedule("sched-del")
+	require.NoError(t, s.StoreSchedule(ctx, sched))
+
+	err := s.DeleteSchedule(ctx, "sched-del")
+	require.NoError(t, err)
+
+	_, err = s.GetSchedule(ctx, "sched-del")
+	assert.Error(t, err, "GetSchedule should return error after deletion")
+}
+
+func TestDeleteSchedule_NotFound(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	err := s.DeleteSchedule(ctx, "nonexistent-id")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestStoreScheduleRun_RoundTrip(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	// Must create the schedule first for the run to reference.
+	sched := testSchedule("sched-run")
+	require.NoError(t, s.StoreSchedule(ctx, sched))
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	run := scheduler.ScheduleRun{
+		ID:          "run-001",
+		ScheduleID:  "sched-run",
+		StartedAt:   now.Add(-5 * time.Minute),
+		CompletedAt: now,
+		Status:      scheduler.RunStatusSuccess,
+		ModuleResults: []scheduler.ModuleRunResult{
+			{ModuleID: "mock.test", Status: scheduler.ModuleStatusSuccess, EvidenceCount: 3},
+			{ModuleID: "mock.network", Status: scheduler.ModuleStatusFailure, EvidenceCount: 0, Error: "timeout"},
+		},
+		Error: "",
+	}
+
+	err := s.StoreScheduleRun(ctx, run)
+	require.NoError(t, err)
+
+	runs, err := s.ListScheduleRuns(ctx, "sched-run", 10)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+
+	got := runs[0]
+	assert.Equal(t, run.ID, got.ID)
+	assert.Equal(t, run.ScheduleID, got.ScheduleID)
+	assert.Equal(t, run.StartedAt.Format(time.RFC3339Nano), got.StartedAt.Format(time.RFC3339Nano))
+	assert.Equal(t, run.CompletedAt.Format(time.RFC3339Nano), got.CompletedAt.Format(time.RFC3339Nano))
+	assert.Equal(t, run.Status, got.Status)
+	assert.Equal(t, run.Error, got.Error)
+	require.Len(t, got.ModuleResults, 2)
+	assert.Equal(t, "mock.test", got.ModuleResults[0].ModuleID)
+	assert.Equal(t, 3, got.ModuleResults[0].EvidenceCount)
+	assert.Equal(t, "timeout", got.ModuleResults[1].Error)
+}
+
+func TestListScheduleRuns_DefaultLimit(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	sched := testSchedule("sched-limit")
+	require.NoError(t, s.StoreSchedule(ctx, sched))
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	// Insert 15 runs.
+	for i := 0; i < 15; i++ {
+		run := scheduler.ScheduleRun{
+			ID:          fmt.Sprintf("run-%03d", i),
+			ScheduleID:  "sched-limit",
+			StartedAt:   now.Add(time.Duration(i) * time.Minute),
+			CompletedAt: now.Add(time.Duration(i)*time.Minute + 30*time.Second),
+			Status:      scheduler.RunStatusSuccess,
+		}
+		require.NoError(t, s.StoreScheduleRun(ctx, run))
+	}
+
+	// Pass 0 as limit -> should default to 10.
+	runs, err := s.ListScheduleRuns(ctx, "sched-limit", 0)
+	require.NoError(t, err)
+	assert.Len(t, runs, 10)
+
+	// Runs should be ordered by started_at DESC (most recent first).
+	for i := 1; i < len(runs); i++ {
+		assert.True(t, runs[i-1].StartedAt.After(runs[i].StartedAt),
+			"runs should be ordered most recent first")
+	}
+}
+
+func TestDeleteSchedule_CascadesRuns(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	sched := testSchedule("sched-cascade")
+	require.NoError(t, s.StoreSchedule(ctx, sched))
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	for i := 0; i < 3; i++ {
+		run := scheduler.ScheduleRun{
+			ID:          fmt.Sprintf("cascade-run-%d", i),
+			ScheduleID:  "sched-cascade",
+			StartedAt:   now.Add(time.Duration(i) * time.Minute),
+			CompletedAt: now.Add(time.Duration(i)*time.Minute + 10*time.Second),
+			Status:      scheduler.RunStatusSuccess,
+		}
+		require.NoError(t, s.StoreScheduleRun(ctx, run))
+	}
+
+	// Verify runs exist before delete.
+	runs, err := s.ListScheduleRuns(ctx, "sched-cascade", 10)
+	require.NoError(t, err)
+	require.Len(t, runs, 3)
+
+	// Delete the schedule - should cascade to runs.
+	err = s.DeleteSchedule(ctx, "sched-cascade")
+	require.NoError(t, err)
+
+	// Schedule should be gone.
+	_, err = s.GetSchedule(ctx, "sched-cascade")
+	assert.Error(t, err)
+
+	// Runs should also be gone.
+	runs, err = s.ListScheduleRuns(ctx, "sched-cascade", 10)
+	require.NoError(t, err)
+	assert.Empty(t, runs)
 }
 
 // Compile-time check that *Store satisfies storage.Store.

@@ -7,7 +7,7 @@ LDFLAGS=-ldflags "-s -w -X github.com/grcengineering/ocean/internal/cli.version=
 PLATFORMS=linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
 # Test configuration
-COVERAGE_THRESHOLD ?= 55
+COVERAGE_THRESHOLD ?= 70
 
 .PHONY: build test test-unit test-integration test-e2e test-all test-json \
         lint run install clean cross-compile release coverage coverage-check \
