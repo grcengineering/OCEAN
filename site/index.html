@@ -1254,46 +1254,57 @@
     } else { c.fillStyle='rgba('+this.color+','+this.opacity+')'; c.fill(); }
   };
 
-  // ── Surface shimmer — WebGL wave-band caustic ───────────────────
-  // Same 5-wave organic caustic algorithm now running as a GPU fragment
-  // shader: full 1920×1080 resolution, zero CPU cost, crisp pixel-accurate
-  // lines. Rendered to an offscreen WebGL canvas each frame; composited
-  // onto the main 2D canvas via ctx.drawImage so creature drawing is
-  // unaffected. Falls back silently if WebGL is unavailable.
-  // Coordinate space: u = gl_FragCoord.x * 0.25 ≡ old JS offscreen x,
-  // so ALL wave/warp constants are unchanged from the CPU version.
-  var glCvs=null,gl=null,glProg=null,glBuf=null,glPosLoc,glTimeLoc,glResLoc;
+  // ── Surface shimmer — WebGL wave-band caustic + interactive ripples ─
+  // 5-wave organic caustic runs as a GPU fragment shader: full resolution,
+  // zero CPU cost. Interactive ripples (cursor drag + click/tap) are passed
+  // as up to 12 vec4 uniforms: xy=GL screen pos, z=age(s), w=strength.
+  // Physics: traveling circular wave sin(ω·age − k·d), wavefront at 350px/s.
+  // Rendered to an offscreen WebGL canvas, composited via ctx.drawImage.
+  var glCvs=null,gl=null,glProg=null,glBuf=null,glPosLoc,glTimeLoc,glRipLoc;
+  // Ripple state — pre-allocated to avoid per-frame GC pressure
+  var wRipples=[],wLastDrag=0,wRipData=new Float32Array(48);
+
   var GL_FRAG=[
     'precision highp float;',
     'uniform float uT;',
+    'uniform vec4 uR[12];', // xy=GL screen pos, z=age(s), w=strength; w=0 inactive
+    // Circular traveling wave: sin(ω·age − k·d) puts crests BEHIND wavefront
+    // k=0.03 rad/px (λ≈210px), ω=10.5 rad/s → phase speed v=ω/k=350px/s
+    'float rip(vec4 r,vec2 px){',
+    '  if(r.w<=0.)return 0.;',
+    '  float d=length(px-r.xy);',
+    '  float age=r.z;',
+    '  if(d*.00286>age)return 0.;', // wavefront gate: wave unreached if d/350 > age
+    '  float en=exp(-age*.7)*exp(-d*.002)*r.w;',
+    '  return pow(max(0.,sin(age*10.5-d*.03)),6.)*en;',
+    '}',
     'void main(){',
     '  float t=uT;',
     '  float pl=0.68+sin(t*.38)*.32;',
-    // Scale to old offscreen pixel coords (÷4 of display resolution)
-    '  float ox=gl_FragCoord.x*.25, oy=gl_FragCoord.y*.25;',
-    // Level-1 warp — large slow swells
+    '  float ox=gl_FragCoord.x*.25,oy=gl_FragCoord.y*.25;',
     '  float dx1=sin(oy*.031+t*.19)*6.+cos(ox*.027-t*.13)*4.5;',
     '  float dy1=cos(ox*.028+t*.22)*5.5+sin(oy*.033-t*.16)*4.;',
-    '  float u0=ox+dx1, v0=oy+dy1;',
-    // Level-2 warp — faster ripples riding level-1
+    '  float u0=ox+dx1,v0=oy+dy1;',
     '  float u=u0+sin(v0*.073+t*.51)*2.8;',
     '  float v=v0+cos(u0*.068-t*.47)*2.5;',
-    // 5 waves at irregular angles
     '  float w1=cos(u*.142+v*.088+t*.79);',
     '  float w2=cos(u*.095-v*.168+t*1.08+2.09);',
     '  float w3=cos(-u*.125+v*.112+t*.61+4.18);',
     '  float w4=cos(u*.177+v*.041-t*.87+1.57);',
     '  float w5=cos(-u*.046+v*.189+t*.73+3.14);',
-    // Positive-crest sharpening: pow(max(0,w), 6)
     '  float b1=pow(max(0.,w1),6.);',
     '  float b2=pow(max(0.,w2),6.);',
     '  float b3=pow(max(0.,w3),6.);',
     '  float b4=pow(max(0.,w4),6.);',
     '  float b5=pow(max(0.,w5),6.);',
-    // Background threshold, sqrt compression, scale to alpha (90/255≈0.353)
     '  float s=b1+b2+b3+b4+b5;',
     '  float val=s>.6?sqrt((s-.6)/4.4):0.;',
-    '  gl_FragColor=vec4(.580,.824,.925,clamp(val*pl*.353,0.,1.));',
+    // Unrolled ripple sum (constant indices required by GLSL ES 1.00)
+    '  vec2 px=gl_FragCoord.xy;',
+    '  float rv=rip(uR[0],px)+rip(uR[1],px)+rip(uR[2],px)+rip(uR[3],px)',
+    '          +rip(uR[4],px)+rip(uR[5],px)+rip(uR[6],px)+rip(uR[7],px)',
+    '          +rip(uR[8],px)+rip(uR[9],px)+rip(uR[10],px)+rip(uR[11],px);',
+    '  gl_FragColor=vec4(.580,.824,.925,clamp(val*pl*.353+rv*.7,0.,1.));',
     '}'
   ].join('\n');
 
@@ -1319,6 +1330,7 @@
     gl.linkProgram(glProg);
     if(!gl.getProgramParameter(glProg,gl.LINK_STATUS)){gl=null;return false;}
     glTimeLoc=gl.getUniformLocation(glProg,'uT');
+    glRipLoc =gl.getUniformLocation(glProg,'uR[0]');
     glPosLoc =gl.getAttribLocation(glProg,'p');
     glBuf=gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER,glBuf);
@@ -1341,12 +1353,62 @@
     gl.bindBuffer(gl.ARRAY_BUFFER,glBuf);
     gl.vertexAttribPointer(glPosLoc,2,gl.FLOAT,false,0,0);
     gl.enableVertexAttribArray(glPosLoc);
-    gl.uniform1f(glTimeLoc,performance.now()*.001);
+    var now=performance.now()*.001;
+    gl.uniform1f(glTimeLoc,now);
+    // Cull expired ripples (lifetime 3s), pack into pre-allocated Float32Array
+    var live=[];
+    for(var i=0;i<wRipples.length;i++){if(now-wRipples[i].t0<3.)live.push(wRipples[i]);}
+    wRipples=live;
+    for(var i=0;i<12;i++){
+      var base=i*4;
+      if(i<wRipples.length){
+        var r=wRipples[i];
+        wRipData[base]=r.x; wRipData[base+1]=r.y;
+        wRipData[base+2]=now-r.t0; wRipData[base+3]=r.s;
+      } else {
+        wRipData[base]=0; wRipData[base+1]=0;
+        wRipData[base+2]=0; wRipData[base+3]=0;
+      }
+    }
+    gl.uniform4fv(glRipLoc,wRipData);
     gl.drawArrays(gl.TRIANGLES,0,6);
     ctx.save();
     ctx.drawImage(glCvs,0,0);
     ctx.restore();
   }
+
+  // ── Interactive ripple events ────────────────────────────────────
+  // Convert DOM client coords → WebGL fragment coords (Y-axis flipped).
+  // Canvas may be CSS-scaled so we scale by the canvas/rect ratio.
+  function wAddRipple(cx,cy,strength){
+    var rect=canvas.getBoundingClientRect();
+    var x=(cx-rect.left)*(canvas.width/rect.width);
+    // WebGL gl_FragCoord.y=0 is at bottom; DOM y=0 is at top → flip
+    var y=canvas.height-(cy-rect.top)*(canvas.height/rect.height);
+    var now=performance.now()*.001;
+    if(wRipples.length>=12)wRipples.shift(); // drop oldest when at capacity
+    wRipples.push({x:x,y:y,t0:now,s:strength});
+  }
+  // Canvas has pointer-events:none so we listen on window to catch all events
+  window.addEventListener('mousemove',function(e){
+    var now=performance.now()*.001;
+    if(now-wLastDrag<.1)return; // throttle: max one drag ripple per 100ms
+    wLastDrag=now;
+    wAddRipple(e.clientX,e.clientY,.22);
+  });
+  window.addEventListener('click',function(e){
+    wAddRipple(e.clientX,e.clientY,1.0); // strong pebble-drop ring
+  });
+  window.addEventListener('touchstart',function(e){
+    for(var i=0;i<e.changedTouches.length;i++)
+      wAddRipple(e.changedTouches[i].clientX,e.changedTouches[i].clientY,1.0);
+  },{passive:true});
+  window.addEventListener('touchmove',function(e){
+    var now=performance.now()*.001;
+    if(now-wLastDrag<.08)return;
+    wLastDrag=now;
+    wAddRipple(e.changedTouches[0].clientX,e.changedTouches[0].clientY,.22);
+  },{passive:true});
 
   // ── Fish — 28 cols x 12 rows, PS=2 (56x24px) ─────────────
   // Nose at RIGHT (col 27), tail V-fork at LEFT (cols 0-2).
