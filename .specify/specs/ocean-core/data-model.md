@@ -1,11 +1,14 @@
-# Data Model: OCEAN Core v2.0.0
+# Data Model: OCEAN Core v3.0.0
 
 **Spec Reference**: `.specify/specs/ocean-core/spec.md`
-**Constitution Reference**: `.specify/memory/constitution.md` v2.0.0
+**Constitution Reference**: `.specify/memory/constitution.md` v3.0.0
 **Created**: 2026-02-13
+**Updated**: 2026-02-26
 **Status**: Draft
 
-This document defines the entity relationships for OCEAN (Open Control Evidence Acquisition Normalizer). All entities follow the principles established in the Constitution: evidence-first architecture, OCSF-inspired schema design, dual-mode modules, and cryptographic provenance.
+This document defines the entity relationships for OCEAN (Open Control Evidence Acquisition Normalizer). All entities follow the principles established in the Constitution: evidence-first architecture, OCSF-inspired schema design, and dual-mode modules.
+
+> **v3.0.0 Note**: Cryptographic provenance (DSSE attestations) is no longer a native OCEAN feature. Evidence signing is handled by [Corsair](https://grcorsair.com) when required. The `AttestationRef` field and `Attestation` entity have been removed from this data model.
 
 ---
 
@@ -17,16 +20,15 @@ This document defines the entity relationships for OCEAN (Open Control Evidence 
 4. [ControlStatus](#controlstatus)
 5. [Schedule](#schedule)
 6. [Framework](#framework)
-7. [Attestation](#attestation)
-8. [TestTranscript](#testtranscript)
-9. [Entity Relationships](#entity-relationships)
-10. [Enumerations Reference](#enumerations-reference)
+7. [TestTranscript](#testtranscript)
+8. [Entity Relationships](#entity-relationships)
+9. [Enumerations Reference](#enumerations-reference)
 
 ---
 
 ## Evidence
 
-The foundational entity of the entire system. Every piece of data OCEAN produces is an Evidence record -- a structured, immutable, cryptographically signed record proving a fact about a control's implementation or operating effectiveness.
+The foundational entity of the entire system. Every piece of data OCEAN produces is an Evidence record -- a structured, normalized, immutable record proving a fact about a control's implementation or operating effectiveness.
 
 Evidence is produced by Modules (either Collectors or Testers) and consumed by the Evaluation Engine to determine ControlStatus. All Evidence carries provenance metadata and a cryptographic attestation.
 
@@ -49,7 +51,8 @@ Evidence is produced by Modules (either Collectors or Testers) and consumed by t
 | `findings` | array of Finding | Specific observations supporting the status determination | Required. May be empty array. |
 | `enrichments` | array of Enrichment | Post-collection additions (threat intel, context, cross-references) | Optional. Each enrichment creates a derived record linked to the original. |
 | `test_transcript` | TestTranscript | Full record of active test execution | Conditional. Required when confidence_level = `active_verification`. Null for passive evidence. |
-| `attestation` | AttestationRef | Cryptographic provenance reference for this evidence record | Required. Signing is mandatory per Constitution VIII and X. |
+
+> **Corsair note**: For cryptographic signing of evidence records, pipe OCEAN output to [Corsair](https://grcorsair.com). Corsair wraps evidence in W3C JWT-VC (Verifiable Credential) format, creating an independently verifiable CPOE. OCEAN itself does not sign evidence.
 
 ### Metadata Substructure
 
@@ -88,22 +91,11 @@ Evidence is produced by Modules (either Collectors or Testers) and consumed by t
 | `data` | JSON object | Enrichment payload | Required. |
 | `enriched_time` | timestamp | When enrichment was applied | Required. UTC. |
 
-### AttestationRef Substructure
-
-| Field | Type | Description | Constraints |
-|-------|------|-------------|-------------|
-| `type` | enum | Attestation type | Required. Values: `collection`, `evaluation`. |
-| `dsse_envelope_ref` | string | Content-addressable reference to the DSSE envelope | Required. |
-| `digest` | string | SHA-256 digest of this evidence record | Required. Hex-encoded. |
-| `signer` | string | Key identifier of the signer | Required. |
-
 ### Invariants
 
 - Evidence is immutable once created. No updates, only enrichments that create new derived records.
 - `confidence_level` must be `active_verification` if and only if the evidence was produced by a Tester module.
 - `test_transcript` must be present if and only if `confidence_level` = `active_verification`.
-- `attestation.digest` must match the SHA-256 of the evidence record content (excluding the attestation field itself).
-- Every stored Evidence record must have a corresponding signed Attestation (mandatory per Constitution).
 
 ---
 
@@ -233,7 +225,6 @@ A point-in-time determination of a Control's operating effectiveness. Produced b
 | `confidence` | enum | Confidence level based on evidence types available | Required. Values: `high`, `medium`, `low`. See confidence rules below. |
 | `evidence_ids` | array of uuid | References to all Evidence records used in this evaluation | Required. At least one. |
 | `evaluation_details` | object | Detailed breakdown of the evaluation (expression result, per-source results for composite controls) | Required. |
-| `evaluation_attestation_ref` | string | Content-addressable reference to the Evaluation Attestation for this verdict | Required. |
 
 ### Confidence Rules
 
@@ -249,7 +240,6 @@ A point-in-time determination of a Control's operating effectiveness. Produced b
 
 - A ControlStatus with `status: effective` must have at least one Evidence record with `status_id: 1`.
 - When passive evidence shows effective but active test shows ineffective, overall status must be `ineffective` (active takes precedence for behavioral assertions).
-- The `evaluation_attestation_ref` must reference an EvaluationAttestation whose `expression_digest` matches the Control's `evaluation_expression_hash` at evaluation time.
 - ControlStatus records are immutable. Re-evaluation produces a new ControlStatus, never modifies an existing one.
 
 ---
@@ -316,63 +306,6 @@ A compliance standard or benchmark that defines a set of control requirements. F
 
 - Framework entities are reference data. They do not change based on evidence collection.
 - The relationship between Framework controls and OCEAN Controls is many-to-many: one OCEAN Control may satisfy multiple framework controls, and one framework control may be satisfied by multiple OCEAN Controls.
-
----
-
-## Attestation
-
-A cryptographic provenance record in in-toto DSSE (Dead Simple Signing Envelope) format. Attestations prove the integrity and origin of evidence and evaluations. Every stored Evidence record and every ControlStatus evaluation has a corresponding Attestation.
-
-### Base Fields
-
-| Field | Type | Description | Constraints |
-|-------|------|-------------|-------------|
-| `dsse_envelope` | JSON object | The complete DSSE envelope containing payload, payloadType, and signatures | Required. Conforms to in-toto DSSE specification. |
-| `predicate_type` | enum | The type of attestation predicate | Required. Values: `collection`, `evaluation`. |
-| `subject_digests` | array of Digest | Content-addressable references to the artifacts this attestation covers | Required. At least one. |
-| `signer_identity` | string | Key identifier or OIDC identity of the signer | Required. |
-| `timestamp` | timestamp | When the attestation was created | Required. UTC. |
-
-### Digest Substructure
-
-| Field | Type | Description | Constraints |
-|-------|------|-------------|-------------|
-| `algorithm` | string | Hash algorithm used | Required. Default: "sha256". |
-| `value` | string | Hex-encoded digest value | Required. |
-
-### Subtype: CollectionAttestation
-
-Created when a Module (Collector or Tester) produces Evidence. Proves what was collected or tested, from where, using what module version, and captures the raw transcript.
-
-| Field | Type | Description | Constraints |
-|-------|------|-------------|-------------|
-| `module_id` | string | The module that performed the collection or test | Required. |
-| `module_version` | semver | Version of the module at collection time | Required. |
-| `source` | object | Source system details (system, api_version, endpoint) | Required. |
-| `evidence_digest` | string | SHA-256 digest of the evidence record | Required. |
-| `raw_data_digest` | string | SHA-256 digest of the raw API response or test output | Required. |
-| `transcript_digest` | string | SHA-256 digest of the collection transcript (API calls, parameters, responses) or test transcript | Optional. Required for active tests. |
-
-### Subtype: EvaluationAttestation
-
-Created when the Evaluation Engine produces a ControlStatus. Proves what evidence was evaluated, what logic was applied, and what verdict was reached.
-
-| Field | Type | Description | Constraints |
-|-------|------|-------------|-------------|
-| `evidence_digests` | array of string | SHA-256 digests of all evidence records used as input | Required. At least one. |
-| `expression_digest` | string | SHA-256 content-address of the CEL expression (or expanded preset) used | Required. Enables reproducing the exact evaluation logic for any historical verdict. |
-| `expression_text` | string | The actual CEL expression evaluated (for auditability) | Required. |
-| `verdict` | string | The evaluation result (maps to ControlStatus.status) | Required. |
-| `control_id` | string | The control that was evaluated | Required. |
-
-### Invariants
-
-- Every stored Evidence record must have exactly one CollectionAttestation.
-- Every ControlStatus record must have exactly one EvaluationAttestation.
-- Attestation digests must match the actual content. Any mismatch indicates tampering and must be reported by the verification system.
-- Signing is mandatory. Evidence or evaluations without signed attestations must be rejected.
-- Old attestations remain verifiable after key rotation. Key metadata in the attestation identifies which key version was used.
-- The provenance chain is independently verifiable: a third party with the public key and attestation chain can validate any verdict without trusting the OCEAN operator.
 
 ---
 
@@ -458,26 +391,6 @@ Module -- Dual
   A Dual-mode module implements both Collector and Tester subtypes.
 ```
 
-### Provenance Relationships
-
-```
-Evidence 1 ---- 1 CollectionAttestation
-  Every Evidence record has exactly one CollectionAttestation.
-  CollectionAttestation references the Evidence by digest (content-addressable).
-
-ControlStatus 1 ---- 1 EvaluationAttestation
-  Every ControlStatus has exactly one EvaluationAttestation.
-  EvaluationAttestation references its input Evidence records by digest.
-
-EvaluationAttestation * ---- 1..* Evidence
-  An EvaluationAttestation references one or more Evidence digests as input.
-  This creates the provenance chain: Evidence -> CollectionAttestation,
-  Evidence -> EvaluationAttestation -> ControlStatus.
-
-CollectionAttestation * ---- 1 Module
-  Each CollectionAttestation references the Module that produced the evidence.
-```
-
 ### Embedded Relationships
 
 ```
@@ -507,7 +420,7 @@ Schedule * ---- * Control
   A Control may be covered by many Schedules.
 ```
 
-### Full Provenance Chain (End-to-End)
+### Evidence Flow (End-to-End)
 
 ```
 Source System API
@@ -516,25 +429,16 @@ Source System API
       v
   Evidence Record
       |
-      +--> CollectionAttestation (DSSE envelope, signed)
-      |      - subject: Evidence digest
-      |      - predicate: module, source, raw_data_digest, transcript_digest
-      |
       | (Evaluation Engine applies CEL expression)
       v
   ControlStatus Record
       |
-      +--> EvaluationAttestation (DSSE envelope, signed)
-             - subjects: Evidence digests (input)
-             - predicate: expression_digest, verdict, control_id
+      | (Optional: Corsair signs for cryptographic provenance)
+      v
+  CPOE (Certificate of Proof of Operational Effectiveness)
 ```
 
-A third party with the public signing key can independently verify:
-1. The Evidence content matches its CollectionAttestation digest (data integrity).
-2. The CollectionAttestation was signed by a trusted key (authenticity).
-3. The EvaluationAttestation references the correct Evidence digests (chain integrity).
-4. The evaluation used a specific, content-addressed CEL expression (reproducibility).
-5. The verdict follows from the expression applied to the evidence (logical correctness).
+For cryptographic signing and independent verification, pipe OCEAN's `ControlStatus` JSON output to [Corsair](https://grcorsair.com). Corsair creates a W3C JWT-VC that any auditor can verify independently.
 
 ---
 
@@ -598,9 +502,3 @@ A third party with the public signing key can independently verify:
 | `tester` | Active control verification only |
 | `dual` | Implements both collector and tester capabilities |
 
-### attestation.predicate_type
-
-| Value | Description |
-|-------|-------------|
-| `collection` | Attests to evidence collection or test execution provenance |
-| `evaluation` | Attests to control evaluation logic and verdict provenance |

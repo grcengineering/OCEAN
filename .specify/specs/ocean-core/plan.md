@@ -1,19 +1,20 @@
-# Implementation Plan: OCEAN Core v2.0.0
+# Implementation Plan: OCEAN Core v3.0.0
 
 **Branch**: `main` | **Date**: 2026-02-12 | **Spec**: `.specify/specs/ocean-core/spec.md`
 **Constitution**: `.specify/memory/constitution.md` v2.0.0
 
 ## Summary
 
-OCEAN is the "Metasploit for GRC" — an open-source CLI tool and Go library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring. The v2.0.0 plan expands the architecture from passive-only collection to a dual-mode system with:
+OCEAN is the "Metasploit for GRC" — an open-source CLI tool and Go library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring. The v3.0.0 plan builds a three-pillar system:
 
 1. **Core Engine**: Go-based CLI with dual-mode module architecture (Collectors + Testers)
 2. **Evidence Schema**: JSON Schema-validated data model inspired by OCSF with confidence levels and test transcripts
 3. **Storage Layer**: SQLite for local storage with optional PostgreSQL and ClickHouse
 4. **Module System**: Well-defined Go interfaces for Collectors (passive) and Testers (active) with shared Module base
 5. **Evaluation Engine**: CEL (Common Expression Language) for user-defined compliance conditions plus YAML presets
-6. **Attestation Layer**: in-toto DSSE envelopes for cryptographic provenance (Collection + Evaluation attestations)
-7. **Scheduling**: Built-in cron-style scheduler for continuous monitoring and testing with safety-aware scheduling
+6. **Scheduling**: Built-in cron-style scheduler for continuous monitoring and testing with safety-aware scheduling
+
+> **v3.0.0 Note**: Cryptographic provenance (in-toto DSSE attestations) is NOT a native OCEAN feature. Evidence signing is delegated to [Corsair](https://grcorsair.com). OCEAN focuses on evidence acquisition, active testing, and CEL evaluation. The `internal/attestation/` package and `ocean keys generate`/`ocean verify-provenance` commands have been removed from scope.
 
 ## Technical Context
 
@@ -27,9 +28,7 @@ OCEAN is the "Metasploit for GRC" — an open-source CLI tool and Go library for
 - `rs/zerolog` — Structured logging
 - `stretchr/testify` — Testing assertions
 - `google/cel-go` — CEL expression evaluation engine
-- `in-toto/in-toto-golang` — in-toto attestation framework
-- `secure-systems-lab/go-securesystemslib` — DSSE envelope signing/verification
-- `crypto/ed25519` — Default signing (Go stdlib)
+- `crypto/sha256` — Content addressing (Go stdlib)
 
 **Storage**: SQLite (default), PostgreSQL (enterprise), ClickHouse (analytics, optional)
 **Testing**: Go standard testing + testify, table-driven tests
@@ -47,13 +46,13 @@ OCEAN is the "Metasploit for GRC" — an open-source CLI tool and Go library for
 - Memory < 256MB typical usage
 - Zero runtime dependencies
 - Offline-capable
-- Signing mandatory for all stored evidence
+- No external signing dependencies (signing is Corsair's job)
 
 **Scale/Scope**:
 - Support 1M+ evidence records
 - 50+ modules (collectors + testers) over time
 - 100+ control definitions
-- Attestation chain depth: unlimited (collection → evaluation → re-evaluation)
+- Evidence query depth: unlimited historical time-series
 
 ## Constitution Check
 
@@ -68,9 +67,8 @@ OCEAN is the "Metasploit for GRC" — an open-source CLI tool and Go library for
 | V. Control-Centric Organization | ✅ PASS | CEL evaluation logic, composite controls, framework mappings, content-addressed expressions |
 | VI. Continuous Monitoring Native | ✅ PASS | Built-in scheduler, time-series queries, safety-aware scheduling |
 | VII. Radical Transparency | ✅ PASS | No hiding failures, complete audit trail, test transcripts |
-| VIII. Security & Privacy by Design | ✅ PASS | Mandatory signing, secret providers, test authorization, no credential storage |
+| VIII. Security & Privacy by Design | ✅ PASS | Secret providers, test authorization, no credential storage; Corsair available for signing when needed |
 | IX. Active Control Verification | ✅ PASS | Safety classifications, pre-flight validation, cleanup, environment scoping, test transcripts |
-| X. Cryptographic Provenance Chain | ✅ PASS | Two-layer attestation (Collection + Evaluation), in-toto DSSE, content-addressable references, Ed25519 default |
 
 ## Project Structure
 
@@ -113,7 +111,6 @@ ocean/
 │   │   ├── schedule.go              # ocean schedule
 │   │   ├── modules.go               # ocean modules list/validate
 │   │   ├── report.go                # ocean report
-│   │   ├── provenance.go            # ocean verify-provenance
 │   │   └── serve.go                 # ocean serve (server mode)
 │   ├── module/                      # Module framework (shared base)
 │   │   ├── module.go                # Module base interface + metadata
@@ -140,13 +137,6 @@ ocean/
 │   │   ├── observable.go            # Observable extraction
 │   │   ├── confidence.go            # Confidence level types
 │   │   └── transcript.go            # Test transcript structures
-│   ├── attestation/                 # Cryptographic provenance
-│   │   ├── dsse.go                  # DSSE envelope creation/verification
-│   │   ├── collection.go            # Collection attestation predicate
-│   │   ├── evaluation.go            # Evaluation attestation predicate
-│   │   ├── signer.go                # Signing interface (Ed25519/KMS/OIDC)
-│   │   ├── verifier.go              # Attestation chain verification
-│   │   └── content.go               # Content-addressable digest utilities
 │   ├── storage/                     # Persistence layer
 │   │   ├── interface.go             # Storage interface
 │   │   ├── sqlite.go                # SQLite implementation
@@ -199,8 +189,7 @@ ocean/
 ├── schemas/                         # JSON Schema definitions
 │   ├── evidence.schema.json
 │   ├── control.schema.json
-│   ├── module.schema.json
-│   └── attestation.schema.json
+│   └── module.schema.json
 ├── controls/                        # Default control library
 │   ├── iam/
 │   │   └── mfa_enforcement.yaml
@@ -232,30 +221,28 @@ ocean/
 **Deliverables**:
 1. Go module initialized with all dependencies
 2. CLI framework with `ocean --help`, `ocean version`
-3. Evidence schema v2.0.0 JSON Schema definition (including `confidence_level`, `attestation`, `test_transcript`)
+3. Evidence schema v3.0.0 JSON Schema definition (including `confidence_level`, `test_transcript`)
 4. Evidence Go types with validation
 5. Module base interface + Collector interface
 6. In-memory evidence store (no persistence yet)
 7. Mock collector for testing
-8. Ed25519 key generation (`ocean keys generate`)
-9. Basic DSSE envelope creation for collected evidence
-10. `ocean collect mock.test` working end-to-end with signed attestation
+8. `ocean collect mock.test` working end-to-end
 
-**Exit Criteria**: `ocean collect mock.test` returns valid, schema-compliant, signed evidence to stdout with a Collection Attestation.
+**Exit Criteria**: `ocean collect mock.test` returns valid, schema-compliant evidence JSON to stdout.
 
 ### Phase 1: Storage & History (US2)
 
 **Goal**: Persistent storage, historical queries, and uptime calculations.
 
 **Deliverables**:
-1. SQLite storage implementation (with attestation storage)
+1. SQLite storage implementation
 2. Migration framework
 3. `ocean history` command with time-range queries
 4. Time-series queries with uptime percentage calculation
 5. Configuration file support (YAML)
-6. Content-addressable artifact storage (digests for raw_data, attestations)
+6. Content-addressable raw_data storage (SHA-256 digests)
 
-**Exit Criteria**: Evidence persists across CLI invocations; `ocean history --control mock.test --days 7` returns stored data with uptime percentage; attestation chain is stored and retrievable.
+**Exit Criteria**: Evidence persists across CLI invocations; `ocean history --control mock.test --days 7` returns stored data with uptime percentage.
 
 ### Phase 2: Active Testing Framework (US8)
 
@@ -270,9 +257,9 @@ ocean/
 6. Environment scoping enforcement (production/staging/isolated)
 7. Authorization prompt system (appropriate to safety level)
 8. Mock tester for testing
-9. `ocean test mock.safety_test` working end-to-end with transcript and attestation
+9. `ocean test mock.safety_test` working end-to-end with transcript
 
-**Exit Criteria**: `ocean test mock.safety_test` executes pre-flight, runs mock test, captures transcript, performs cleanup, stores signed evidence with `confidence_level: active_verification`.
+**Exit Criteria**: `ocean test mock.safety_test` executes pre-flight, runs mock test, captures transcript, performs cleanup, stores evidence with `confidence_level: active_verification`.
 
 ### Phase 3: Evaluation Engine (US10, US11)
 
@@ -283,15 +270,14 @@ ocean/
 2. CEL expression compilation, validation, and execution
 3. YAML preset system (common patterns expand to CEL)
 4. Content-addressed expression versioning (SHA-256 of expression text)
-5. Evaluation Attestation creation (references evidence digests + expression version)
-6. Control definition YAML schema (referencing collectors + testers + evaluation logic)
+5. Control definition YAML schema (referencing collectors + testers + evaluation logic)
 7. Composite control support (multi-source aggregation)
 8. `ocean evaluate` command with CEL expressions
 9. `ocean verify` command (dual-mode: collect + test + evaluate)
 10. Confidence level aggregation (passive-only vs passive+active)
 11. Framework mapping structure (SOC 2 ↔ ISO 27001 ↔ NIST CSF ↔ CIS Controls)
 
-**Exit Criteria**: `ocean verify control.mock_mfa` collects passive evidence, runs active test, evaluates CEL expression, and produces unified control status with Evaluation Attestation.
+**Exit Criteria**: `ocean verify control.mock_mfa` collects passive evidence, runs active test, evaluates CEL expression, and produces unified control status.
 
 ### Phase 4: Real Modules (US1, US5, US8 complete)
 
@@ -311,9 +297,9 @@ ocean/
 
 **Exit Criteria**: `ocean collect okta.mfa_policy` returns real evidence from Okta API; `ocean test okta.mfa_bypass` attempts and records MFA bypass result; `ocean verify control.mfa_enforcement` runs both.
 
-### Phase 5: Scheduling & Provenance Verification (US4, US9)
+### Phase 5: Scheduling & Continuous Monitoring (US4)
 
-**Goal**: Continuous monitoring with safety-aware scheduling and provenance verification.
+**Goal**: Continuous monitoring with safety-aware scheduling.
 
 **Deliverables**:
 1. Cron-style scheduler for collectors and testers
@@ -322,12 +308,8 @@ ocean/
 4. Failure alerting (stdout/webhook)
 5. `ocean schedule` commands (add/list/remove/status)
 6. Catch-up collection for missed runs
-7. `ocean verify-provenance --evidence <id>` command
-8. Full attestation chain verification (Collection → Evaluation)
-9. Tamper detection (digest mismatch reporting)
-10. Third-party verification support (public key + attestation chain export)
 
-**Exit Criteria**: Scheduled collections and safe tests run automatically; `ocean verify-provenance --evidence <id>` validates the complete attestation chain; tampered evidence is detected.
+**Exit Criteria**: Scheduled collections and safe tests run automatically; scheduling state persists across restarts; failures trigger alerts.
 
 ### Phase 6: Server Mode & API (US7)
 
@@ -338,11 +320,10 @@ ocean/
 2. Authentication middleware
 3. Evidence query endpoints (with confidence level filtering)
 4. Control status endpoints
-5. Attestation export endpoints (DSSE envelopes)
-6. OpenAPI 3.0 specification
-7. Cursor-based pagination
+5. OpenAPI 3.0 specification
+6. Cursor-based pagination
 
-**Exit Criteria**: External system can query `/api/v1/evidence?min_confidence=active_verification` and receive JSON response with attestations.
+**Exit Criteria**: External system can query `/api/v1/evidence?min_confidence=active_verification` and receive JSON evidence response. Downstream systems (including Corsair) can poll this API for signing.
 
 ### Phase 7: Reports & Polish (US6)
 
@@ -351,8 +332,7 @@ ocean/
 **Deliverables**:
 1. Markdown report generation (passive + active evidence distinguished)
 2. CSV export
-3. Provenance verification in reports (`--verify-provenance` flag)
-4. Cross-platform builds (Windows, macOS, Linux)
+3. Cross-platform builds (Windows, macOS, Linux)
 5. Docker image
 6. Homebrew formula
 7. Comprehensive documentation
@@ -360,7 +340,7 @@ ocean/
 9. Performance optimization
 10. Security audit
 
-**Exit Criteria**: `ocean report --format markdown --verify-provenance` generates a complete report; users can install via `brew install ocean` and complete quickstart in < 5 minutes.
+**Exit Criteria**: `ocean report --format markdown` generates a complete report; users can install via `brew install ocean` and complete quickstart in < 5 minutes.
 
 ## Key Technical Decisions
 

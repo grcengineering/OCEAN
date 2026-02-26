@@ -1,6 +1,6 @@
 # Research Notes: OCEAN Core v2.0.0
 
-**Date**: 2026-02-12 (updated from 2026-01-17)
+**Date**: 2026-02-12 (updated 2026-02-26 for v3.0.0)
 **Purpose**: Capture all research findings to inform OCEAN design
 
 ## Table of Contents
@@ -11,7 +11,7 @@
 5. [NIST OSCAL](#nist-oscal)
 6. [Cloud Provider APIs](#cloud-provider-apis)
 7. [CEL Expression Engine](#cel-expression-engine) *(new for v2.0.0)*
-8. [In-Toto DSSE Attestation](#in-toto-dsse-attestation) *(new for v2.0.0)*
+8. [Corsair Integration](#corsair-integration) *(updated for v3.0.0 — replaces in-toto DSSE)*
 9. [Active Control Testing Patterns](#active-control-testing-patterns) *(new for v2.0.0)*
 10. [Design Implications](#design-implications)
 
@@ -164,73 +164,124 @@ CEL maintains canonical Protocol Buffer representations for ASTs:
 
 ---
 
-## In-Toto DSSE Attestation
+## Corsair Integration
 
-### Source: https://github.com/in-toto/attestation
+### Source: https://grcorsair.com | https://github.com/grcorsair/corsair
 
-**Decision**: in-toto Statement + DSSE envelope for attestation format
-**Rationale**: Standards-based, well-defined predicate model, content-addressable subjects, ecosystem compatibility
-**Alternatives Considered**: Raw Ed25519 signatures (lack structured predicate), JWT (heavier), Sigstore bundle (too many dependencies)
+**Decision**: Cryptographic provenance is NOT a native OCEAN feature. OCEAN evidence pipes to **Corsair** for signing when independent provenance verification is required.
+**Rationale**: Corsair is a purpose-built open-source cryptographic provenance protocol for GRC. OCEAN specializes in evidence acquisition and active testing; Corsair specializes in signing and certifying that evidence. The separation keeps OCEAN's scope narrow and the combined stack more powerful than either alone.
 
-### Statement Structure
+### What Corsair Is
 
+Corsair is a TypeScript/Bun open-source tool that creates **CPOEs** (Certificates of Proof of Operational Effectiveness) — machine-verifiable, cryptographically-signed certificates proving that a control worked at a specific time.
+
+**Format**: W3C JWT-VC (Verifiable Credentials) with Ed25519 signatures
+**Standards**: IETF SCITT, OpenID SSF/CAEP, DID:web
+
+### Corsair's Six Primitives
+
+| Primitive | Description |
+|-----------|-------------|
+| `SIGN` | Create a CPOE from input evidence |
+| `VERIFY` | Verify an existing CPOE |
+| `DIFF` | Compare two CPOEs to detect state changes |
+| `LOG` | Append CPOE to an immutable audit log |
+| `PUBLISH` | Publish CPOEs to external systems |
+| `SIGNAL` | Emit compliance signals to downstream consumers |
+
+### CPOE Input Format
+
+Corsair accepts either a **generic JSON format** or a **mapping pack** targeting specific tool output:
+
+**Generic format:**
 ```json
 {
-  "_type": "https://in-toto.io/Statement/v1",
-  "subject": [
+  "metadata": {
+    "source": "ocean",
+    "version": "3.0.0",
+    "timestamp": "2026-02-26T10:00:00Z"
+  },
+  "controls": [
     {
-      "name": "evidence/okta-mfa-policy-2026-02-12",
-      "digest": { "sha256": "<hex>" }
+      "id": "mfa.enforcement",
+      "status": "effective",
+      "confidence": "high",
+      "evidence": { ... }
     }
   ],
-  "predicateType": "https://ocean.grc.engineering/attestation/v1/collection",
-  "predicate": { }
+  "assessmentContext": {
+    "collector": "ocean",
+    "collectionMethod": "passive_observation"
+  }
 }
 ```
 
-### DSSE Envelope Format
+**Mapping pack**: A Corsair mapping pack targets OCEAN's output format specifically, translating `ControlStatus` records directly into CPOE predicates without manual JSON construction.
 
-```json
-{
-  "payload": "<base64-encoded-statement>",
-  "payloadType": "application/vnd.in-toto+json",
-  "signatures": [
-    { "keyid": "<key-identifier>", "sig": "<base64-encoded-signature>" }
-  ]
-}
+### OCEAN → Corsair Integration Patterns
+
+**Pattern 1 — CLI Pipe:**
+```bash
+ocean collect okta.mfa_policy | corsair sign --output cpoe.jwt
 ```
 
-No canonicalization required — payload is raw bytes. Supports multiple signatures.
+**Pattern 2 — REST API:**
+```bash
+ocean serve &
+# Corsair polls OCEAN's API and signs new evidence on schedule
+corsair sign --source http://localhost:8080/api/v1/evidence
+```
 
-### OCEAN Custom Predicate Types
+**Pattern 3 — OCEAN Mapping Pack:**
+```bash
+corsair sign --mapping-pack ocean --input ocean-evidence.json
+```
 
-**Collection Attestation** (`https://ocean.grc.engineering/attestation/v1/collection`):
-- moduleId, moduleVersion, moduleType (collector|tester)
-- timestamp, source system, endpoint
-- transcript (API calls made, parameters, responses)
-- For testers: actions attempted, observations, cleanup actions
+### What OCEAN Outputs for Corsair
 
-**Evaluation Attestation** (`https://ocean.grc.engineering/attestation/v1/evaluation`):
-- controlId, framework
-- evidenceRefs (array of content-addressable digests)
-- expressionRef (content-addressed CEL expression hash)
-- verdict (effective|ineffective|unknown)
-- confidence (high|medium|low)
+OCEAN's `ControlStatus` JSON becomes the body of the Corsair CPOE. Key fields Corsair uses:
+- `control_id` → CPOE subject identifier
+- `status` (effective|ineffective|unknown|partial) → CPOE assertion
+- `confidence` (high|medium|low) → CPOE confidence claim
+- `evidence_ids` → CPOE evidence references
+- `timestamp` → CPOE issuance time
 
-### Go Libraries
+### Architecture: OCEAN + Corsair Together
 
-1. **`github.com/in-toto/in-toto-golang`** — Official Go implementation
-2. **`github.com/secure-systems-lab/go-securesystemslib/dsse`** — Standalone DSSE
-3. **`crypto/ed25519`** (stdlib) — Ed25519 signing (32B pubkey, 64B signature, RFC 8032)
-4. **`crypto/sha256`** (stdlib) — SHA-256 content addressing
-5. **`github.com/opencontainers/go-digest`** — Robust Digest type (format: `sha256:<hex>`)
+```
+Source System APIs
+      |
+      | (OCEAN Collectors + Testers)
+      v
+  Evidence Records
+      |
+      | (OCEAN CEL Evaluation)
+      v
+  ControlStatus JSON
+      |
+      | (Corsair Mapping Pack or CLI pipe)
+      v
+  CPOE (Certificate of Proof of Operational Effectiveness)
+      |
+      | (Corsair PUBLISH + SIGNAL)
+      v
+  GRC Platforms / Auditors / StatusPage-style UIs
+```
+
+### When to Use Corsair
+
+Corsair is **optional** but recommended when:
+- Audit-grade evidence is required (auditors need independent verification)
+- Evidence will be shared with parties who don't trust the OCEAN operator
+- Compliance frameworks require cryptographic non-repudiation
+- Building a "StatusPage for Compliance" with verifiable uptime metrics
 
 ### References
 
-- [DSSE Specification](https://github.com/secure-systems-lab/dsse)
-- [In-Toto Statement Spec v1](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md)
-- [In-Toto Envelope Spec v1](https://github.com/in-toto/attestation/blob/main/spec/v1/envelope.md)
-- [Go crypto/ed25519](https://pkg.go.dev/crypto/ed25519)
+- [Corsair Website](https://grcorsair.com)
+- [Corsair GitHub](https://github.com/grcorsair/corsair)
+- [W3C Verifiable Credentials](https://www.w3.org/TR/vc-data-model/)
+- [IETF SCITT Architecture](https://www.ietf.org/archive/id/draft-ietf-scitt-architecture-07.txt)
 
 ---
 
@@ -313,21 +364,21 @@ test_transcript:
 
 **CEL-based**: Compile-once evaluate-many with content-addressed expressions for audit trail.
 
-### Attestation Layer (new for v2.0.0)
-
-**Two-layer**: Collection Attestations + Evaluation Attestations in in-toto DSSE format.
-
-### Architecture Stack
+### Architecture Stack (updated for v3.0.0)
 
 ```
-┌─────────────────────────────────────────┐
-│  GRC Platforms (GigaChad, CISO Assist)  │
-├─────────────────────────────────────────┤
-│         StatusPage-style UIs            │
-├─────────────────────────────────────────┤
-│      OCEAN (Evidence + Testing +        │
-│      Evaluation + Provenance)           │
-├─────────────────────────────────────────┤
-│  Source APIs (Okta, AWS, GitHub, etc.)  │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│   GRC Platforms (GigaChad, CISO Assist) + Auditors   │
+├──────────────────────────────────────────────────────┤
+│              StatusPage-style UIs                    │
+├────────────────────────┬─────────────────────────────┤
+│   Corsair (optional)   │                             │
+│   Cryptographic        │   OCEAN                     │
+│   Provenance / CPOEs   │   Evidence + Active Testing │
+│                        │   + CEL Evaluation          │
+├────────────────────────┴─────────────────────────────┤
+│        Source APIs (Okta, AWS, GitHub, etc.)         │
+└──────────────────────────────────────────────────────┘
 ```
+
+OCEAN and Corsair are complementary, not competing. OCEAN focuses on evidence quality; Corsair focuses on evidence trustworthiness. Use OCEAN alone for internal continuous monitoring; add Corsair when audit-grade independent verification is required.

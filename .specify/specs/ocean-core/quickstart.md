@@ -20,16 +20,7 @@ curl -sSL https://ocean.grc.engineering/install.sh | sh
 ocean version
 ```
 
-## 1. Generate Signing Keys
-
-All evidence requires cryptographic signing (Ed25519, in-toto DSSE format). Generate your keys first.
-
-```bash
-ocean keys generate
-# Creates ~/.ocean/keys/ocean-ed25519.pub and ocean-ed25519.key
-```
-
-## 2. Configure Credentials
+## 1. Configure Credentials
 
 OCEAN never stores credentials. Use environment variables or external secret providers.
 
@@ -38,7 +29,7 @@ export OKTA_API_TOKEN="your-token-here"
 export OKTA_DOMAIN="your-org.okta.com"
 ```
 
-## 3. Collect Evidence (Passive)
+## 2. Collect Evidence (Passive)
 
 Passive collection queries system APIs to observe configuration state without modifying anything.
 
@@ -49,12 +40,12 @@ ocean modules list
 # Collect MFA policy evidence from Okta
 ocean collect okta.mfa_policy
 
-# Output: JSON evidence with Collection Attestation (DSSE signed)
+# Output: JSON evidence normalized to OCEAN Evidence Schema
 ```
 
-Evidence is normalized to the OCEAN Evidence Schema, signed, and stored with full provenance. The `confidence_level` is set to `passive_observation`.
+Evidence is normalized to the OCEAN Evidence Schema with full provenance metadata. The `confidence_level` is set to `passive_observation`.
 
-## 4. Run Active Test
+## 3. Run Active Test
 
 Active testing attempts what controls should prevent and records whether the control blocked it. Every tester declares a safety classification.
 
@@ -78,7 +69,7 @@ Safety classifications control authorization requirements:
 | `reversible` | Explicit | Makes changes, auto-reverts after |
 | `destructive` | Explicit + warning | Permanent changes, manual cleanup |
 
-## 5. Evaluate Control
+## 4. Evaluate Control
 
 Evaluate control effectiveness using YAML presets or custom CEL expressions.
 
@@ -91,7 +82,7 @@ ocean evaluate control.mfa_enforcement \
   --cel 'evidence.mfa_policy.enforcement == "required" && evidence.test_result.blocked == true'
 ```
 
-## 6. Dual-Mode Verification
+## 5. Dual-Mode Verification
 
 Run both collector + tester and evaluate in a single command for highest confidence.
 
@@ -103,7 +94,7 @@ ocean verify control.mfa_enforcement
 
 When passive observation and active verification agree, confidence is `high`. If they disagree, the active test result takes precedence for behavioral assertions and the discrepancy is highlighted.
 
-## 7. Query History
+## 6. Query History
 
 Query historical evidence and calculate uptime metrics for the "StatusPage for Compliance" view.
 
@@ -114,19 +105,7 @@ ocean history --control mfa_enforcement --days 180
 
 Gaps in collection are clearly indicated, never interpolated or hidden.
 
-## 8. Verify Provenance
-
-Any party with the public key can independently verify evidence integrity.
-
-```bash
-ocean verify-provenance --evidence <evidence-id>
-# Output: ✓ Collection Attestation valid
-#         ✓ Evaluation Attestation valid
-#         ✓ Evidence digest matches
-#         ✓ Expression version: sha256:abc123...
-```
-
-## 9. Schedule Continuous Monitoring
+## 7. Schedule Continuous Monitoring
 
 Automate evidence collection and safe testing on a recurring schedule.
 
@@ -137,15 +116,29 @@ ocean schedule add --cron "0 2 * * *" --control mfa_enforcement
 
 Scheduled active tests respect safety classifications and environment scoping. Tests marked `reversible` or higher require pre-authorized approval configured at schedule creation time.
 
-## 10. Generate Report
+## 8. Generate Report
 
-Produce human-readable compliance reports with full provenance verification.
+Produce human-readable compliance reports.
 
 ```bash
-ocean report --format markdown --period 2026-01-01:2026-06-30 --verify-provenance
+ocean report --format markdown --period 2026-01-01:2026-06-30
 ```
 
 Reports distinguish passive observations from active test results and display failures prominently per the Radical Transparency principle.
+
+## 9. (Optional) Sign Evidence with Corsair
+
+For audit-grade independent verification, pipe OCEAN evidence to [Corsair](https://grcorsair.com) to produce CPOEs (Certificates of Proof of Operational Effectiveness).
+
+```bash
+# Pipe evidence to Corsair for cryptographic signing
+ocean collect okta.mfa_policy | corsair sign --output cpoe.jwt
+
+# Or export all control statuses and sign in batch
+ocean verify control.mfa_enforcement --output json | corsair sign --mapping-pack ocean
+```
+
+Corsair signs OCEAN evidence into W3C JWT-VC format (Verifiable Credentials) using Ed25519, enabling any third party to independently verify your compliance claims without trusting the OCEAN operator. See [grcorsair.com](https://grcorsair.com) for setup.
 
 ---
 
@@ -196,3 +189,4 @@ framework_mappings:
 - **Build custom modules**: Follow the Collector or Tester interface to extend OCEAN
 - **Enable scheduling**: Set up continuous monitoring for all controls
 - **Integrate with GRC platforms**: Use server mode (`ocean serve`) to expose the REST API
+- **Add cryptographic provenance**: Install [Corsair](https://grcorsair.com) and pipe OCEAN output for audit-grade CPOEs

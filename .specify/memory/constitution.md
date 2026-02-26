@@ -3,38 +3,42 @@
 
 <!--
 Sync Impact Report:
-- Version change: 1.0.0 → 2.0.0
-- MAJOR: Fundamentally expands scope from passive-only to passive + active
+- Version change: 2.0.0 → 3.0.0
+- MAJOR: Cryptographic provenance removed as native OCEAN feature
+  - Principle X (Cryptographic Provenance Chain) removed
+  - Provenance is now handled by Corsair (https://grcorsair.com), used in tandem
 - Modified principles:
-  - III. Metasploit-Style Extensibility → expanded for Collectors + Testers
-  - V. Control-Centric Organization → expanded for active verification + CEL evaluation
-  - VIII. Security & Privacy by Design → signing now mandatory, active test security added
-- Added principles:
-  - IX. Active Control Verification (NEW)
-  - X. Cryptographic Provenance Chain (NEW)
-- Added Technology Stack rows: Expression Engine (CEL), Attestation Format (in-toto DSSE)
-- Added Quality Gates: active test safety classification requirements
-- Removed sections: none
+  - I. Evidence-First Architecture → removed mandatory attestation requirement
+  - VII. Radical Transparency → removed "cryptographic provenance" wording
+  - VIII. Security & Privacy by Design → removed mandatory signing, updated to Corsair reference
+  - Vision Statement → updated to describe 3-pillar OCEAN + Corsair integration
+- Removed principles:
+  - X. Cryptographic Provenance Chain (removed — now Corsair's domain)
+- Technology Stack changes:
+  - Removed: Attestation Format (in-toto DSSE)
+  - Added: Corsair Integration note
 - Templates requiring updates:
-  - ⚠ .specify/specs/ocean-core/spec.md — needs new user stories for active testing + provenance
-  - ⚠ .specify/specs/ocean-core/plan.md — needs new phases for testing framework + attestation layer
-  - ⚠ .specify/specs/ocean-core/tasks.md — needs regeneration from updated plan
+  - ⚠ .specify/specs/ocean-core/spec.md — updated to remove provenance pillar and FR-040-FR-047
+  - ⚠ .specify/specs/ocean-core/plan.md — updated to remove attestation phases/decisions
+  - ⚠ .specify/specs/ocean-core/data-model.md — updated to remove Attestation entity
+  - ⚠ .specify/specs/ocean-core/quickstart.md — updated to remove keys/verify-provenance
+  - ⚠ .specify/specs/ocean-core/research.md — updated with Corsair Integration section
+  - ⚠ .specify/specs/ocean-core/tasks.md — Phase 11 and attestation tasks deprecated
   - ⚠ CLAUDE.md — needs updated principle list and scope description
-  - ✅ .specify/templates/plan-template.md — no changes needed (Constitution Check is dynamic)
-  - ✅ .specify/templates/spec-template.md — no changes needed (template is generic)
-  - ✅ .specify/templates/tasks-template.md — no changes needed (template is generic)
-- Follow-up TODOs: Run /speckit.specify → /speckit.plan → /speckit.tasks to cascade changes
+- Follow-up TODOs: Code changes to remove internal/attestation/, ocean keys, ocean verify-provenance
 -->
 
 ## Vision Statement
 
 OCEAN is the **"Metasploit for GRC"** — an open-source, portable evidence acquisition, active control testing, and normalization engine powering continuous compliance monitoring. Its ultimate purpose is to serve as the backend for a **"StatusPage for Compliance"** — a radically transparent, shareable dashboard showing historical control operating effectiveness metrics.
 
-Like Metasploit enables security professionals to both *scan for* and *actively test* vulnerabilities, OCEAN enables both **passive monitoring** (querying system APIs to observe configuration state) and **active verification** (attempting what controls should prevent to prove they work). All evidence — whether passively collected or actively generated — carries cryptographic provenance proving exactly how it was obtained and evaluated.
+Like Metasploit enables security professionals to both *scan for* and *actively test* vulnerabilities, OCEAN enables both **passive monitoring** (querying system APIs to observe configuration state) and **active verification** (attempting what controls should prevent to prove they work). All evidence — whether passively collected or actively generated — is structured, normalized, and queryable.
 
 Like StatusPage shows "Is the service up?", OCEAN enables showing "Is the control operating effectively?" with historical evidence trails, uptime metrics (e.g., "99.94% effective over 180 days"), and honest representation of failures alongside successes.
 
-OCEAN is **NOT** a full GRC platform. It is the specialized evidence and verification layer that GRC platforms consume.
+OCEAN is designed to work in tandem with **[Corsair](https://grcorsair.com)** — the open-source cryptographic provenance layer. OCEAN produces structured evidence; Corsair signs it into independently-verifiable Certificates of Proof of Operational Effectiveness (CPOEs). Together they form a complete, auditor-grade GRC evidence stack.
+
+OCEAN is **NOT** a full GRC platform, and it is **NOT** a cryptographic provenance tool. It is the specialized evidence acquisition and verification layer that GRC platforms consume. Provenance is Corsair's job.
 
 ## Core Principles
 
@@ -42,7 +46,7 @@ OCEAN is **NOT** a full GRC platform. It is the specialized evidence and verific
 
 All data in OCEAN is **evidence** — structured records proving whether controls are implemented and operating effectively.
 
-- All evidence MUST have provenance metadata: source system, collection timestamp, module version, chain of custody, and cryptographic attestation (see Principle X)
+- All evidence MUST have provenance metadata: source system, collection timestamp, module version, chain of custody
 - Evidence is **immutable** once collected; enrichment creates new derived records with explicit linkage to originals
 - Support both point-in-time snapshots AND continuous/historical time-series data for control uptime calculations
 - Evidence MUST be **reproducible** — same query parameters over the same time window MUST produce identical results
@@ -55,7 +59,7 @@ The evidence schema draws inspiration from [OCSF](https://schema.ocsf.io/) (Open
 
 - **Hierarchical taxonomy**: Control Domains (categories) → Evidence Classes → Attributes
 - **Shared attribute dictionary** ensures consistent semantics across all integrations (e.g., `timestamp`, `resource_id`, `status` mean the same thing everywhere)
-- **Profile system** for cross-cutting concerns: audit trail profile, temporal profile, enrichment profile, attestation profile
+- **Profile system** for cross-cutting concerns: audit trail profile, temporal profile, enrichment profile
 - **Extension mechanism** for regulation-specific evidence without modifying core schema (e.g., HIPAA extensions, PCI extensions)
 - **Single-parentage**: each evidence record belongs to exactly one Evidence Class — no ambiguity
 - **Observable extraction**: key indicators (accounts, IPs, resources, domains) are surfaced regardless of nesting depth for unified search
@@ -121,7 +125,7 @@ No "trust center theater." OCEAN shows reality.
 - **Clear error handling** with actionable remediation guidance (not just "collection failed")
 - **Public-facing dashboards** show real historical data, not curated point-in-time snapshots
 - Evidence includes confidence levels and caveats where applicable
-- **Cryptographic provenance** enables third-party independent verification of any compliance claim
+- **Corsair integration** enables third-party independent verification of any compliance claim when cryptographic provenance is desired
 
 ### VIII. Security & Privacy by Design
 
@@ -130,12 +134,12 @@ The tool that proves security must itself be secure.
 - **Credentials NEVER stored in evidence**; use secret references (environment variables, HashiCorp Vault, AWS Secrets Manager, Azure Key Vault)
 - **Minimal permissions principle** — modules request only the permissions they need, document required permissions
 - **Evidence redaction** capabilities for sharing: PII masking, resource ID hashing, configurable field removal
-- **Cryptographic provenance chain** for all stored evidence (see Principle X); signing is mandatory, not optional
 - **Role-based access** to different evidence sensitivity levels
 - **Secure defaults**: TLS required for remote storage, secrets encrypted at rest
 - Regular security audits of module permission scopes
 - **Active test modules** undergo additional security review for blast radius and safety classification
 - **Test authorization** is required before executing active tests in any environment
+- Evidence produced by OCEAN can be cryptographically signed using **Corsair** (https://grcorsair.com) when independent provenance verification is required
 
 ### IX. Active Control Verification
 
@@ -154,19 +158,6 @@ OCEAN supports both passive evidence collection AND active control testing. Pass
 - Active test results include the **full test transcript**: what was attempted, what was observed, what was cleaned up
 - **Safety-first principle**: when in doubt, classify tests at a HIGHER risk level; production-safe is a claim that must be proven
 
-### X. Cryptographic Provenance Chain
-
-All evidence and evaluations MUST support verifiable provenance proving the complete chain from data acquisition to compliance verdict.
-
-- Evidence provenance follows a **two-layer attestation model**: Collection Attestations (what was gathered, how, from where) and Evaluation Attestations (what logic was applied, to what evidence, producing what verdict)
-- Attestations use **content-addressable references**: artifacts are identified by cryptographic digest, not mutable identifiers
-- Attestation format follows the **in-toto Statement specification** (DSSE envelope) with OCEAN-specific predicate types
-- Signing is **mandatory** for stored evidence; key management supports local Ed25519 keys (default), KMS-backed keys (enterprise), and keyless signing with OIDC identity binding (advanced)
-- The provenance chain MUST be **independently verifiable**: a third party with the public key and attestation chain can validate any verdict without trusting the operator
-- **Collection transcripts** (API calls made, parameters used, responses received) are preserved as content-addressed artifacts referenced by collection attestations
-- **Evaluation logic** is versioned and content-addressed; the exact logic used for any historical evaluation MUST be reproducible
-- For active tests: the **test transcript** (actions attempted, system responses, cleanup actions) is captured in the collection attestation as additional provenance
-
 ## Technology Stack
 
 | Component | Choice | Rationale |
@@ -177,7 +168,7 @@ All evidence and evaluations MUST support verifiable provenance proving the comp
 | Enterprise Storage | **PostgreSQL** | Battle-tested, JSONB support, excellent for structured queries |
 | Analytics Storage | **ClickHouse** (optional) | Columnar storage for time-series analytics at scale |
 | Expression Engine | **CEL** (Common Expression Language) | Non-Turing-complete, Go-native evaluation engine for user-defined compliance conditions; reference implementation: `github.com/google/cel-go` |
-| Attestation Format | **in-toto DSSE** (Dead Simple Signing Envelope) | Standards-based attestation format for evidence provenance with OCEAN-specific predicate types |
+| Provenance Layer | **Corsair** (optional, external) | Open-source cryptographic provenance protocol; OCEAN evidence pipes to Corsair for CPOE (Certificate of Proof of Operational Effectiveness) signing. See https://grcorsair.com |
 | API | **REST** (external), gRPC (internal, optional) | REST for broad compatibility, gRPC for performance-critical internal paths |
 | License | **Apache 2.0** | Permissive, enterprise-friendly, includes patent protection |
 
@@ -223,4 +214,4 @@ All evidence and evaluations MUST support verifiable provenance proving the comp
 ### Precedence
 This constitution supersedes all other documentation in cases of conflict. If guidance documents contradict principles here, file an issue to resolve the discrepancy.
 
-**Version**: 2.0.0 | **Ratified**: 2026-01-17 | **Last Amended**: 2026-02-12
+**Version**: 3.0.0 | **Ratified**: 2026-01-17 | **Last Amended**: 2026-02-26
