@@ -15,3 +15,6 @@ pub mod modules;
 
 pub use evidence::{Evidence, ConfidenceLevel, StatusId};
 pub use module::{Module, Collector, Tester, Registry};
+
+#[cfg(test)]
+pub mod testutil;

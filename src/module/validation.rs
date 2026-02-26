@@ -29,3 +29,67 @@ pub fn validate_tester(t: &dyn Tester) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::{MockCollector, MockTester, TesterBadMeta};
+
+    // --- validate_collector ---
+
+    #[test]
+    fn collector_valid_passes() {
+        let c = MockCollector::new("col.valid");
+        assert!(validate_collector(&c).is_ok());
+    }
+
+    #[test]
+    fn collector_empty_id_fails() {
+        let c = MockCollector::empty_id();
+        let err = validate_collector(&c).unwrap_err();
+        assert!(err.to_string().contains("ID must not be empty"));
+    }
+
+    #[test]
+    fn collector_empty_name_fails() {
+        let c = MockCollector::empty_name("col.bad");
+        let err = validate_collector(&c).unwrap_err();
+        assert!(err.to_string().contains("name must not be empty"));
+    }
+
+    #[test]
+    fn collector_empty_source_system_fails() {
+        let c = MockCollector::empty_source("col.nosrc");
+        let err = validate_collector(&c).unwrap_err();
+        assert!(err.to_string().contains("source_system must not be empty"));
+    }
+
+    // --- validate_tester ---
+
+    #[test]
+    fn tester_valid_passes() {
+        let t = MockTester::safe("test.valid");
+        assert!(validate_tester(&t).is_ok());
+    }
+
+    #[test]
+    fn tester_empty_id_fails() {
+        let t = MockTester::empty_id();
+        let err = validate_tester(&t).unwrap_err();
+        assert!(err.to_string().contains("ID must not be empty"));
+    }
+
+    #[test]
+    fn tester_empty_name_fails() {
+        let t = TesterBadMeta { id: "t.bad", name: "", source: "mock" };
+        let err = validate_tester(&t).unwrap_err();
+        assert!(err.to_string().contains("name must not be empty"));
+    }
+
+    #[test]
+    fn tester_empty_source_system_fails() {
+        let t = TesterBadMeta { id: "t.nosrc", name: "Bad", source: "" };
+        let err = validate_tester(&t).unwrap_err();
+        assert!(err.to_string().contains("source_system must not be empty"));
+    }
+}

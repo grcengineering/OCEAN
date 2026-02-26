@@ -59,3 +59,112 @@ fn hash_value(value: &str) -> String {
     hasher.update(value.as_bytes());
     format!("sha256:{:x}", hasher.finalize())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::evidence::{Observable, Finding};
+    use crate::evidence::transcript::TranscriptRecorder;
+
+    #[test]
+    fn noop_config_returns_clone() {
+        let ev = crate::testutil::make_evidence();
+        let config = RedactionConfig::default();
+        let redacted = redact_evidence(&ev, &config);
+        assert_eq!(redacted.id, ev.id);
+        assert_eq!(redacted.raw_data, ev.raw_data);
+        assert_eq!(redacted.observables.len(), ev.observables.len());
+        assert_eq!(redacted.findings.len(), ev.findings.len());
+    }
+
+    #[test]
+    fn remove_raw_data() {
+        let ev = crate::testutil::make_evidence();
+        let config = RedactionConfig { remove_raw_data: true, ..Default::default() };
+        let redacted = redact_evidence(&ev, &config);
+        assert!(redacted.raw_data.is_null());
+    }
+
+    #[test]
+    fn mask_observable_type() {
+        let mut ev = crate::testutil::make_evidence();
+        ev.observables = vec![
+            Observable { obs_type: "user".to_string(), value: "alice".to_string() },
+            Observable { obs_type: "ip".to_string(), value: "1.2.3.4".to_string() },
+        ];
+        let config = RedactionConfig {
+            mask_observable_types: vec!["user".to_string()],
+            ..Default::default()
+        };
+        let redacted = redact_evidence(&ev, &config);
+        assert_eq!(redacted.observables[0].value, "***REDACTED***");
+        assert_eq!(redacted.observables[1].value, "1.2.3.4"); // untouched
+    }
+
+    #[test]
+    fn hash_observable_type() {
+        let mut ev = crate::testutil::make_evidence();
+        ev.observables = vec![
+            Observable { obs_type: "ip".to_string(), value: "10.0.0.1".to_string() },
+        ];
+        let config = RedactionConfig {
+            hash_observable_types: vec!["ip".to_string()],
+            ..Default::default()
+        };
+        let redacted = redact_evidence(&ev, &config);
+        assert!(redacted.observables[0].value.starts_with("sha256:"));
+        assert_ne!(redacted.observables[0].value, "10.0.0.1");
+    }
+
+    #[test]
+    fn remove_findings() {
+        let mut ev = crate::testutil::make_evidence();
+        ev.findings = vec![Finding { title: "T".to_string(), description: "D".to_string(), severity_id: 1 }];
+        let config = RedactionConfig {
+            remove_fields: vec!["findings".to_string()],
+            ..Default::default()
+        };
+        let redacted = redact_evidence(&ev, &config);
+        assert!(redacted.findings.is_empty());
+    }
+
+    #[test]
+    fn remove_enrichments() {
+        let mut ev = crate::testutil::make_evidence();
+        ev.enrichments = vec![crate::evidence::Enrichment {
+            enrichment_type: "geo".to_string(),
+            data: serde_json::json!({}),
+            enriched_time: chrono::Utc::now(),
+        }];
+        let config = RedactionConfig {
+            remove_fields: vec!["enrichments".to_string()],
+            ..Default::default()
+        };
+        let redacted = redact_evidence(&ev, &config);
+        assert!(redacted.enrichments.is_empty());
+    }
+
+    #[test]
+    fn remove_test_transcript() {
+        let mut ev = crate::testutil::make_evidence();
+        let mut rec = TranscriptRecorder::new();
+        rec.record_action("attack", None);
+        ev.test_transcript = Some(rec.finalize());
+        assert!(ev.test_transcript.is_some());
+
+        let config = RedactionConfig {
+            remove_fields: vec!["test_transcript".to_string()],
+            ..Default::default()
+        };
+        let redacted = redact_evidence(&ev, &config);
+        assert!(redacted.test_transcript.is_none());
+    }
+
+    #[test]
+    fn original_not_mutated() {
+        let ev = crate::testutil::make_evidence();
+        let config = RedactionConfig { remove_raw_data: true, ..Default::default() };
+        let _redacted = redact_evidence(&ev, &config);
+        assert!(!ev.raw_data.is_null()); // original unchanged
+    }
+}

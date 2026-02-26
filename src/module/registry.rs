@@ -121,3 +121,133 @@ impl Registry {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::{MockCollector, MockTester};
+
+    fn make_registry() -> Registry {
+        let reg = Registry::new();
+        reg.register_collector(Arc::new(MockCollector::new("col.a")));
+        reg.register_collector(Arc::new(MockCollector::new("col.b")));
+        reg.register_tester(Arc::new(MockTester::safe("test.a")));
+        reg
+    }
+
+    #[test]
+    fn get_collector_found() {
+        let reg = make_registry();
+        let c = reg.get_collector("col.a").unwrap();
+        assert_eq!(c.id(), "col.a");
+    }
+
+    #[test]
+    fn get_collector_not_found() {
+        let reg = make_registry();
+        let err = reg.get_collector("nonexistent").err().expect("should fail");
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn get_tester_found() {
+        let reg = make_registry();
+        let t = reg.get_tester("test.a").unwrap();
+        assert_eq!(t.id(), "test.a");
+    }
+
+    #[test]
+    fn get_tester_not_found() {
+        let reg = make_registry();
+        assert!(reg.get_tester("missing").is_err());
+    }
+
+    #[test]
+    fn get_module_finds_collector() {
+        let reg = make_registry();
+        let m = reg.get_module("col.a").unwrap();
+        assert_eq!(m.id(), "col.a");
+    }
+
+    #[test]
+    fn get_module_finds_tester() {
+        let reg = make_registry();
+        let m = reg.get_module("test.a").unwrap();
+        assert_eq!(m.id(), "test.a");
+    }
+
+    #[test]
+    fn get_module_not_found() {
+        let reg = make_registry();
+        assert!(reg.get_module("unknown").is_err());
+    }
+
+    #[test]
+    fn list_collectors_returns_all() {
+        let reg = make_registry();
+        assert_eq!(reg.list_collectors().len(), 2);
+    }
+
+    #[test]
+    fn list_testers_returns_all() {
+        let reg = make_registry();
+        assert_eq!(reg.list_testers().len(), 1);
+    }
+
+    #[test]
+    fn list_modules_sorted_by_id() {
+        let reg = make_registry();
+        let modules = reg.list_modules();
+        assert_eq!(modules.len(), 3);
+        // Verify sorted
+        let ids: Vec<&str> = modules.iter().map(|m| m.id.as_str()).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        assert_eq!(ids, sorted);
+    }
+
+    #[test]
+    fn list_modules_has_correct_types() {
+        let reg = make_registry();
+        let modules = reg.list_modules();
+        let col_count = modules.iter().filter(|m| m.module_type == "collector").count();
+        let test_count = modules.iter().filter(|m| m.module_type == "tester").count();
+        assert_eq!(col_count, 2);
+        assert_eq!(test_count, 1);
+    }
+
+    #[test]
+    fn list_by_type_collector() {
+        let reg = make_registry();
+        let cols = reg.list_by_type("collector");
+        assert_eq!(cols.len(), 2);
+        assert!(cols.iter().all(|m| m.module_type == "collector"));
+    }
+
+    #[test]
+    fn list_by_type_tester() {
+        let reg = make_registry();
+        let testers = reg.list_by_type("tester");
+        assert_eq!(testers.len(), 1);
+    }
+
+    #[test]
+    fn list_by_source_system() {
+        let reg = make_registry();
+        // All mocks have source_system = "mock"
+        let mock_modules = reg.list_by_source_system("mock");
+        assert_eq!(mock_modules.len(), 3);
+
+        let aws_modules = reg.list_by_source_system("aws");
+        assert!(aws_modules.is_empty());
+    }
+
+    #[test]
+    fn tester_info_includes_safety_and_scope() {
+        let reg = make_registry();
+        let modules = reg.list_modules();
+        let tester_info = modules.iter().find(|m| m.module_type == "tester").unwrap();
+        assert!(!tester_info.safety_classification.is_empty());
+        assert!(!tester_info.environment_scope.is_empty());
+    }
+}

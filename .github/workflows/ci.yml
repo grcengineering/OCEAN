@@ -9,66 +9,84 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
+  # -------------------------------------------------------------------------
+  # Test
+  # -------------------------------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-features
+
+  # -------------------------------------------------------------------------
+  # Lint (clippy + fmt)
+  # -------------------------------------------------------------------------
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -- -D warnings
+      - run: cargo fmt --check
 
-  test-unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Run unit tests
-        run: go test -race -count=1 -json -coverprofile=coverage.out ./... 2>&1 | tee test-output.json
-      - name: Check coverage threshold
-        run: make coverage-check
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.out
-
-  test-integration:
-    runs-on: ubuntu-latest
-    needs: test-unit
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Run integration tests
-        run: go test -race -count=1 -tags=integration ./...
-
+  # -------------------------------------------------------------------------
+  # Build (release)
+  # -------------------------------------------------------------------------
   build:
+    name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test-unit]
-    strategy:
-      matrix:
-        goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
-        exclude:
-          - goos: windows
-            goarch: arm64
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+
+  # -------------------------------------------------------------------------
+  # Coverage (cargo-tarpaulin, Linux only)
+  # -------------------------------------------------------------------------
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+      - name: Run coverage
+        run: |
+          cargo tarpaulin \
+            --all-features \
+            --timeout 120 \
+            --out Xml \
+            --output-dir coverage/ \
+            --exclude-files 'src/api/*' \
+            --exclude-files 'src/config/*' \
+            --exclude-files 'src/eval/*' \
+            --exclude-files 'src/secrets/*' \
+            --exclude-files 'src/modules/*' \
+            --exclude-files 'src/scheduler/cron.rs' \
+            --exclude-files 'src/scheduler/runner.rs' \
+            --exclude-files 'src/control/composite.rs' \
+            --exclude-files 'src/control/evaluator.rs' \
+            --exclude-files 'src/control/framework.rs' \
+            --exclude-files 'src/main.rs'
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
         with:
-          go-version-file: go.mod
-          cache: true
-      - name: Build
+          files: coverage/cobertura.xml
+          fail_ci_if_error: false
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: go build -o /dev/null ./cmd/ocean
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

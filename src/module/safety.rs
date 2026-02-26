@@ -170,3 +170,176 @@ impl Authorizer for AutoAuthorizer {
         Ok(level == AuthorizationLevel::Auto)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- SafetyClassification ---
+
+    #[test]
+    fn requires_explicit_auth() {
+        assert!(!SafetyClassification::Safe.requires_explicit_auth());
+        assert!(SafetyClassification::Observable.requires_explicit_auth());
+        assert!(SafetyClassification::Reversible.requires_explicit_auth());
+        assert!(SafetyClassification::Destructive.requires_explicit_auth());
+    }
+
+    #[test]
+    fn requires_warning_only_destructive() {
+        assert!(!SafetyClassification::Safe.requires_warning());
+        assert!(!SafetyClassification::Observable.requires_warning());
+        assert!(!SafetyClassification::Reversible.requires_warning());
+        assert!(SafetyClassification::Destructive.requires_warning());
+    }
+
+    #[test]
+    fn safety_classification_display() {
+        assert_eq!(SafetyClassification::Safe.to_string(), "safe");
+        assert_eq!(SafetyClassification::Observable.to_string(), "observable");
+        assert_eq!(SafetyClassification::Reversible.to_string(), "reversible");
+        assert_eq!(SafetyClassification::Destructive.to_string(), "destructive");
+    }
+
+    #[test]
+    fn safety_classification_serde() {
+        for sc in [
+            SafetyClassification::Safe,
+            SafetyClassification::Observable,
+            SafetyClassification::Reversible,
+            SafetyClassification::Destructive,
+        ] {
+            let json = serde_json::to_string(&sc).unwrap();
+            let decoded: SafetyClassification = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, sc);
+        }
+    }
+
+    // --- EnvironmentScope ---
+
+    #[test]
+    fn environment_scope_display() {
+        assert_eq!(EnvironmentScope::Production.to_string(), "production");
+        assert_eq!(EnvironmentScope::Staging.to_string(), "staging");
+        assert_eq!(EnvironmentScope::Isolated.to_string(), "isolated");
+    }
+
+    #[test]
+    fn environment_scope_serde() {
+        for scope in [EnvironmentScope::Production, EnvironmentScope::Staging, EnvironmentScope::Isolated] {
+            let json = serde_json::to_string(&scope).unwrap();
+            let decoded: EnvironmentScope = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, scope);
+        }
+    }
+
+    // --- can_run_in_environment ---
+
+    #[test]
+    fn safe_runs_everywhere() {
+        for env in [EnvironmentScope::Production, EnvironmentScope::Staging, EnvironmentScope::Isolated] {
+            assert!(can_run_in_environment(SafetyClassification::Safe, env));
+        }
+    }
+
+    #[test]
+    fn observable_runs_in_prod_and_staging_not_isolated() {
+        assert!(can_run_in_environment(SafetyClassification::Observable, EnvironmentScope::Production));
+        assert!(can_run_in_environment(SafetyClassification::Observable, EnvironmentScope::Staging));
+        assert!(!can_run_in_environment(SafetyClassification::Observable, EnvironmentScope::Isolated));
+    }
+
+    #[test]
+    fn reversible_runs_in_staging_and_isolated_not_prod() {
+        assert!(!can_run_in_environment(SafetyClassification::Reversible, EnvironmentScope::Production));
+        assert!(can_run_in_environment(SafetyClassification::Reversible, EnvironmentScope::Staging));
+        assert!(can_run_in_environment(SafetyClassification::Reversible, EnvironmentScope::Isolated));
+    }
+
+    #[test]
+    fn destructive_only_in_isolated() {
+        assert!(!can_run_in_environment(SafetyClassification::Destructive, EnvironmentScope::Production));
+        assert!(!can_run_in_environment(SafetyClassification::Destructive, EnvironmentScope::Staging));
+        assert!(can_run_in_environment(SafetyClassification::Destructive, EnvironmentScope::Isolated));
+    }
+
+    // --- enforce_scope ---
+
+    #[test]
+    fn enforce_scope_allowed_passes() {
+        assert!(enforce_scope("t1", SafetyClassification::Safe, EnvironmentScope::Production).is_ok());
+    }
+
+    #[test]
+    fn enforce_scope_denied_returns_error() {
+        let err = enforce_scope("t1", SafetyClassification::Destructive, EnvironmentScope::Production).unwrap_err();
+        assert!(err.to_string().contains("scope violation"));
+    }
+
+    // --- highest_safety_classification ---
+
+    #[test]
+    fn highest_of_empty_is_safe() {
+        assert_eq!(highest_safety_classification(&[]), SafetyClassification::Safe);
+    }
+
+    #[test]
+    fn highest_of_single() {
+        assert_eq!(
+            highest_safety_classification(&[SafetyClassification::Reversible]),
+            SafetyClassification::Reversible
+        );
+    }
+
+    #[test]
+    fn highest_picks_most_restrictive() {
+        let classes = [
+            SafetyClassification::Safe,
+            SafetyClassification::Reversible,
+            SafetyClassification::Observable,
+        ];
+        assert_eq!(highest_safety_classification(&classes), SafetyClassification::Reversible);
+    }
+
+    #[test]
+    fn highest_with_destructive_wins() {
+        let classes = [SafetyClassification::Reversible, SafetyClassification::Destructive];
+        assert_eq!(highest_safety_classification(&classes), SafetyClassification::Destructive);
+    }
+
+    // --- required_auth_level ---
+
+    #[test]
+    fn required_auth_level_mapping() {
+        assert_eq!(required_auth_level(SafetyClassification::Safe), AuthorizationLevel::Auto);
+        assert_eq!(required_auth_level(SafetyClassification::Observable), AuthorizationLevel::Prompt);
+        assert_eq!(required_auth_level(SafetyClassification::Reversible), AuthorizationLevel::Explicit);
+        assert_eq!(required_auth_level(SafetyClassification::Destructive), AuthorizationLevel::Warning);
+    }
+
+    // --- AuthorizationLevel Display ---
+
+    #[test]
+    fn auth_level_display() {
+        assert_eq!(AuthorizationLevel::Auto.to_string(), "auto");
+        assert_eq!(AuthorizationLevel::Prompt.to_string(), "prompt");
+        assert_eq!(AuthorizationLevel::Explicit.to_string(), "explicit");
+        assert_eq!(AuthorizationLevel::Warning.to_string(), "warning");
+    }
+
+    // --- AutoAuthorizer ---
+
+    #[test]
+    fn auto_authorizer_approves_auto_level() {
+        let auth = AutoAuthorizer;
+        assert!(auth.authorize("t", SafetyClassification::Safe, AuthorizationLevel::Auto).unwrap());
+    }
+
+    #[test]
+    fn auto_authorizer_rejects_non_auto() {
+        let auth = AutoAuthorizer;
+        assert!(!auth.authorize("t", SafetyClassification::Observable, AuthorizationLevel::Prompt).unwrap());
+        assert!(!auth.authorize("t", SafetyClassification::Reversible, AuthorizationLevel::Explicit).unwrap());
+        assert!(!auth.authorize("t", SafetyClassification::Destructive, AuthorizationLevel::Warning).unwrap());
+    }
+}

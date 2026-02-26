@@ -55,3 +55,32 @@ pub trait Store: Send + Sync {
     fn prune_evidence(&self, older_than: DateTime<Utc>) -> Result<u64>;
     fn close(&self) -> Result<()>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evidence_query_default_all_none() {
+        let q = EvidenceQuery::default();
+        assert!(q.control_id.is_none());
+        assert!(q.source.is_none());
+        assert!(q.from_time.is_none());
+        assert!(q.to_time.is_none());
+        assert!(q.min_confidence.is_none());
+        assert!(q.limit.is_none());
+        assert!(q.cursor.is_none());
+    }
+
+    #[test]
+    fn evidence_query_with_fields() {
+        let q = EvidenceQuery {
+            control_id: Some("cc6.1".to_string()),
+            limit: Some(50),
+            ..Default::default()
+        };
+        assert_eq!(q.control_id.as_deref(), Some("cc6.1"));
+        assert_eq!(q.limit, Some(50));
+        assert!(q.from_time.is_none());
+    }
+}

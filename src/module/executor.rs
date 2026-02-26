@@ -114,3 +114,109 @@ impl Executor {
         Ok(evidences)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use crate::testutil::{MockCollector, MockTester, DenyAuthorizer};
+    use crate::evidence::ConfidenceLevel;
+    use crate::module::EnvironmentScope;
+
+    fn make_executor() -> (Arc<Registry>, Executor) {
+        let reg = Arc::new(Registry::new());
+        let exec = Executor::new(Arc::clone(&reg));
+        (reg, exec)
+    }
+
+    // --- execute_collector ---
+
+    #[test]
+    fn execute_collector_success() {
+        let (reg, exec) = make_executor();
+        reg.register_collector(Arc::new(MockCollector::new("col.mock")));
+        let ev = exec.execute_collector("col.mock", &HashMap::new()).unwrap();
+        assert_eq!(ev.len(), 1);
+    }
+
+    #[test]
+    fn execute_collector_not_found() {
+        let (_, exec) = make_executor();
+        assert!(exec.execute_collector("col.missing", &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn execute_collector_module_error_propagated() {
+        let (reg, exec) = make_executor();
+        reg.register_collector(Arc::new(MockCollector::failing("col.fail")));
+        let err = exec.execute_collector("col.fail", &HashMap::new()).unwrap_err();
+        assert!(err.to_string().contains("mock collector failure"));
+    }
+
+    // --- execute_tester ---
+
+    #[test]
+    fn execute_tester_safe_success() {
+        let (reg, exec) = make_executor();
+        reg.register_tester(Arc::new(MockTester::safe("test.safe")));
+        let cfg = TestConfig::default_safe();
+        let ev = exec.execute_tester("test.safe", &cfg).unwrap();
+        assert_eq!(ev.len(), 1);
+        assert_eq!(ev[0].confidence_level, ConfidenceLevel::ActiveVerification);
+        assert!(ev[0].metadata.safety_classification.is_some());
+        assert!(ev[0].test_transcript.is_some());
+    }
+
+    #[test]
+    fn execute_tester_sets_cleanup_in_transcript() {
+        let (reg, exec) = make_executor();
+        reg.register_tester(Arc::new(MockTester::safe("test.safe2")));
+        let cfg = TestConfig::default_safe();
+        let ev = exec.execute_tester("test.safe2", &cfg).unwrap();
+        let transcript = ev[0].test_transcript.as_ref().unwrap();
+        assert!(!transcript.cleanup_actions.is_empty());
+    }
+
+    #[test]
+    fn execute_tester_not_found() {
+        let (_, exec) = make_executor();
+        let cfg = TestConfig::default_safe();
+        assert!(exec.execute_tester("missing", &cfg).is_err());
+    }
+
+    #[test]
+    fn execute_tester_scope_violation() {
+        let (reg, exec) = make_executor();
+        // Destructive tester cannot run in Production
+        reg.register_tester(Arc::new(MockTester::destructive("test.dest")));
+        let cfg = TestConfig {
+            module_config: HashMap::new(),
+            target_environment: EnvironmentScope::Production,
+            authorizer: Box::new(AutoAuthorizer),
+        };
+        let err = exec.execute_tester("test.dest", &cfg).unwrap_err();
+        assert!(err.to_string().contains("scope violation"));
+    }
+
+    #[test]
+    fn execute_tester_auth_denied() {
+        let (reg, exec) = make_executor();
+        reg.register_tester(Arc::new(MockTester::safe("test.safe3")));
+        let cfg = TestConfig {
+            module_config: HashMap::new(),
+            target_environment: EnvironmentScope::Production,
+            authorizer: Box::new(DenyAuthorizer),
+        };
+        let err = exec.execute_tester("test.safe3", &cfg).unwrap_err();
+        assert!(err.to_string().contains("authorization denied"));
+    }
+
+    #[test]
+    fn execute_tester_test_failure_after_cleanup() {
+        let (reg, exec) = make_executor();
+        reg.register_tester(Arc::new(MockTester::failing("test.fail")));
+        let cfg = TestConfig::default_safe();
+        let err = exec.execute_tester("test.fail", &cfg).unwrap_err();
+        assert!(err.to_string().contains("cleanup completed"));
+    }
+}

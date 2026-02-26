@@ -563,3 +563,421 @@ fn scan_schedule_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScheduleRun> {
         error: row.get(6)?,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scheduler::types::{RUN_STATUS_SUCCESS, MODULE_STATUS_SUCCESS};
+    use crate::storage::{EvidenceQuery, Store};
+    use chrono::Duration;
+    use tempfile::TempDir;
+
+    // ---------------------------------------------------------------------------
+    // Test helpers
+    // ---------------------------------------------------------------------------
+
+    fn open_store() -> (SqliteStore, TempDir) {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("test.db");
+        let store = SqliteStore::open(&db_path).unwrap();
+        (store, dir)
+    }
+
+    fn make_evidence() -> Evidence {
+        crate::testutil::make_evidence()
+    }
+
+    fn make_control_status(control_id: &str) -> ControlStatus {
+        ControlStatus {
+            id: Uuid::new_v4(),
+            control_id: control_id.to_string(),
+            timestamp: Utc::now(),
+            status: "effective".to_string(),
+            confidence: "high".to_string(),
+            evidence_ids: vec![Uuid::new_v4()],
+            evaluation_details: "all clear".to_string(),
+        }
+    }
+
+    fn make_schedule(id: &str) -> Schedule {
+        Schedule {
+            id: id.to_string(),
+            control_id: "cc6.1".to_string(),
+            cron_expr: "0 * * * *".to_string(),
+            modules: vec!["mock.test".to_string()],
+            max_safety_level: "safe".to_string(),
+            environment_scope: "production".to_string(),
+            enabled: true,
+            catch_up: false,
+            last_run: None,
+            next_run: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    fn make_schedule_run(schedule_id: &str, run_id: &str) -> ScheduleRun {
+        ScheduleRun {
+            id: run_id.to_string(),
+            schedule_id: schedule_id.to_string(),
+            started_at: Utc::now(),
+            completed_at: Utc::now(),
+            status: RUN_STATUS_SUCCESS.to_string(),
+            module_results: vec![ModuleRunResult {
+                module_id: "mock.test".to_string(),
+                status: MODULE_STATUS_SUCCESS.to_string(),
+                evidence_count: 1,
+                error: String::new(),
+            }],
+            error: String::new(),
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Open / schema
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn open_creates_db_file() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("subdir").join("ocean.db");
+        let store = SqliteStore::open(&db_path).unwrap();
+        assert!(db_path.exists());
+        store.close().unwrap();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Evidence CRUD
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn store_and_get_evidence() {
+        let (store, _dir) = open_store();
+        let ev = make_evidence();
+        let id = ev.id;
+        store.store_evidence(&ev).unwrap();
+        let retrieved = store.get_evidence(id).unwrap();
+        assert_eq!(retrieved.id, id);
+        assert_eq!(retrieved.control_id, ev.control_id);
+        assert_eq!(retrieved.status_id, ev.status_id);
+        assert_eq!(retrieved.status, ev.status);
+    }
+
+    #[test]
+    fn get_evidence_not_found() {
+        let (store, _dir) = open_store();
+        let err = store.get_evidence(Uuid::new_v4()).unwrap_err();
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn store_evidence_with_transcript() {
+        let (store, _dir) = open_store();
+        let mut ev = make_evidence();
+        ev.test_transcript = Some(crate::evidence::TestTranscript {
+            actions_attempted: vec![],
+            observations: vec![],
+            cleanup_actions: vec![],
+        });
+        let id = ev.id;
+        store.store_evidence(&ev).unwrap();
+        let retrieved = store.get_evidence(id).unwrap();
+        assert!(retrieved.test_transcript.is_some());
+    }
+
+    #[test]
+    fn store_evidence_with_enrichments() {
+        let (store, _dir) = open_store();
+        let mut ev = make_evidence();
+        ev.enrichments = vec![Enrichment {
+            enrichment_type: "geo".to_string(),
+            data: serde_json::json!({"cc": "US"}),
+            enriched_time: Utc::now(),
+        }];
+        let id = ev.id;
+        store.store_evidence(&ev).unwrap();
+        let retrieved = store.get_evidence(id).unwrap();
+        assert_eq!(retrieved.enrichments.len(), 1);
+    }
+
+    #[test]
+    fn store_evidence_active_verification_confidence() {
+        let (store, _dir) = open_store();
+        let mut ev = make_evidence();
+        ev.confidence_level = ConfidenceLevel::ActiveVerification;
+        let id = ev.id;
+        store.store_evidence(&ev).unwrap();
+        let retrieved = store.get_evidence(id).unwrap();
+        assert_eq!(retrieved.confidence_level, ConfidenceLevel::ActiveVerification);
+    }
+
+    // --- query_evidence ---
+
+    #[test]
+    fn query_all_evidence() {
+        let (store, _dir) = open_store();
+        for _ in 0..3 {
+            store.store_evidence(&make_evidence()).unwrap();
+        }
+        let results = store.query_evidence(&EvidenceQuery::default()).unwrap();
+        assert_eq!(results.len(), 3);
+    }
+
+    #[test]
+    fn query_by_control_id() {
+        let (store, _dir) = open_store();
+        let mut ev1 = make_evidence();
+        ev1.control_id = "cc6.1".to_string();
+        let mut ev2 = make_evidence();
+        ev2.control_id = "cc7.2".to_string();
+        store.store_evidence(&ev1).unwrap();
+        store.store_evidence(&ev2).unwrap();
+
+        let q = EvidenceQuery { control_id: Some("cc6.1".to_string()), ..Default::default() };
+        let results = store.query_evidence(&q).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].control_id, "cc6.1");
+    }
+
+    #[test]
+    fn query_by_source() {
+        let (store, _dir) = open_store();
+        store.store_evidence(&make_evidence()).unwrap();
+        let q = EvidenceQuery { source: Some("mock".to_string()), ..Default::default() };
+        let results = store.query_evidence(&q).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn query_by_time_range() {
+        let (store, _dir) = open_store();
+        let ev = make_evidence();
+        store.store_evidence(&ev).unwrap();
+
+        let from = Utc::now() - Duration::hours(1);
+        let to = Utc::now() + Duration::hours(1);
+        let q = EvidenceQuery { from_time: Some(from), to_time: Some(to), ..Default::default() };
+        let results = store.query_evidence(&q).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn query_with_limit() {
+        let (store, _dir) = open_store();
+        for _ in 0..5 {
+            store.store_evidence(&make_evidence()).unwrap();
+        }
+        let q = EvidenceQuery { limit: Some(2), ..Default::default() };
+        let results = store.query_evidence(&q).unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn query_empty_returns_empty() {
+        let (store, _dir) = open_store();
+        let results = store.query_evidence(&EvidenceQuery::default()).unwrap();
+        assert!(results.is_empty());
+    }
+
+    // --- prune_evidence ---
+
+    #[test]
+    fn prune_evidence_removes_old() {
+        let (store, _dir) = open_store();
+        // Insert evidence — its timestamp is Utc::now()
+        store.store_evidence(&make_evidence()).unwrap();
+        // Prune anything older than 1 hour from now — should prune nothing
+        let cutoff = Utc::now() - Duration::hours(1);
+        let pruned = store.prune_evidence(cutoff).unwrap();
+        assert_eq!(pruned, 0);
+        // Prune everything (cutoff in future)
+        let cutoff_future = Utc::now() + Duration::hours(1);
+        let pruned2 = store.prune_evidence(cutoff_future).unwrap();
+        assert_eq!(pruned2, 1);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Control Status
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn store_and_get_control_status() {
+        let (store, _dir) = open_store();
+        let cs = make_control_status("cc6.1");
+        store.store_control_status(&cs).unwrap();
+        let retrieved = store.get_control_status("cc6.1").unwrap();
+        assert_eq!(retrieved.id, cs.id);
+        assert_eq!(retrieved.status, "effective");
+        assert_eq!(retrieved.confidence, "high");
+        assert_eq!(retrieved.evidence_ids.len(), 1);
+    }
+
+    #[test]
+    fn get_control_status_returns_latest() {
+        let (store, _dir) = open_store();
+        let mut cs1 = make_control_status("cc6.1");
+        cs1.timestamp = Utc::now() - Duration::hours(2);
+        cs1.status = "ineffective".to_string();
+        let mut cs2 = make_control_status("cc6.1");
+        cs2.timestamp = Utc::now();
+        cs2.status = "effective".to_string();
+        store.store_control_status(&cs1).unwrap();
+        store.store_control_status(&cs2).unwrap();
+        let latest = store.get_control_status("cc6.1").unwrap();
+        assert_eq!(latest.status, "effective");
+    }
+
+    #[test]
+    fn get_control_status_not_found() {
+        let (store, _dir) = open_store();
+        let err = store.get_control_status("nonexistent").unwrap_err();
+        assert!(err.to_string().contains("no status found"));
+    }
+
+    #[test]
+    fn query_history() {
+        let (store, _dir) = open_store();
+        let cs = make_control_status("cc6.1");
+        store.store_control_status(&cs).unwrap();
+        let from = Utc::now() - Duration::hours(1);
+        let to = Utc::now() + Duration::hours(1);
+        let history = store.query_history("cc6.1", from, to).unwrap();
+        assert_eq!(history.len(), 1);
+    }
+
+    #[test]
+    fn query_history_outside_range() {
+        let (store, _dir) = open_store();
+        let cs = make_control_status("cc6.1");
+        store.store_control_status(&cs).unwrap();
+        // Query a range in the past — should find nothing
+        let from = Utc::now() - Duration::days(7);
+        let to = Utc::now() - Duration::days(6);
+        let history = store.query_history("cc6.1", from, to).unwrap();
+        assert!(history.is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Schedules
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn store_and_get_schedule() {
+        let (store, _dir) = open_store();
+        let sched = make_schedule("sched-1");
+        store.store_schedule(&sched).unwrap();
+        let retrieved = store.get_schedule("sched-1").unwrap();
+        assert_eq!(retrieved.id, "sched-1");
+        assert_eq!(retrieved.cron_expr, sched.cron_expr);
+        assert!(retrieved.enabled);
+        assert!(!retrieved.catch_up);
+    }
+
+    #[test]
+    fn store_schedule_with_optional_times() {
+        let (store, _dir) = open_store();
+        let mut sched = make_schedule("sched-opt");
+        sched.last_run = Some(Utc::now() - Duration::hours(1));
+        sched.next_run = Some(Utc::now() + Duration::hours(1));
+        store.store_schedule(&sched).unwrap();
+        let retrieved = store.get_schedule("sched-opt").unwrap();
+        assert!(retrieved.last_run.is_some());
+        assert!(retrieved.next_run.is_some());
+    }
+
+    #[test]
+    fn get_schedule_not_found() {
+        let (store, _dir) = open_store();
+        let err = store.get_schedule("ghost").unwrap_err();
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn list_schedules() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("s1")).unwrap();
+        store.store_schedule(&make_schedule("s2")).unwrap();
+        let list = store.list_schedules().unwrap();
+        assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn delete_schedule() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("del-me")).unwrap();
+        store.delete_schedule("del-me").unwrap();
+        assert!(store.get_schedule("del-me").is_err());
+    }
+
+    #[test]
+    fn delete_schedule_not_found_error() {
+        let (store, _dir) = open_store();
+        let err = store.delete_schedule("ghost").unwrap_err();
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn store_schedule_upserts() {
+        let (store, _dir) = open_store();
+        let mut sched = make_schedule("upsert-1");
+        store.store_schedule(&sched).unwrap();
+        sched.enabled = false;
+        store.store_schedule(&sched).unwrap();
+        let retrieved = store.get_schedule("upsert-1").unwrap();
+        assert!(!retrieved.enabled);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Schedule Runs
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn store_and_list_schedule_runs() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("sched-1")).unwrap();
+        store.store_schedule_run(&make_schedule_run("sched-1", "run-1")).unwrap();
+        store.store_schedule_run(&make_schedule_run("sched-1", "run-2")).unwrap();
+        let runs = store.list_schedule_runs("sched-1", 10).unwrap();
+        assert_eq!(runs.len(), 2);
+    }
+
+    #[test]
+    fn list_schedule_runs_respects_limit() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("sched-2")).unwrap();
+        for i in 0..5 {
+            store.store_schedule_run(&make_schedule_run("sched-2", &format!("run-{i}"))).unwrap();
+        }
+        let runs = store.list_schedule_runs("sched-2", 3).unwrap();
+        assert_eq!(runs.len(), 3);
+    }
+
+    #[test]
+    fn list_schedule_runs_empty() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("sched-3")).unwrap();
+        let runs = store.list_schedule_runs("sched-3", 10).unwrap();
+        assert!(runs.is_empty());
+    }
+
+    #[test]
+    fn schedule_run_cascade_delete() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("sched-del")).unwrap();
+        store.store_schedule_run(&make_schedule_run("sched-del", "run-del")).unwrap();
+        store.delete_schedule("sched-del").unwrap();
+        // After cascade delete, runs should be gone
+        let runs = store.list_schedule_runs("sched-del", 10).unwrap();
+        assert!(runs.is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Lifecycle
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn close_is_noop() {
+        let (store, _dir) = open_store();
+        assert!(store.close().is_ok());
+    }
+}
