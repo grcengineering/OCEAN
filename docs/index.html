@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OCEAN — Open Control Evidence Acquisition Normalizer</title>
-  <meta name="description" content="The Metasploit for GRC. Open-source CLI tool for evidence acquisition, active control testing, and cryptographic provenance. The backend for a StatusPage for Compliance.">
+  <meta name="description" content="The Metasploit for GRC. Open-source CLI tool for evidence acquisition and active control testing. The backend for a StatusPage for Compliance. Pairs with Corsair for cryptographic provenance.">
   <meta name="og:title" content="OCEAN — Metasploit for GRC">
-  <meta name="og:description" content="Open-source evidence acquisition and control verification with cryptographic provenance.">
+  <meta name="og:description" content="Open-source evidence acquisition and active control verification. Pairs with Corsair (grcorsair.com) for audit-grade cryptographic provenance.">
   <meta name="theme-color" content="#FFA84F">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -598,7 +598,7 @@
       <div class="nav-links">
         <a href="#pillars" class="nav-link">Pillars</a>
         <a href="#modules"  class="nav-link">Modules</a>
-        <a href="#provenance" class="nav-link">Provenance</a>
+        <a href="#corsair" class="nav-link">Corsair</a>
         <a href="https://github.com/grcengineering/ocean" class="btn btn-secondary" target="_blank" rel="noopener">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           GitHub
@@ -669,8 +669,8 @@
             <div class="mini-card-label">source systems</div>
           </div>
           <div class="mini-card">
-            <div class="mini-card-val" style="color:var(--cyan)">2-layer</div>
-            <div class="mini-card-label">DSSE attestation</div>
+            <div class="mini-card-val" style="color:var(--cyan)">CPOE</div>
+            <div class="mini-card-label">via Corsair</div>
           </div>
           <div class="mini-card">
             <div class="mini-card-val grad-orange">CEL</div>
@@ -694,7 +694,7 @@
           <div style="margin-top:10px;display:flex;gap:12px;font-family:var(--mono);font-size:0.75rem">
             <span style="color:var(--green)">✓ passive</span>
             <span style="color:var(--green)">✓ active</span>
-            <span style="color:var(--text-dim)">DSSE signed</span>
+            <span style="color:var(--text-dim)">Corsair-ready</span>
           </div>
         </div>
       </div>
@@ -709,8 +709,8 @@
   <div class="container">
     <div class="section-header">
       <div class="section-label">// architecture</div>
-      <h2 class="section-title">Four Pillars of<br><span class="grad-main">Control Assurance</span></h2>
-      <p class="section-desc">OCEAN isn't a GRC platform. It's the evidence and verification layer that GRC platforms should consume.</p>
+      <h2 class="section-title">Three Pillars of<br><span class="grad-main">Control Assurance</span></h2>
+      <p class="section-desc">OCEAN isn't a GRC platform. It's the evidence and verification layer that GRC platforms should consume. Pair it with <a href="#corsair" style="color:var(--orange);text-decoration:none">Corsair</a> for audit-grade cryptographic provenance.</p>
     </div>
 
     <div class="pillars-grid">
@@ -718,7 +718,7 @@
         <div class="pillar-icon pillar-icon-orange">🔭</div>
         <div class="pillar-num">PILLAR 01</div>
         <div class="pillar-title">Passive Control Monitoring</div>
-        <p class="pillar-desc">Query system APIs to observe configuration state without modifying anything. Evidence is normalized, signed, and stored with full provenance. Confidence level: <code style="color:var(--cyan);font-family:var(--mono);font-size:0.8rem">passive_observation</code>.</p>
+        <p class="pillar-desc">Query system APIs to observe configuration state without modifying anything. Evidence is normalized, immutable, and stored with full provenance metadata. Confidence level: <code style="color:var(--cyan);font-family:var(--mono);font-size:0.8rem">passive_observation</code>.</p>
         <span class="pillar-tag">ocean collect okta.mfa_policy</span>
       </div>
 
@@ -738,12 +738,12 @@
         <span class="pillar-tag">ocean evaluate --cel '...'</span>
       </div>
 
-      <div class="pillar-card">
-        <div class="pillar-icon pillar-icon-orange">🔐</div>
-        <div class="pillar-num">PILLAR 04</div>
+      <div class="pillar-card" style="border-color:var(--border-orange);border-style:dashed;background:rgba(255,168,79,0.04)">
+        <div class="pillar-icon pillar-icon-orange">🔗</div>
+        <div class="pillar-num" style="color:var(--orange)">+ CORSAIR</div>
         <div class="pillar-title">Cryptographic Provenance</div>
-        <p class="pillar-desc">Two-layer in-toto DSSE attestations create a tamper-resistant proof chain. Collection attestation + Evaluation attestation. Any party with the public key can independently verify.</p>
-        <span class="pillar-tag">ocean verify-provenance --evidence &lt;id&gt;</span>
+        <p class="pillar-desc">OCEAN pipes evidence to <a href="https://grcorsair.com" target="_blank" rel="noopener" style="color:var(--orange);text-decoration:none">Corsair</a> — an open-source signing tool that produces W3C JWT-VC Certificates of Proof of Operational Effectiveness (CPOEs). Any auditor can verify independently.</p>
+        <span class="pillar-tag">ocean collect okta.mfa_policy | corsair sign</span>
       </div>
     </div>
   </div>
@@ -781,8 +781,8 @@
       <div class="flow-step">
         <div class="flow-step-num">04</div>
         <div class="flow-step-title">Verify</div>
-        <p class="flow-step-desc">Independent provenance verification. Full audit trail, no trust required.</p>
-        <span class="flow-step-cmd">ocean verify</span>
+        <p class="flow-step-desc">Run passive + active evidence together for highest confidence. Historical uptime, trend queries, and shareable reports.</p>
+        <span class="flow-step-cmd">ocean verify control.mfa_enforcement</span>
       </div>
     </div>
   </div>
@@ -916,30 +916,30 @@
 
 <div class="scan-bar"></div>
 
-<!-- ═══════════════════════════════════════════ PROVENANCE -->
-<section class="section" id="provenance" style="background:var(--bg-2)">
+<!-- ═══════════════════════════════════════════ CORSAIR -->
+<section class="section" id="corsair" style="background:var(--bg-2)">
   <div class="container">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start">
       <div>
-        <div class="section-label">// cryptographic provenance</div>
+        <div class="section-label">// corsair integration</div>
         <h2 class="section-title" style="margin-bottom:16px">
-          Tamper-Resistant<br><span class="grad-blue">Proof Chain</span>
+          Audit-Grade Provenance<br><span class="grad-orange">Powered by Corsair</span>
         </h2>
         <p style="color:var(--text-muted);margin-bottom:28px;font-size:0.95rem;line-height:1.7">
-          Every evidence record carries a two-layer in-toto DSSE attestation. No trust assumptions required — any party with the public key can independently verify the entire chain from raw API response to compliance verdict.
+          OCEAN produces structured, normalized evidence. <a href="https://grcorsair.com" target="_blank" rel="noopener" style="color:var(--orange);text-decoration:none;font-weight:600">Corsair</a> turns it into independently-verifiable Certificates of Proof of Operational Effectiveness (CPOEs) — W3C JWT-VC format, Ed25519 signatures. Any auditor can verify without trusting you.
         </p>
         <div style="display:flex;flex-direction:column;gap:10px;font-family:var(--mono);font-size:0.8rem">
           <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
-            <span style="color:var(--green)">✓</span> Ed25519 signing keys, generated locally
+            <span style="color:var(--green)">✓</span> Pipe OCEAN output directly to Corsair CLI
           </div>
           <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
-            <span style="color:var(--green)">✓</span> Dead Simple Signing Envelope (DSSE) format
+            <span style="color:var(--green)">✓</span> W3C JWT-VC format — standard, portable, auditable
           </div>
           <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
-            <span style="color:var(--green)">✓</span> Content-addressable evidence references
+            <span style="color:var(--green)">✓</span> Auditors verify CPOEs without running OCEAN
           </div>
           <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
-            <span style="color:var(--green)">✓</span> CEL expression hash in evaluation attestation
+            <span style="color:var(--green)">✓</span> Open-source — <a href="https://grcorsair.com" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none">grcorsair.com</a>
           </div>
         </div>
       </div>
@@ -952,8 +952,9 @@
               <div class="prov-line"></div>
             </div>
             <div class="prov-content">
-              <div class="prov-title">API Call</div>
-              <p class="prov-desc">Collector queries source system API. Raw response captured verbatim.</p>
+              <div class="prov-title">Collect &amp; Test</div>
+              <p class="prov-desc">OCEAN queries APIs and runs active testers. Evidence normalized to schema.</p>
+              <code class="prov-code">ocean verify control.mfa_enforcement --output json</code>
             </div>
           </div>
           <div class="prov-step">
@@ -962,8 +963,9 @@
               <div class="prov-line"></div>
             </div>
             <div class="prov-content">
-              <div class="prov-title">Normalization</div>
-              <p class="prov-desc">Response mapped to OCEAN Evidence Schema with provenance metadata.</p>
+              <div class="prov-title">Pipe to Corsair</div>
+              <p class="prov-desc">OCEAN output streams directly into Corsair for signing — no intermediate files needed.</p>
+              <code class="prov-code">ocean verify ... | corsair sign --mapping-pack ocean</code>
             </div>
           </div>
           <div class="prov-step">
@@ -972,9 +974,9 @@
               <div class="prov-line"></div>
             </div>
             <div class="prov-content">
-              <div class="prov-title">Collection Attestation</div>
-              <p class="prov-desc">in-toto DSSE envelope signed with Ed25519 key. Proves who collected, what, when.</p>
-              <code class="prov-code">dsse+json: {"payloadType":"application/vnd.ocean.collection+json"...}</code>
+              <div class="prov-title">CPOE Issued</div>
+              <p class="prov-desc">Corsair produces a W3C JWT-VC Certificate of Proof of Operational Effectiveness.</p>
+              <code class="prov-code">cpoe.jwt — Ed25519 | iss: did:key:z6Mk… | exp: 90d</code>
             </div>
           </div>
           <div class="prov-step">
@@ -982,9 +984,9 @@
               <div class="prov-circle">04</div>
             </div>
             <div class="prov-content">
-              <div class="prov-title">Evaluation Attestation</div>
-              <p class="prov-desc">Second DSSE layer wraps the verdict, evidence digest, and CEL expression hash.</p>
-              <code class="prov-code">dsse+json: {"payloadType":"application/vnd.ocean.evaluation+json"...}</code>
+              <div class="prov-title">Independent Verification</div>
+              <p class="prov-desc">Any auditor verifies the CPOE against your DID. No OCEAN required, no trust assumed.</p>
+              <code class="prov-code">corsair verify cpoe.jwt --issuer did:key:z6Mk…</code>
             </div>
           </div>
         </div>
@@ -1110,7 +1112,6 @@
     { type: 'prompt', text: 'ocean collect okta.mfa_policy' },
     { type: 'ok',  text: '✓  Querying Okta API...' },
     { type: 'ok',  text: '✓  Normalizing to OCEAN Evidence Schema...' },
-    { type: 'ok',  text: '✓  Signing with Ed25519 (in-toto DSSE)...' },
     { type: 'ok',  text: '✓  Stored — confidence: passive_observation' },
     { type: 'blank' },
     { type: 'prompt', text: 'ocean test okta.mfa_bypass --target staging' },
@@ -1123,7 +1124,10 @@
     { type: 'ok',  text: '✓  Passive evidence: PASS (policy configured correctly)' },
     { type: 'ok',  text: '✓  Active test:     PASS (bypass blocked)' },
     { type: 'ok',  text: '✓  Status: EFFECTIVE | Confidence: HIGH | Uptime: 99.94%' },
-    { type: 'ok',  text: '✓  Both attestations verified against public key' },
+    { type: 'blank' },
+    { type: 'prompt', text: 'ocean verify control.mfa_enforcement --output json | corsair sign' },
+    { type: 'ok',  text: '✓  CPOE issued — cpoe.jwt (Ed25519, W3C JWT-VC)' },
+    { type: 'ok',  text: '✓  Share with any auditor — no OCEAN required to verify' },
     { type: 'blank' },
     { type: 'prompt-cursor', text: '' },
   ];
