@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OCEAN — Open Control Evidence Acquisition Normalizer</title>
+  <meta name="description" content="The Metasploit for GRC. Open-source CLI tool for evidence acquisition, active control testing, and cryptographic provenance. The backend for a StatusPage for Compliance.">
+  <meta name="og:title" content="OCEAN — Metasploit for GRC">
+  <meta name="og:description" content="Open-source evidence acquisition and control verification with cryptographic provenance.">
+  <meta name="theme-color" content="#F97316">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════
+       DESIGN SYSTEM
+       Mix: GRCOrsair (dark/terminal) + Pluto.security (bold/clean) + GRC.Engineering (orange+blue)
+    ═══════════════════════════════════════════ */
+    :root {
+      --bg:         #080E1C;
+      --bg-2:       #0D1628;
+      --bg-card:    #111E33;
+      --bg-card-2:  #0F1A2E;
+      --orange:     #F97316;
+      --orange-dim: #C2580F;
+      --orange-glow: rgba(249, 115, 22, 0.18);
+      --orange-glow-strong: rgba(249, 115, 22, 0.35);
+      --blue:       #3B82F6;
+      --blue-dim:   #1D4ED8;
+      --blue-glow:  rgba(59, 130, 246, 0.15);
+      --cyan:       #22D3EE;
+      --green:      #10B981;
+      --red:        #EF4444;
+      --text:       #F0F4FF;
+      --text-muted: #8A9BC4;
+      --text-dim:   #4A5A80;
+      --border:     rgba(59, 130, 246, 0.18);
+      --border-orange: rgba(249, 115, 22, 0.25);
+      --border-card: rgba(59, 130, 246, 0.12);
+      --radius:     10px;
+      --radius-lg:  16px;
+      --mono: 'JetBrains Mono', 'Consolas', monospace;
+      --sans: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ═══════════════════════════════════════════ LAYOUT */
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    section { position: relative; }
+
+    /* ═══════════════════════════════════════════ TYPOGRAPHY */
+    h1, h2, h3, h4 { line-height: 1.15; letter-spacing: -0.02em; }
+    h1 { font-size: clamp(2.6rem, 6vw, 4.5rem); font-weight: 900; }
+    h2 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 800; }
+    h3 { font-size: 1.2rem; font-weight: 700; }
+    .mono { font-family: var(--mono); }
+
+    /* ═══════════════════════════════════════════ GRADIENT TEXT */
+    .grad-orange {
+      background: linear-gradient(135deg, #F97316 0%, #FBBF24 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .grad-blue {
+      background: linear-gradient(135deg, #3B82F6 0%, #818CF8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .grad-main {
+      background: linear-gradient(135deg, #F97316 0%, #FB923C 30%, #3B82F6 70%, #818CF8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ═══════════════════════════════════════════ BUTTONS */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 8px; font-weight: 600;
+      font-size: 0.95rem; cursor: pointer; text-decoration: none;
+      transition: all 0.18s ease; border: none; white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--orange);
+      color: #fff;
+      box-shadow: 0 0 24px var(--orange-glow-strong);
+    }
+    .btn-primary:hover {
+      background: #EA6C0F;
+      box-shadow: 0 0 36px rgba(249, 115, 22, 0.5);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--blue);
+      background: var(--blue-glow);
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-card);
+      font-size: 0.85rem;
+      padding: 8px 16px;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--border); }
+
+    /* ═══════════════════════════════════════════ BADGE */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 600; font-family: var(--mono);
+      letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .badge-collector { background: var(--blue-glow); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
+    .badge-tester    { background: var(--orange-glow); color: var(--orange); border: 1px solid var(--border-orange); }
+    .badge-safe      { background: rgba(16,185,129,0.1); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+
+    /* ═══════════════════════════════════════════ DIVIDERS */
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 0;
+    }
+    .hex-row {
+      display: flex; gap: 6px; align-items: center; margin: 12px 0;
+      overflow: hidden;
+    }
+    .hex {
+      width: 8px; height: 8px; opacity: 0.3;
+      background: var(--orange);
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    }
+    .hex:nth-child(even) { background: var(--blue); }
+    .hex-row .hex:nth-child(3n) { opacity: 0.15; }
+
+    /* ═══════════════════════════════════════════ NAV */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(8, 14, 28, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 0;
+    }
+    .nav-inner {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 12px;
+      text-decoration: none;
+    }
+    .nav-logo-mark {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--orange), var(--blue));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-weight: 700; font-size: 1rem;
+      color: #fff;
+      box-shadow: 0 0 20px var(--orange-glow);
+    }
+    .nav-logo-text {
+      font-family: var(--mono); font-weight: 700; font-size: 1.2rem;
+      color: var(--text); letter-spacing: 0.05em;
+    }
+    .nav-logo-text span { color: var(--orange); }
+    .nav-links { display: flex; align-items: center; gap: 8px; }
+    .nav-link {
+      font-size: 0.88rem; color: var(--text-muted); text-decoration: none;
+      padding: 6px 12px; border-radius: 6px; transition: all 0.15s;
+      font-weight: 500;
+    }
+    .nav-link:hover { color: var(--text); background: var(--blue-glow); }
+
+    /* ═══════════════════════════════════════════ HERO */
+    .hero {
+      padding: 96px 0 80px;
+      position: relative;
+      overflow: hidden;
+    }
+    /* Background radial glow effects */
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -100px; left: 50%;
+      transform: translateX(-50%);
+      width: 900px; height: 600px;
+      background: radial-gradient(ellipse, rgba(249,115,22,0.07) 0%, rgba(59,130,246,0.05) 40%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg-card); border: 1px solid var(--border-orange);
+      border-radius: 100px; padding: 6px 16px 6px 10px;
+      font-family: var(--mono); font-size: 0.8rem; color: var(--orange);
+      margin-bottom: 28px;
+    }
+    .hero-eyebrow-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--orange);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--orange-glow-strong); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 5px transparent; }
+    }
+    .hero-title {
+      margin-bottom: 20px;
+      max-width: 800px;
+    }
+    .hero-subtitle {
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      color: var(--text-muted);
+      max-width: 600px;
+      margin-bottom: 14px;
+      line-height: 1.7;
+    }
+    .hero-tagline {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      margin-bottom: 40px;
+      letter-spacing: 0.05em;
+    }
+    .hero-tagline span { color: var(--blue); }
+    .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 60px; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 20px;
+    }
+    @media (max-width: 768px) {
+      .hero { padding: 60px 0 48px; }
+      .hero-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ═══════════════════════════════════════════ TERMINAL */
+    .terminal {
+      background: #050D1A;
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(249,115,22,0.05);
+    }
+    .terminal-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      background: #0A1425;
+      border-bottom: 1px solid rgba(59,130,246,0.15);
+    }
+    .terminal-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+    }
+    .td-red   { background: #FF5F57; }
+    .td-amber { background: #FEBC2E; }
+    .td-green { background: #28C840; }
+    .terminal-title {
+      margin-left: 8px; color: var(--text-dim);
+      font-size: 0.75rem; letter-spacing: 0.05em;
+    }
+    .terminal-body { padding: 20px 24px; min-height: 280px; }
+    .terminal-line { display: flex; align-items: flex-start; margin-bottom: 4px; }
+    .terminal-prompt { color: var(--orange); margin-right: 8px; user-select: none; }
+    .terminal-cmd { color: var(--cyan); }
+    .terminal-out { color: var(--text-muted); padding-left: 0; }
+    .terminal-ok  { color: var(--green); }
+    .terminal-cursor {
+      display: inline-block; width: 8px; height: 14px;
+      background: var(--orange);
+      animation: blink 1.1s step-end infinite;
+      vertical-align: middle; margin-left: 2px;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ═══════════════════════════════════════════ MINI STAT CARD */
+    .mini-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .mini-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .mini-card-val {
+      font-size: 1.8rem; font-weight: 800;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .mini-card-label { font-size: 0.78rem; color: var(--text-muted); font-family: var(--mono); }
+
+    /* ═══════════════════════════════════════════ SECTIONS */
+    .section { padding: 80px 0; }
+    .section-header { margin-bottom: 56px; }
+    .section-label {
+      font-family: var(--mono); font-size: 0.75rem; color: var(--orange);
+      letter-spacing: 0.12em; text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section-title { margin-bottom: 16px; }
+    .section-desc { color: var(--text-muted); font-size: 1.05rem; max-width: 560px; }
+
+    /* ═══════════════════════════════════════════ PILLARS */
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 720px) { .pillars-grid { grid-template-columns: 1fr; } }
+    .pillar-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      transition: all 0.22s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .pillar-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .pillar-card:nth-child(1)::before,
+    .pillar-card:nth-child(3)::before { background: linear-gradient(90deg, var(--orange), transparent); }
+    .pillar-card:nth-child(2)::before,
+    .pillar-card:nth-child(4)::before { background: linear-gradient(90deg, var(--blue), transparent); }
+    .pillar-card:hover {
+      border-color: rgba(59,130,246,0.3);
+      transform: translateY(-3px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .pillar-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; margin-bottom: 20px;
+    }
+    .pillar-icon-orange { background: var(--orange-glow); }
+    .pillar-icon-blue   { background: var(--blue-glow); }
+    .pillar-num {
+      font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim);
+      letter-spacing: 0.08em; margin-bottom: 8px;
+    }
+    .pillar-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
+    .pillar-desc { color: var(--text-muted); font-size: 0.9rem; line-height: 1.65; }
+    .pillar-tag {
+      display: inline-block; margin-top: 16px;
+      font-family: var(--mono); font-size: 0.72rem;
+      color: var(--text-dim); background: var(--bg-card-2);
+      border: 1px solid var(--border-card); border-radius: 4px;
+      padding: 3px 8px;
+    }
+
+    /* ═══════════════════════════════════════════ FLOW / HOW IT WORKS */
+    .flow { background: var(--bg-2); }
+    .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      position: relative;
+    }
+    .flow-steps::before {
+      content: '';
+      position: absolute;
+      top: 28px; left: 12.5%; right: 12.5%;
+      height: 1px;
+      background: linear-gradient(90deg, var(--orange), var(--blue));
+      z-index: 0;
+    }
+    @media (max-width: 768px) {
+      .flow-steps { grid-template-columns: 1fr 1fr; }
+      .flow-steps::before { display: none; }
+    }
+    @media (max-width: 480px) { .flow-steps { grid-template-columns: 1fr; } }
+    .flow-step { text-align: center; padding: 0 16px 0; position: relative; z-index: 1; }
+    .flow-step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-weight: 700; font-size: 1rem;
+      margin: 0 auto 20px;
+      border: 2px solid;
+    }
+    .flow-step:nth-child(odd) .flow-step-num {
+      background: var(--orange-glow); border-color: var(--orange); color: var(--orange);
+    }
+    .flow-step:nth-child(even) .flow-step-num {
+      background: var(--blue-glow); border-color: var(--blue); color: var(--blue);
+    }
+    .flow-step-title { font-weight: 700; margin-bottom: 8px; font-size: 0.95rem; }
+    .flow-step-desc { color: var(--text-muted); font-size: 0.83rem; line-height: 1.6; }
+    .flow-step-cmd {
+      margin-top: 10px; font-family: var(--mono); font-size: 0.72rem;
+      color: var(--cyan); background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 4px 8px; display: inline-block;
+    }
+
+    /* ═══════════════════════════════════════════ MODULES */
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 900px) { .modules-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 520px)  { .modules-grid { grid-template-columns: 1fr; } }
+    .module-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: all 0.2s;
+    }
+    .module-card:hover {
+      border-color: rgba(249,115,22,0.25);
+      background: #152040;
+      transform: translateY(-2px);
+    }
+    .module-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+    .module-name { font-family: var(--mono); font-size: 0.88rem; font-weight: 600; color: var(--text); }
+    .module-source { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; font-family: var(--mono); }
+    .module-desc { color: var(--text-muted); font-size: 0.82rem; line-height: 1.5; }
+    .module-safety {
+      margin-top: 10px; display: flex; align-items: center; gap: 6px;
+      font-size: 0.72rem; color: var(--text-dim); font-family: var(--mono);
+    }
+    .safety-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .safe-green { background: var(--green); }
+
+    /* ═══════════════════════════════════════════ PROVENANCE */
+    .provenance-chain {
+      display: flex; flex-direction: column; gap: 16px;
+      max-width: 680px;
+    }
+    .prov-step {
+      display: flex; gap: 20px; align-items: flex-start;
+    }
+    .prov-line-col { display: flex; flex-direction: column; align-items: center; gap: 0; }
+    .prov-circle {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-weight: 700; font-size: 0.85rem;
+      border: 2px solid;
+    }
+    .prov-line {
+      width: 2px; flex-grow: 1; min-height: 24px;
+      background: linear-gradient(to bottom, var(--orange), var(--blue));
+      opacity: 0.3;
+    }
+    .prov-step:nth-child(odd) .prov-circle { background: var(--orange-glow); border-color: var(--orange); color: var(--orange); }
+    .prov-step:nth-child(even) .prov-circle { background: var(--blue-glow); border-color: var(--blue); color: var(--blue); }
+    .prov-content { padding-top: 8px; }
+    .prov-title { font-weight: 700; margin-bottom: 4px; }
+    .prov-desc { color: var(--text-muted); font-size: 0.86rem; line-height: 1.55; }
+    .prov-code {
+      margin-top: 8px; font-family: var(--mono); font-size: 0.73rem;
+      color: var(--cyan); background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 6px 10px; display: block;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .prov-panel {
+      background: var(--bg-card); border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg); padding: 36px;
+    }
+
+    /* ═══════════════════════════════════════════ INSTALL CTA */
+    .cta-section { background: var(--bg-2); }
+    .cta-box {
+      background: linear-gradient(135deg, var(--bg-card) 0%, #0F1D35 100%);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 56px 48px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-box::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: 50%; transform: translateX(-50%);
+      width: 400px; height: 200px;
+      background: radial-gradient(ellipse, rgba(249,115,22,0.12), transparent 70%);
+      pointer-events: none;
+    }
+    .cta-box::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; left: 50%; transform: translateX(-50%);
+      width: 300px; height: 150px;
+      background: radial-gradient(ellipse, rgba(59,130,246,0.1), transparent 70%);
+      pointer-events: none;
+    }
+    .cta-title { margin-bottom: 12px; position: relative; z-index: 1; }
+    .cta-desc { color: var(--text-muted); margin-bottom: 32px; position: relative; z-index: 1; }
+    .install-cmd {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 20px;
+      font-family: var(--mono); font-size: 0.88rem; color: var(--cyan);
+      max-width: 560px; margin: 0 auto 28px;
+      position: relative; z-index: 1; cursor: pointer;
+    }
+    .install-cmd-text { flex: 1; text-align: left; }
+    .copy-btn {
+      background: var(--blue-glow); border: 1px solid rgba(59,130,246,0.3);
+      color: var(--blue); padding: 5px 12px; border-radius: 5px;
+      font-family: var(--mono); font-size: 0.72rem; cursor: pointer;
+      transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+    }
+    .copy-btn:hover { background: rgba(59,130,246,0.25); }
+    .copy-btn.copied { color: var(--green); border-color: rgba(16,185,129,0.4); }
+    .cta-actions {
+      display: flex; align-items: center; justify-content: center; gap: 14px;
+      flex-wrap: wrap; position: relative; z-index: 1;
+    }
+
+    /* ═══════════════════════════════════════════ FOOTER */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+    }
+    .footer-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo { display: flex; align-items: center; gap: 10px; }
+    .footer-logo-text {
+      font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--text);
+    }
+    .footer-logo-text span { color: var(--orange); }
+    .footer-copy { font-size: 0.8rem; color: var(--text-dim); }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-link { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .footer-link:hover { color: var(--text); }
+
+    /* ═══════════════════════════════════════════ SCAN LINE (GRCOrsair nod) */
+    .scan-bar {
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--orange) 30%, var(--blue) 70%, transparent 100%);
+      opacity: 0.6;
+      margin: 0;
+    }
+
+    /* ═══════════════════════════════════════════ CONFIDENCE PILL */
+    .conf-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3);
+      border-radius: 100px; padding: 4px 12px;
+      font-family: var(--mono); font-size: 0.75rem; color: var(--green);
+    }
+    .conf-pill svg { width: 12px; height: 12px; }
+
+    /* ═══════════════════════════════════════════ RESPONSIVE NAV */
+    @media (max-width: 600px) {
+      .nav-links .nav-link:not(.btn) { display: none; }
+      .hero-ctas { flex-direction: column; }
+      .hero-ctas .btn { width: 100%; justify-content: center; }
+      .cta-box { padding: 36px 24px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ NAV -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-mark">O</div>
+        <span class="nav-logo-text">OC<span>E</span>AN</span>
+      </a>
+      <div class="nav-links">
+        <a href="#pillars" class="nav-link">Pillars</a>
+        <a href="#modules"  class="nav-link">Modules</a>
+        <a href="#provenance" class="nav-link">Provenance</a>
+        <a href="https://github.com/grcengineering/ocean" class="btn btn-secondary" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════ HERO -->
+<section class="hero">
+  <div class="container">
+
+    <div class="hero-eyebrow">
+      <span class="hero-eyebrow-dot"></span>
+      Open Source &nbsp;·&nbsp; Apache 2.0 &nbsp;·&nbsp; Go 1.22+
+    </div>
+
+    <h1 class="hero-title">
+      The <span class="grad-orange">Metasploit</span><br>
+      for <span class="grad-blue">GRC</span>
+    </h1>
+
+    <p class="hero-subtitle">
+      OCEAN is the open-source evidence acquisition layer that GRC platforms
+      should consume — not replace. Collect. Test. Prove. Continuously.
+    </p>
+
+    <p class="hero-tagline">
+      ocean &mdash; <span>Open Control Evidence Acquisition Normalizer</span>
+    </p>
+
+    <div class="hero-ctas">
+      <a href="https://github.com/grcengineering/ocean" class="btn btn-primary" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+      <a href="#install" class="btn btn-secondary">
+        Quick Install
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </a>
+    </div>
+
+    <!-- Hero grid: terminal + mini stats -->
+    <div class="hero-grid">
+      <!-- Terminal -->
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot td-red"></span>
+          <span class="terminal-dot td-amber"></span>
+          <span class="terminal-dot td-green"></span>
+          <span class="terminal-title">ocean — control evidence terminal</span>
+        </div>
+        <div class="terminal-body" id="terminal-body">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
+      <!-- Mini stats + confidence -->
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="mini-cards">
+          <div class="mini-card">
+            <div class="mini-card-val grad-orange">9</div>
+            <div class="mini-card-label">modules registered</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-val grad-blue">4</div>
+            <div class="mini-card-label">source systems</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-val" style="color:var(--cyan)">2-layer</div>
+            <div class="mini-card-label">DSSE attestation</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-val grad-orange">CEL</div>
+            <div class="mini-card-label">eval expressions</div>
+          </div>
+        </div>
+
+        <div class="mini-card" style="border-color:var(--border-orange)">
+          <div class="mini-card-label" style="margin-bottom:10px">CONTROL STATUS — mfa.enforcement</div>
+          <div class="conf-pill" style="margin-bottom:10px">
+            <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+            Confidence: HIGH
+          </div>
+          <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:0.78rem">
+            <span style="color:var(--text-muted)">Uptime (180d)</span>
+            <span style="color:var(--orange);font-weight:700">99.94%</span>
+          </div>
+          <div style="margin-top:8px;height:4px;background:var(--bg);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:99.94%;background:linear-gradient(90deg,var(--orange),var(--green));border-radius:2px"></div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:12px;font-family:var(--mono);font-size:0.75rem">
+            <span style="color:var(--green)">✓ passive</span>
+            <span style="color:var(--green)">✓ active</span>
+            <span style="color:var(--text-dim)">DSSE signed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="scan-bar"></div>
+
+<!-- ═══════════════════════════════════════════ PILLARS -->
+<section class="section" id="pillars">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">// architecture</div>
+      <h2 class="section-title">Four Pillars of<br><span class="grad-main">Control Assurance</span></h2>
+      <p class="section-desc">OCEAN isn't a GRC platform. It's the evidence and verification layer that GRC platforms should consume.</p>
+    </div>
+
+    <div class="pillars-grid">
+      <div class="pillar-card">
+        <div class="pillar-icon pillar-icon-orange">🔭</div>
+        <div class="pillar-num">PILLAR 01</div>
+        <div class="pillar-title">Passive Control Monitoring</div>
+        <p class="pillar-desc">Query system APIs to observe configuration state without modifying anything. Evidence is normalized, signed, and stored with full provenance. Confidence level: <code style="color:var(--cyan);font-family:var(--mono);font-size:0.8rem">passive_observation</code>.</p>
+        <span class="pillar-tag">ocean collect okta.mfa_policy</span>
+      </div>
+
+      <div class="pillar-card">
+        <div class="pillar-icon pillar-icon-blue">⚔️</div>
+        <div class="pillar-num">PILLAR 02</div>
+        <div class="pillar-title">Active Control Testing</div>
+        <p class="pillar-desc">Attempt what controls should prevent — like Atomic Red Team, but for compliance. Every tester declares a safety classification. Confidence level: <code style="color:var(--cyan);font-family:var(--mono);font-size:0.8rem">active_verification</code>.</p>
+        <span class="pillar-tag">ocean test okta.mfa_bypass</span>
+      </div>
+
+      <div class="pillar-card">
+        <div class="pillar-icon pillar-icon-blue">🧮</div>
+        <div class="pillar-num">PILLAR 03</div>
+        <div class="pillar-title">Flexible Evaluation Logic</div>
+        <p class="pillar-desc">Define compliance conditions using CEL expressions or structured YAML presets. Write exactly the logic your organization requires — no vendor lock-in, no black boxes.</p>
+        <span class="pillar-tag">ocean evaluate --cel '...'</span>
+      </div>
+
+      <div class="pillar-card">
+        <div class="pillar-icon pillar-icon-orange">🔐</div>
+        <div class="pillar-num">PILLAR 04</div>
+        <div class="pillar-title">Cryptographic Provenance</div>
+        <p class="pillar-desc">Two-layer in-toto DSSE attestations create a tamper-resistant proof chain. Collection attestation + Evaluation attestation. Any party with the public key can independently verify.</p>
+        <span class="pillar-tag">ocean verify-provenance --evidence &lt;id&gt;</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══════════════════════════════════════════ HOW IT WORKS -->
+<section class="section flow">
+  <div class="container">
+    <div class="section-header" style="margin-bottom:48px">
+      <div class="section-label">// workflow</div>
+      <h2 class="section-title">From Evidence to <span class="grad-orange">Verdict</span></h2>
+      <p class="section-desc">A rigorous, reproducible pipeline from raw API data to cryptographically-proven compliance status.</p>
+    </div>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-step-num">01</div>
+        <div class="flow-step-title">Collect</div>
+        <p class="flow-step-desc">Query source APIs passively. Normalize to OCEAN Evidence Schema.</p>
+        <span class="flow-step-cmd">ocean collect</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-step-num">02</div>
+        <div class="flow-step-title">Test</div>
+        <p class="flow-step-desc">Attempt what controls prevent. Record transcript and outcome.</p>
+        <span class="flow-step-cmd">ocean test</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-step-num">03</div>
+        <div class="flow-step-title">Evaluate</div>
+        <p class="flow-step-desc">Run CEL expressions against evidence. Determine effectiveness.</p>
+        <span class="flow-step-cmd">ocean evaluate</span>
+      </div>
+      <div class="flow-step">
+        <div class="flow-step-num">04</div>
+        <div class="flow-step-title">Verify</div>
+        <p class="flow-step-desc">Independent provenance verification. Full audit trail, no trust required.</p>
+        <span class="flow-step-cmd">ocean verify</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══════════════════════════════════════════ MODULES -->
+<section class="section" id="modules">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">// modules</div>
+      <h2 class="section-title">9 Modules. <span class="grad-blue">4 Systems.</span><br>Dual-Mode.</h2>
+      <p class="section-desc">Collectors observe state passively. Testers actively verify controls work. Use both for maximum confidence.</p>
+    </div>
+
+    <div class="modules-grid">
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">mock.test</div>
+            <div class="module-source">mock system</div>
+          </div>
+          <span class="badge badge-collector">Collector</span>
+        </div>
+        <p class="module-desc">Simulated test collector for development and integration testing workflows.</p>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">mock.network</div>
+            <div class="module-source">mock system</div>
+          </div>
+          <span class="badge badge-collector">Collector</span>
+        </div>
+        <p class="module-desc">Simulated network evidence collector for testing pipeline and schema validation.</p>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">mock.safety_test</div>
+            <div class="module-source">mock system</div>
+          </div>
+          <span class="badge badge-tester">Tester</span>
+        </div>
+        <p class="module-desc">Safety classification test harness. Validates the authorization flow for all tester tiers.</p>
+        <div class="module-safety"><span class="safety-dot safe-green"></span>safe</div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">okta.mfa_policy</div>
+            <div class="module-source">okta</div>
+          </div>
+          <span class="badge badge-collector">Collector</span>
+        </div>
+        <p class="module-desc">Collects MFA enrollment and policy configuration for all users and groups in an Okta tenant.</p>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">okta.mfa_bypass</div>
+            <div class="module-source">okta</div>
+          </div>
+          <span class="badge badge-tester">Tester</span>
+        </div>
+        <p class="module-desc">Attempts authentication without MFA factors. Verifies the bypass attempt is blocked.</p>
+        <div class="module-safety"><span class="safety-dot safe-green"></span>safe</div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">aws.iam</div>
+            <div class="module-source">aws</div>
+          </div>
+          <span class="badge badge-collector">Collector</span>
+        </div>
+        <p class="module-desc">Collects IAM policies, roles, users, and permission boundaries across an AWS account.</p>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">aws.s3_public_access</div>
+            <div class="module-source">aws</div>
+          </div>
+          <span class="badge badge-tester">Tester</span>
+        </div>
+        <p class="module-desc">Tests whether S3 public access block settings actually prevent public object access.</p>
+        <div class="module-safety"><span class="safety-dot safe-green"></span>safe</div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">github.branch_protection</div>
+            <div class="module-source">github</div>
+          </div>
+          <span class="badge badge-collector">Collector</span>
+        </div>
+        <p class="module-desc">Collects branch protection rules, required reviewers, and merge restrictions across repositories.</p>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">github.secret_push</div>
+            <div class="module-source">github</div>
+          </div>
+          <span class="badge badge-tester">Tester</span>
+        </div>
+        <p class="module-desc">Attempts to push a test secret pattern and verifies GitHub secret scanning blocks it.</p>
+        <div class="module-safety"><span class="safety-dot" style="background:var(--orange)"></span>observable</div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:32px;text-align:center">
+      <a href="https://github.com/grcengineering/ocean/tree/main/modules" class="btn btn-ghost" target="_blank" rel="noopener">
+        Browse all modules on GitHub →
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="scan-bar"></div>
+
+<!-- ═══════════════════════════════════════════ PROVENANCE -->
+<section class="section" id="provenance" style="background:var(--bg-2)">
+  <div class="container">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start">
+      <div>
+        <div class="section-label">// cryptographic provenance</div>
+        <h2 class="section-title" style="margin-bottom:16px">
+          Tamper-Resistant<br><span class="grad-blue">Proof Chain</span>
+        </h2>
+        <p style="color:var(--text-muted);margin-bottom:28px;font-size:0.95rem;line-height:1.7">
+          Every evidence record carries a two-layer in-toto DSSE attestation. No trust assumptions required — any party with the public key can independently verify the entire chain from raw API response to compliance verdict.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;font-family:var(--mono);font-size:0.8rem">
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
+            <span style="color:var(--green)">✓</span> Ed25519 signing keys, generated locally
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
+            <span style="color:var(--green)">✓</span> Dead Simple Signing Envelope (DSSE) format
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
+            <span style="color:var(--green)">✓</span> Content-addressable evidence references
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted)">
+            <span style="color:var(--green)">✓</span> CEL expression hash in evaluation attestation
+          </div>
+        </div>
+      </div>
+
+      <div class="prov-panel">
+        <div class="provenance-chain">
+          <div class="prov-step">
+            <div class="prov-line-col">
+              <div class="prov-circle">01</div>
+              <div class="prov-line"></div>
+            </div>
+            <div class="prov-content">
+              <div class="prov-title">API Call</div>
+              <p class="prov-desc">Collector queries source system API. Raw response captured verbatim.</p>
+            </div>
+          </div>
+          <div class="prov-step">
+            <div class="prov-line-col">
+              <div class="prov-circle">02</div>
+              <div class="prov-line"></div>
+            </div>
+            <div class="prov-content">
+              <div class="prov-title">Normalization</div>
+              <p class="prov-desc">Response mapped to OCEAN Evidence Schema with provenance metadata.</p>
+            </div>
+          </div>
+          <div class="prov-step">
+            <div class="prov-line-col">
+              <div class="prov-circle">03</div>
+              <div class="prov-line"></div>
+            </div>
+            <div class="prov-content">
+              <div class="prov-title">Collection Attestation</div>
+              <p class="prov-desc">in-toto DSSE envelope signed with Ed25519 key. Proves who collected, what, when.</p>
+              <code class="prov-code">dsse+json: {"payloadType":"application/vnd.ocean.collection+json"...}</code>
+            </div>
+          </div>
+          <div class="prov-step">
+            <div class="prov-line-col">
+              <div class="prov-circle">04</div>
+            </div>
+            <div class="prov-content">
+              <div class="prov-title">Evaluation Attestation</div>
+              <p class="prov-desc">Second DSSE layer wraps the verdict, evidence digest, and CEL expression hash.</p>
+              <code class="prov-code">dsse+json: {"payloadType":"application/vnd.ocean.evaluation+json"...}</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Responsive provenance fix -->
+<style>
+  @media (max-width: 840px) {
+    #provenance .container > div { grid-template-columns: 1fr !important; }
+  }
+</style>
+
+<div class="section-divider"></div>
+
+<!-- ═══════════════════════════════════════════ SAFETY TABLE -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">// safety model</div>
+      <h2 class="section-title">Authorization by <span class="grad-orange">Safety Class</span></h2>
+      <p class="section-desc">Active testing requires explicit authorization proportional to potential impact. No accidents in production.</p>
+    </div>
+
+    <div class="terminal" style="max-width:720px">
+      <div class="terminal-header">
+        <span class="terminal-dot td-red"></span>
+        <span class="terminal-dot td-amber"></span>
+        <span class="terminal-dot td-green"></span>
+        <span class="terminal-title">ocean modules list --type tester</span>
+      </div>
+      <div class="terminal-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 24px;font-size:0.78rem">
+          <div style="color:var(--text-dim);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:4px">CLASSIFICATION</div>
+          <div style="color:var(--text-dim);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:4px">AUTHORIZATION</div>
+          <div style="color:var(--text-dim);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:4px">DESCRIPTION</div>
+
+          <div style="color:var(--green)">safe</div>
+          <div style="color:var(--text-muted)">auto-approved</div>
+          <div style="color:var(--text-muted)">Read-only probes, no side effects</div>
+
+          <div style="color:var(--cyan)">observable</div>
+          <div style="color:var(--text-muted)">prompt</div>
+          <div style="color:var(--text-muted)">Creates audit trail entries</div>
+
+          <div style="color:var(--orange)">reversible</div>
+          <div style="color:var(--text-muted)">explicit</div>
+          <div style="color:var(--text-muted)">Makes changes, auto-reverts</div>
+
+          <div style="color:var(--red)">destructive</div>
+          <div style="color:var(--text-muted)">explicit + warn</div>
+          <div style="color:var(--text-muted)">Permanent changes, manual cleanup</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="scan-bar"></div>
+
+<!-- ═══════════════════════════════════════════ INSTALL -->
+<section class="section cta-section" id="install">
+  <div class="container">
+    <div class="cta-box">
+      <div class="section-label" style="margin-bottom:16px">// get started</div>
+      <h2 class="cta-title">
+        Start Verifying Controls<br>
+        <span class="grad-orange">in Minutes</span>
+      </h2>
+      <p class="cta-desc">Single Go binary. Zero dependencies. Works anywhere.</p>
+
+      <div class="install-cmd" id="install-cmd-box">
+        <span class="install-cmd-text">go install github.com/grcengineering/ocean/cmd/ocean@latest</span>
+        <button class="copy-btn" id="copy-btn" onclick="copyInstall()">copy</button>
+      </div>
+
+      <div class="cta-actions">
+        <a href="https://github.com/grcengineering/ocean" class="btn btn-primary" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View Source
+        </a>
+        <a href="https://github.com/grcengineering/ocean/tree/main/docs" class="btn btn-secondary" target="_blank" rel="noopener">
+          Read the Docs
+        </a>
+      </div>
+
+      <div style="margin-top:28px;font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">
+        Apache 2.0 &nbsp;·&nbsp; Built for GRC practitioners &nbsp;·&nbsp; Contributions welcome
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div>
+        <div class="footer-logo" style="margin-bottom:6px">
+          <div class="nav-logo-mark" style="width:28px;height:28px;font-size:0.8rem">O</div>
+          <span class="footer-logo-text">OC<span>E</span>AN</span>
+        </div>
+        <p class="footer-copy">Open Control Evidence Acquisition Normalizer &nbsp;·&nbsp; Apache 2.0</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/grcengineering/ocean" class="footer-link" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/grcengineering/ocean/blob/main/docs/quickstart.md" class="footer-link" target="_blank" rel="noopener">Quickstart</a>
+        <a href="https://grc.engineering" class="footer-link" target="_blank" rel="noopener">GRC Engineering</a>
+        <a href="https://github.com/grcengineering/ocean/issues" class="footer-link" target="_blank" rel="noopener">Issues</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════ TERMINAL ANIMATION -->
+<script>
+(function() {
+  const lines = [
+    { type: 'prompt', text: 'ocean modules list' },
+    { type: 'out', text: '9 modules registered across 4 systems (collectors: 5, testers: 4)' },
+    { type: 'blank' },
+    { type: 'prompt', text: 'ocean collect okta.mfa_policy' },
+    { type: 'ok',  text: '✓  Querying Okta API...' },
+    { type: 'ok',  text: '✓  Normalizing to OCEAN Evidence Schema...' },
+    { type: 'ok',  text: '✓  Signing with Ed25519 (in-toto DSSE)...' },
+    { type: 'ok',  text: '✓  Stored — confidence: passive_observation' },
+    { type: 'blank' },
+    { type: 'prompt', text: 'ocean test okta.mfa_bypass --target staging' },
+    { type: 'ok',  text: '✓  Pre-flight: safe | scope: staging | auth: auto' },
+    { type: 'ok',  text: '✓  Attempting authentication without MFA...' },
+    { type: 'ok',  text: '✓  MFA bypass blocked — control is EFFECTIVE' },
+    { type: 'ok',  text: '✓  Transcript saved — confidence: active_verification' },
+    { type: 'blank' },
+    { type: 'prompt', text: 'ocean verify control.mfa_enforcement' },
+    { type: 'ok',  text: '✓  Passive evidence: PASS (policy configured correctly)' },
+    { type: 'ok',  text: '✓  Active test:     PASS (bypass blocked)' },
+    { type: 'ok',  text: '✓  Status: EFFECTIVE | Confidence: HIGH | Uptime: 99.94%' },
+    { type: 'ok',  text: '✓  Both attestations verified against public key' },
+    { type: 'blank' },
+    { type: 'prompt-cursor', text: '' },
+  ];
+
+  const body = document.getElementById('terminal-body');
+  let lineIdx = 0;
+  let charIdx = 0;
+  let currentEl = null;
+
+  function renderLine(line) {
+    const div = document.createElement('div');
+    div.className = 'terminal-line';
+    if (line.type === 'blank') { div.style.height = '12px'; body.appendChild(div); return null; }
+    if (line.type === 'prompt' || line.type === 'prompt-cursor') {
+      const pr = document.createElement('span');
+      pr.className = 'terminal-prompt'; pr.textContent = '$';
+      div.appendChild(pr);
+    }
+    const span = document.createElement('span');
+    if (line.type === 'prompt' || line.type === 'prompt-cursor') span.className = 'terminal-cmd';
+    else if (line.type === 'ok') span.className = 'terminal-ok';
+    else span.className = 'terminal-out';
+    div.appendChild(span);
+    body.appendChild(div);
+    return span;
+  }
+
+  function typeNext() {
+    if (lineIdx >= lines.length) {
+      // Restart after pause
+      setTimeout(() => {
+        body.innerHTML = '';
+        lineIdx = 0; charIdx = 0; currentEl = null;
+        typeNext();
+      }, 3200);
+      return;
+    }
+    const line = lines[lineIdx];
+    if (!currentEl) {
+      currentEl = renderLine(line);
+      if (!currentEl) { lineIdx++; setTimeout(typeNext, 80); return; }
+      if (line.type === 'prompt-cursor') {
+        const cur = document.createElement('span');
+        cur.className = 'terminal-cursor';
+        currentEl.parentElement.appendChild(cur);
+        lineIdx++;
+        return; // stop, cursor blinks
+      }
+      charIdx = 0;
+    }
+    const text = line.text;
+    if (charIdx < text.length) {
+      currentEl.textContent += text[charIdx];
+      charIdx++;
+      const delay = (line.type === 'prompt') ? 38 : 14;
+      setTimeout(typeNext, delay);
+    } else {
+      currentEl = null;
+      lineIdx++;
+      const pause = (line.type === 'prompt') ? 320 : (line.type === 'ok' ? 80 : 20);
+      setTimeout(typeNext, pause);
+    }
+  }
+
+  // Start after short delay
+  setTimeout(typeNext, 800);
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════ COPY INSTALL -->
+<script>
+function copyInstall() {
+  const text = 'go install github.com/grcengineering/ocean/cmd/ocean@latest';
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'copy';
+      btn.classList.remove('copied');
+    }, 2200);
+  });
+}
+</script>
+
+</body>
+</html>
