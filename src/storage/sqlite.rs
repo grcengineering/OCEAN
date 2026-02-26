@@ -1,1 +1,565 @@
-// SQLite storage — implemented in Phase 2.
+use anyhow::{anyhow, Context, Result};
+use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde_json;
+use std::path::Path;
+use std::sync::Mutex;
+use uuid::Uuid;
+
+use crate::control::ControlStatus;
+use crate::evidence::{
+    ConfidenceLevel, Evidence, Enrichment, Finding, Metadata, Observable, StatusId,
+};
+use crate::scheduler::{ModuleRunResult, Schedule, ScheduleRun};
+use crate::storage::{EvidenceQuery, Store};
+
+/// SQLite-backed implementation of the Store trait.
+/// Uses a Mutex for connection sharing — suitable for single-process CLI use.
+/// WAL mode is enabled for better concurrent read performance.
+pub struct SqliteStore {
+    conn: Mutex<Connection>,
+}
+
+impl SqliteStore {
+    /// Open or create a SQLite database at the given path and run migrations.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating storage directory: {}", parent.display()))?;
+        }
+
+        let conn = Connection::open(path)
+            .with_context(|| format!("opening SQLite database: {}", path.display()))?;
+
+        // WAL mode + busy timeout for better concurrency.
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;",
+        )?;
+
+        let store = Self { conn: Mutex::new(conn) };
+        store.migrate()?;
+        Ok(store)
+    }
+
+    fn migrate(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute_batch(r#"
+            CREATE TABLE IF NOT EXISTS evidence (
+                id                   TEXT PRIMARY KEY,
+                control_id           TEXT NOT NULL,
+                class_uid            INTEGER NOT NULL,
+                category_uid         INTEGER NOT NULL,
+                activity_id          INTEGER NOT NULL,
+                timestamp            TEXT NOT NULL,
+                confidence_level     TEXT NOT NULL,
+                metadata_json        TEXT NOT NULL,
+                observables_json     TEXT NOT NULL DEFAULT '[]',
+                status_id            INTEGER NOT NULL,
+                status               TEXT NOT NULL,
+                raw_data             TEXT NOT NULL DEFAULT 'null',
+                findings_json        TEXT NOT NULL DEFAULT '[]',
+                test_transcript_json TEXT,
+                enrichments_json     TEXT,
+                created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_evidence_control_id ON evidence(control_id);
+            CREATE INDEX IF NOT EXISTS idx_evidence_timestamp  ON evidence(timestamp);
+
+            CREATE TABLE IF NOT EXISTS control_status (
+                id                 TEXT PRIMARY KEY,
+                control_id         TEXT NOT NULL,
+                timestamp          TEXT NOT NULL,
+                status             TEXT NOT NULL,
+                confidence         TEXT NOT NULL,
+                evidence_ids_json  TEXT NOT NULL DEFAULT '[]',
+                evaluation_details TEXT NOT NULL DEFAULT '',
+                created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_control_status_control_id ON control_status(control_id);
+            CREATE INDEX IF NOT EXISTS idx_control_status_timestamp   ON control_status(timestamp);
+
+            CREATE TABLE IF NOT EXISTS schedules (
+                id                TEXT PRIMARY KEY,
+                control_id        TEXT NOT NULL DEFAULT '',
+                cron_expr         TEXT NOT NULL,
+                modules_json      TEXT NOT NULL,
+                enabled           INTEGER NOT NULL DEFAULT 1,
+                max_safety_level  TEXT NOT NULL DEFAULT 'safe',
+                environment_scope TEXT NOT NULL DEFAULT 'production',
+                catch_up          INTEGER NOT NULL DEFAULT 0,
+                last_run          TEXT,
+                next_run          TEXT,
+                created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS schedule_runs (
+                id                  TEXT PRIMARY KEY,
+                schedule_id         TEXT NOT NULL,
+                started_at          TEXT NOT NULL,
+                completed_at        TEXT NOT NULL,
+                status              TEXT NOT NULL,
+                module_results_json TEXT NOT NULL DEFAULT '[]',
+                error_message       TEXT NOT NULL DEFAULT '',
+                created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule_id ON schedule_runs(schedule_id);
+            CREATE INDEX IF NOT EXISTS idx_schedule_runs_started_at  ON schedule_runs(started_at);
+        "#)?;
+        Ok(())
+    }
+}
+
+impl Store for SqliteStore {
+    // -----------------------------------------------------------------------
+    // Evidence
+    // -----------------------------------------------------------------------
+
+    fn store_evidence(&self, ev: &Evidence) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let metadata_json = serde_json::to_string(&ev.metadata)?;
+        let observables_json = serde_json::to_string(&ev.observables)?;
+        let findings_json = serde_json::to_string(&ev.findings)?;
+        let raw_data = serde_json::to_string(&ev.raw_data)?;
+        let transcript_json = ev
+            .test_transcript
+            .as_ref()
+            .map(|t| serde_json::to_string(t))
+            .transpose()?;
+        let enrichments_json = if ev.enrichments.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_string(&ev.enrichments)?)
+        };
+        let status_id_int: i32 = ev.status_id.into();
+        let confidence_str = match &ev.confidence_level {
+            ConfidenceLevel::PassiveObservation => "passive_observation",
+            ConfidenceLevel::ActiveVerification => "active_verification",
+        };
+
+        conn.execute(
+            r#"INSERT INTO evidence (
+                id, control_id, class_uid, category_uid, activity_id,
+                timestamp, confidence_level, metadata_json, observables_json,
+                status_id, status, raw_data, findings_json,
+                test_transcript_json, enrichments_json
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)"#,
+            params![
+                ev.id.to_string(),
+                ev.control_id,
+                ev.class_uid,
+                ev.category_uid,
+                ev.activity_id,
+                ev.time.to_rfc3339(),
+                confidence_str,
+                metadata_json,
+                observables_json,
+                status_id_int,
+                ev.status,
+                raw_data,
+                findings_json,
+                transcript_json,
+                enrichments_json,
+            ],
+        )
+        .context("inserting evidence")?;
+        Ok(())
+    }
+
+    fn get_evidence(&self, id: Uuid) -> Result<Evidence> {
+        let conn = self.conn.lock().unwrap();
+        let row = conn
+            .query_row(
+                r#"SELECT id, control_id, class_uid, category_uid, activity_id,
+                    timestamp, confidence_level, metadata_json, observables_json,
+                    status_id, status, raw_data, findings_json,
+                    test_transcript_json, enrichments_json
+                   FROM evidence WHERE id = ?1"#,
+                params![id.to_string()],
+                scan_evidence,
+            )
+            .optional()?
+            .ok_or_else(|| anyhow!("evidence {id} not found"))?;
+        Ok(row)
+    }
+
+    fn query_evidence(&self, query: &EvidenceQuery) -> Result<Vec<Evidence>> {
+        let conn = self.conn.lock().unwrap();
+        let mut sql = String::from(
+            r#"SELECT id, control_id, class_uid, category_uid, activity_id,
+                timestamp, confidence_level, metadata_json, observables_json,
+                status_id, status, raw_data, findings_json,
+                test_transcript_json, enrichments_json
+               FROM evidence WHERE 1=1"#,
+        );
+        let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(cid) = &query.control_id {
+            sql.push_str(" AND control_id = ?");
+            args.push(Box::new(cid.clone()));
+        }
+        if let Some(src) = &query.source {
+            sql.push_str(" AND json_extract(metadata_json, '$.source.system') = ?");
+            args.push(Box::new(src.clone()));
+        }
+        if let Some(from) = &query.from_time {
+            sql.push_str(" AND timestamp >= ?");
+            args.push(Box::new(from.to_rfc3339()));
+        }
+        if let Some(to) = &query.to_time {
+            sql.push_str(" AND timestamp <= ?");
+            args.push(Box::new(to.to_rfc3339()));
+        }
+
+        sql.push_str(" ORDER BY timestamp DESC");
+
+        if let Some(limit) = query.limit {
+            sql.push_str(&format!(" LIMIT {limit}"));
+        }
+
+        let refs: Vec<&dyn rusqlite::ToSql> = args.iter().map(|b| b.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(refs.as_slice(), scan_evidence)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("querying evidence")?;
+        Ok(rows)
+    }
+
+    // -----------------------------------------------------------------------
+    // Control Status
+    // -----------------------------------------------------------------------
+
+    fn store_control_status(&self, status: &ControlStatus) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let evidence_ids_json = serde_json::to_string(&status.evidence_ids)?;
+        conn.execute(
+            r#"INSERT INTO control_status (
+                id, control_id, timestamp, status, confidence,
+                evidence_ids_json, evaluation_details
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7)"#,
+            params![
+                status.id.to_string(),
+                status.control_id,
+                status.timestamp.to_rfc3339(),
+                status.status,
+                status.confidence,
+                evidence_ids_json,
+                status.evaluation_details,
+            ],
+        )
+        .context("inserting control status")?;
+        Ok(())
+    }
+
+    fn get_control_status(&self, control_id: &str) -> Result<ControlStatus> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            r#"SELECT id, control_id, timestamp, status, confidence,
+                evidence_ids_json, evaluation_details
+               FROM control_status WHERE control_id = ?1
+               ORDER BY timestamp DESC LIMIT 1"#,
+            params![control_id],
+            scan_control_status,
+        )
+        .optional()?
+        .ok_or_else(|| anyhow!("no status found for control {control_id:?}"))
+    }
+
+    fn query_history(
+        &self,
+        control_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<Vec<ControlStatus>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            r#"SELECT id, control_id, timestamp, status, confidence,
+                evidence_ids_json, evaluation_details
+               FROM control_status
+               WHERE control_id = ?1 AND timestamp >= ?2 AND timestamp <= ?3
+               ORDER BY timestamp ASC"#,
+        )?;
+        let rows = stmt
+            .query_map(params![control_id, from.to_rfc3339(), to.to_rfc3339()], scan_control_status)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("querying control history")?;
+        Ok(rows)
+    }
+
+    // -----------------------------------------------------------------------
+    // Schedules
+    // -----------------------------------------------------------------------
+
+    fn store_schedule(&self, sched: &Schedule) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let modules_json = serde_json::to_string(&sched.modules)?;
+        conn.execute(
+            r#"INSERT OR REPLACE INTO schedules (
+                id, control_id, cron_expr, modules_json, enabled,
+                max_safety_level, environment_scope, catch_up,
+                last_run, next_run, created_at, updated_at
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)"#,
+            params![
+                sched.id,
+                sched.control_id,
+                sched.cron_expr,
+                modules_json,
+                sched.enabled as i32,
+                sched.max_safety_level,
+                sched.environment_scope,
+                sched.catch_up as i32,
+                sched.last_run.map(|t| t.to_rfc3339()),
+                sched.next_run.map(|t| t.to_rfc3339()),
+                sched.created_at.to_rfc3339(),
+                sched.updated_at.to_rfc3339(),
+            ],
+        )
+        .context("storing schedule")?;
+        Ok(())
+    }
+
+    fn get_schedule(&self, id: &str) -> Result<Schedule> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            r#"SELECT id, control_id, cron_expr, modules_json, enabled,
+                max_safety_level, environment_scope, catch_up,
+                last_run, next_run, created_at, updated_at
+               FROM schedules WHERE id = ?1"#,
+            params![id],
+            scan_schedule,
+        )
+        .optional()?
+        .ok_or_else(|| anyhow!("schedule {id:?} not found"))
+    }
+
+    fn list_schedules(&self) -> Result<Vec<Schedule>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            r#"SELECT id, control_id, cron_expr, modules_json, enabled,
+                max_safety_level, environment_scope, catch_up,
+                last_run, next_run, created_at, updated_at
+               FROM schedules ORDER BY created_at ASC"#,
+        )?;
+        let rows = stmt
+            .query_map([], scan_schedule)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("listing schedules")?;
+        Ok(rows)
+    }
+
+    fn delete_schedule(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let affected = conn
+            .execute("DELETE FROM schedules WHERE id = ?1", params![id])
+            .context("deleting schedule")?;
+        if affected == 0 {
+            return Err(anyhow!("schedule {id:?} not found"));
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Schedule Runs
+    // -----------------------------------------------------------------------
+
+    fn store_schedule_run(&self, run: &ScheduleRun) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let results_json = serde_json::to_string(&run.module_results)?;
+        conn.execute(
+            r#"INSERT INTO schedule_runs (
+                id, schedule_id, started_at, completed_at, status,
+                module_results_json, error_message
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7)"#,
+            params![
+                run.id,
+                run.schedule_id,
+                run.started_at.to_rfc3339(),
+                run.completed_at.to_rfc3339(),
+                run.status,
+                results_json,
+                run.error,
+            ],
+        )
+        .context("storing schedule run")?;
+        Ok(())
+    }
+
+    fn list_schedule_runs(&self, schedule_id: &str, limit: usize) -> Result<Vec<ScheduleRun>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            r#"SELECT id, schedule_id, started_at, completed_at, status,
+                module_results_json, error_message
+               FROM schedule_runs WHERE schedule_id = ?1
+               ORDER BY started_at DESC LIMIT ?2"#,
+        )?;
+        let rows = stmt
+            .query_map(params![schedule_id, limit as i64], scan_schedule_run)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("listing schedule runs")?;
+        Ok(rows)
+    }
+
+    // -----------------------------------------------------------------------
+    // Lifecycle
+    // -----------------------------------------------------------------------
+
+    fn prune_evidence(&self, older_than: DateTime<Utc>) -> Result<u64> {
+        let conn = self.conn.lock().unwrap();
+        let affected = conn
+            .execute(
+                "DELETE FROM evidence WHERE timestamp < ?1",
+                params![older_than.to_rfc3339()],
+            )
+            .context("pruning evidence")?;
+        Ok(affected as u64)
+    }
+
+    fn close(&self) -> Result<()> {
+        // Connection is dropped when the store is dropped.
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Row scan helpers
+// ---------------------------------------------------------------------------
+
+fn parse_rfc3339(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+    DateTime::parse_from_rfc3339(s).map(|dt| dt.with_timezone(&Utc))
+}
+
+fn scan_evidence(row: &rusqlite::Row<'_>) -> rusqlite::Result<Evidence> {
+    let id_str: String = row.get(0)?;
+    let timestamp_str: String = row.get(5)?;
+    let confidence_str: String = row.get(6)?;
+    let metadata_json: String = row.get(7)?;
+    let observables_json: String = row.get(8)?;
+    let status_id_int: i32 = row.get(9)?;
+    let raw_data_str: String = row.get(11)?;
+    let findings_json: String = row.get(12)?;
+    let transcript_json: Option<String> = row.get(13)?;
+    let enrichments_json: Option<String> = row.get(14)?;
+
+    let id = Uuid::parse_str(&id_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+    let time = parse_rfc3339(&timestamp_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?;
+    let confidence_level = match confidence_str.as_str() {
+        "active_verification" => ConfidenceLevel::ActiveVerification,
+        _ => ConfidenceLevel::PassiveObservation,
+    };
+    let metadata: Metadata = serde_json::from_str(&metadata_json)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(e)))?;
+    let observables: Vec<Observable> = serde_json::from_str(&observables_json)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e)))?;
+    let raw_data: serde_json::Value = serde_json::from_str(&raw_data_str)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e)))?;
+    let findings: Vec<Finding> = serde_json::from_str(&findings_json)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(12, rusqlite::types::Type::Text, Box::new(e)))?;
+    let test_transcript = transcript_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(13, rusqlite::types::Type::Text, Box::new(e)))?;
+    let enrichments: Vec<Enrichment> = enrichments_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(14, rusqlite::types::Type::Text, Box::new(e)))?
+        .unwrap_or_default();
+
+    Ok(Evidence {
+        id,
+        control_id: row.get(1)?,
+        class_uid: row.get(2)?,
+        category_uid: row.get(3)?,
+        activity_id: row.get(4)?,
+        time,
+        confidence_level,
+        metadata,
+        observables,
+        status_id: StatusId::from(status_id_int),
+        status: row.get(10)?,
+        raw_data,
+        findings,
+        test_transcript,
+        enrichments,
+    })
+}
+
+fn scan_control_status(row: &rusqlite::Row<'_>) -> rusqlite::Result<ControlStatus> {
+    let id_str: String = row.get(0)?;
+    let timestamp_str: String = row.get(2)?;
+    let evidence_ids_json: String = row.get(5)?;
+
+    let id = Uuid::parse_str(&id_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+    let timestamp = parse_rfc3339(&timestamp_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e)))?;
+    let evidence_ids: Vec<Uuid> = serde_json::from_str(&evidence_ids_json)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?;
+
+    Ok(ControlStatus {
+        id,
+        control_id: row.get(1)?,
+        timestamp,
+        status: row.get(3)?,
+        confidence: row.get(4)?,
+        evidence_ids,
+        evaluation_details: row.get(6)?,
+    })
+}
+
+fn scan_schedule(row: &rusqlite::Row<'_>) -> rusqlite::Result<Schedule> {
+    let modules_json: String = row.get(3)?;
+    let enabled: i32 = row.get(4)?;
+    let catch_up: i32 = row.get(7)?;
+    let last_run_str: Option<String> = row.get(8)?;
+    let next_run_str: Option<String> = row.get(9)?;
+    let created_str: String = row.get(10)?;
+    let updated_str: String = row.get(11)?;
+
+    let modules: Vec<String> = serde_json::from_str(&modules_json)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e)))?;
+    let created_at = parse_rfc3339(&created_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(10, rusqlite::types::Type::Text, Box::new(e)))?;
+    let updated_at = parse_rfc3339(&updated_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e)))?;
+    let last_run = last_run_str.as_deref().map(parse_rfc3339).transpose()
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e)))?;
+    let next_run = next_run_str.as_deref().map(parse_rfc3339).transpose()
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(e)))?;
+
+    Ok(Schedule {
+        id: row.get(0)?,
+        control_id: row.get(1)?,
+        cron_expr: row.get(2)?,
+        modules,
+        enabled: enabled != 0,
+        max_safety_level: row.get(5)?,
+        environment_scope: row.get(6)?,
+        catch_up: catch_up != 0,
+        last_run,
+        next_run,
+        created_at,
+        updated_at,
+    })
+}
+
+fn scan_schedule_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScheduleRun> {
+    let started_str: String = row.get(2)?;
+    let completed_str: String = row.get(3)?;
+    let results_json: String = row.get(5)?;
+
+    let started_at = parse_rfc3339(&started_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e)))?;
+    let completed_at = parse_rfc3339(&completed_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e)))?;
+    let module_results: Vec<ModuleRunResult> = serde_json::from_str(&results_json)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?;
+
+    Ok(ScheduleRun {
+        id: row.get(0)?,
+        schedule_id: row.get(1)?,
+        started_at,
+        completed_at,
+        status: row.get(4)?,
+        module_results,
+        error: row.get(6)?,
+    })
+}
