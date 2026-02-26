@@ -1254,18 +1254,28 @@
     } else { c.fillStyle='rgba('+this.color+','+this.opacity+')'; c.fill(); }
   };
 
-  // ── Waves ─────────────────────────────────────────────────
-  var WAVES=[
-    {amp:22,freq:0.0055,speed:0.00078,yFrac:0.76,opacity:0.022},
-    {amp:14,freq:0.0072,speed:0.00118,yFrac:0.83,opacity:0.015},
-    {amp: 9,freq:0.0090,speed:0.00168,yFrac:0.90,opacity:0.009}
-  ];
-  function drawWave(w,t){
-    var yB=canvas.height*w.yFrac;
-    ctx.beginPath(); ctx.moveTo(0,yB);
-    for(var x=0;x<=canvas.width;x+=5) ctx.lineTo(x,yB+Math.sin(x*w.freq+t*w.speed)*w.amp);
-    ctx.lineTo(canvas.width,canvas.height); ctx.lineTo(0,canvas.height);
-    ctx.closePath(); ctx.fillStyle='rgba(27,149,193,'+w.opacity+')'; ctx.fill();
+  // ── Surface shimmer — overhead caustic water effect ───────
+  var SURF_TS=22;
+  function drawSurface(t){
+    var W=canvas.width, H=canvas.height;
+    var cols=Math.ceil(W/SURF_TS)+1, rows=Math.ceil(H/SURF_TS)+1;
+    var ft=t*0.0011;
+    var gBright=0.68+Math.sin(t*0.00038)*0.32;
+    for(var r=0;r<rows;r++){
+      var wy=r*SURF_TS;
+      for(var c=0;c<cols;c++){
+        var wx=c*SURF_TS;
+        var s1=Math.sin(wx*0.036+wy*0.021+ft*1.6);
+        var s2=Math.sin(wx*0.019-wy*0.044+ft*1.4+2.1);
+        var s3=Math.sin(-wx*0.027+wy*0.031+ft*1.8+4.5);
+        var intensity=(s1+s2+s3+3)*(1/6);
+        if(intensity>0.58){
+          var op=(intensity-0.58)*(1/0.42)*0.055*gBright;
+          ctx.fillStyle='rgba(147,210,230,'+op+')';
+          ctx.fillRect(wx,wy,SURF_TS,SURF_TS);
+        }
+      }
+    }
   }
 
   // ── Fish — 28 cols x 12 rows, PS=2 (56x24px) ─────────────
@@ -1530,7 +1540,7 @@
   var t=0;
   function frame(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    WAVES.forEach(function(w){drawWave(w,t);});
+    drawSurface(t);
     bubbles.forEach(function(b){b.update();b.draw(ctx);});
     jellies.forEach(function(j){j.update();j.draw(ctx);});
     gliders.forEach(function(g){g.update();g.draw(ctx);});
