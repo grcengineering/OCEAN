@@ -1283,10 +1283,10 @@
     this.x       = scatter ? Math.random() * window.innerWidth
                            : (goRight ? -70 : window.innerWidth + 70);
     this.y       = window.innerHeight * (0.04 + Math.random() * 0.62);
-    this.r       = Math.random() * 22 + 15;         // dome radius 15–37 px
+    this.r       = Math.random() * 30 + 20;         // dome radius 15–37 px
     this.color   = Math.random() > 0.5 ? ORANGE : BLUE;
-    var depth    = (this.r - 15) / 22;
-    this.opacity = 0.045 + (1 - depth) * 0.065;     // 0.045–0.110
+    var depth    = (this.r - 20) / 30;
+    this.opacity = 0.10 + (1 - depth) * 0.08;     // 0.045–0.110
     this.vx      = this.dir * (Math.random() * 0.15 + 0.07);
     this.drift   = (Math.random() - 0.5) * 0.025;
     this.phase   = Math.random() * Math.PI * 2;
@@ -1312,7 +1312,7 @@
     var co = this.color;
     c.save();
     c.shadowColor = 'rgba(' + co + ',' + (op * 1.6) + ')';
-    c.shadowBlur  = 7;
+    c.shadowBlur  = 14;
 
     // Dome
     c.beginPath();
@@ -1377,9 +1377,9 @@
     this.y      = cy !== undefined
       ? cy + (Math.random() - 0.5) * 18
       : window.innerHeight * (0.08 + Math.random() * 0.74);
-    this.size   = Math.random() * 6 + 5;            // body half-length 5–11 px
+    this.size   = Math.random() * 8 + 7;            // body half-length 5–11 px
     this.color  = Math.random() > 0.5 ? ORANGE : BLUE;
-    this.opacity = Math.random() * 0.065 + 0.045;   // 0.045–0.110
+    this.opacity = Math.random() * 0.08 + 0.09;   // 0.045–0.110
     this.vx     = this.dir * (Math.random() * 0.38 + 0.22);
     this.vy     = (Math.random() - 0.5) * 0.055;
     this.phase  = Math.random() * Math.PI * 2;
@@ -1405,7 +1405,7 @@
     c.save();
     c.translate(this.x, this.y);
     c.shadowColor = 'rgba(' + co + ',' + (op * 1.4) + ')';
-    c.shadowBlur  = 4;
+    c.shadowBlur  = 8;
     c.strokeStyle = 'rgba(' + co + ',' + op + ')';
     c.lineWidth   = 0.75;
 
