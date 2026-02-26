@@ -179,19 +179,16 @@
       text-decoration: none;
     }
     .nav-logo-mark {
-      width: 36px; height: 36px;
+      height: 36px; padding: 0 14px;
       background: linear-gradient(135deg, var(--orange), var(--blue));
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      font-family: var(--mono); font-weight: 700; font-size: 1rem;
+      font-family: var(--heading); font-weight: 700; font-size: 0.9rem;
+      letter-spacing: 0.06em;
       color: #fff;
       box-shadow: 0 0 20px var(--orange-glow);
+      white-space: nowrap;
     }
-    .nav-logo-text {
-      font-family: var(--mono); font-weight: 700; font-size: 1.2rem;
-      color: var(--text); letter-spacing: 0.05em;
-    }
-    .nav-logo-text span { color: var(--orange); }
     .nav-links { display: flex; align-items: center; gap: 8px; }
     .nav-link {
       font-size: 0.88rem; color: var(--text-muted); text-decoration: none;
@@ -595,8 +592,7 @@
   <div class="container">
     <div class="nav-inner">
       <a href="#" class="nav-logo">
-        <div class="nav-logo-mark">O</div>
-        <span class="nav-logo-text">OC<span>E</span>AN</span>
+        <div class="nav-logo-mark">OCEAN</div>
       </a>
       <div class="nav-links">
         <a href="#pillars" class="nav-link">Pillars</a>
@@ -1089,8 +1085,7 @@
     <div class="footer-inner">
       <div>
         <div class="footer-logo" style="margin-bottom:6px">
-          <div class="nav-logo-mark" style="width:28px;height:28px;font-size:0.8rem">O</div>
-          <span class="footer-logo-text">OC<span>E</span>AN</span>
+          <div class="nav-logo-mark" style="height:28px;padding:0 10px;font-size:0.75rem">OCEAN</div>
         </div>
         <p class="footer-copy">Open Control Evidence Acquisition Normalizer &nbsp;·&nbsp; Apache 2.0</p>
       </div>
