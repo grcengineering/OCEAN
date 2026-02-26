@@ -1234,8 +1234,8 @@
   };
   Bubble.prototype.update = function () {
     this.wPhase += this.wFreq;
-    this.x += Math.sin(this.wPhase) * this.wAmp + this.vx;
     this.y -= this.vy;
+    this.x += this.vx + Math.sin(this.wPhase) * this.wAmp * 0.12;
     if (this.y < -12) this.reset(false);
   };
   Bubble.prototype.draw = function (c) {
@@ -1255,7 +1255,7 @@
     }
   };
 
-  // ── Waves (3.5× faster than before) ──────────────────────
+  // ── Waves ─────────────────────────────────────────────────
   var WAVES = [
     { amp: 22, freq: 0.0055, speed: 0.00078, yFrac: 0.76, opacity: 0.022 },
     { amp: 14, freq: 0.0072, speed: 0.00118, yFrac: 0.83, opacity: 0.015 },
@@ -1283,16 +1283,15 @@
     this.x       = scatter ? Math.random() * window.innerWidth
                            : (goRight ? -70 : window.innerWidth + 70);
     this.y       = window.innerHeight * (0.04 + Math.random() * 0.62);
-    this.r       = Math.random() * 30 + 20;         // dome radius 15–37 px
+    this.r       = Math.random() * 30 + 20;
     this.color   = Math.random() > 0.5 ? ORANGE : BLUE;
     var depth    = (this.r - 20) / 30;
-    this.opacity = 0.10 + (1 - depth) * 0.08;     // 0.045–0.110
+    this.opacity = 0.10 + (1 - depth) * 0.08;
     this.vx      = this.dir * (Math.random() * 0.15 + 0.07);
     this.drift   = (Math.random() - 0.5) * 0.025;
     this.phase   = Math.random() * Math.PI * 2;
     this.pSpeed  = Math.random() * 0.022 + 0.012;
-    this.tCount  = Math.floor(Math.random() * 3) + 4; // 4–6 tentacles
-    // Pre-compute tentacle relative lengths (avoids per-frame randomness / flicker)
+    this.tCount  = Math.floor(Math.random() * 3) + 4;
     this.tLens = [];
     for (var i = 0; i < 7; i++) this.tLens.push(0.75 + Math.random() * 0.55);
   };
@@ -1306,7 +1305,7 @@
     if (this.y >  window.innerHeight * 0.72) this.y = 10;
   };
   Jelly.prototype.draw = function (c) {
-    var pulse = 1 + Math.sin(this.phase) * 0.055; // breathing
+    var pulse = 1 + Math.sin(this.phase) * 0.055;
     var r  = this.r * pulse;
     var op = this.opacity;
     var co = this.color;
@@ -1314,20 +1313,26 @@
     c.shadowColor = 'rgba(' + co + ',' + (op * 1.6) + ')';
     c.shadowBlur  = 14;
 
-    // Dome
+    // Filled dome
     c.beginPath();
     c.arc(this.x, this.y, r, Math.PI, 0);
+    c.closePath();
+    c.fillStyle = 'rgba(' + co + ',' + (op * 0.30) + ')';
+    c.fill();
     c.strokeStyle = 'rgba(' + co + ',' + op + ')';
-    c.lineWidth = 0.9;
+    c.lineWidth = 1.2;
     c.stroke();
 
-    // Inner concentric ribs (digital scan-line aesthetic)
+    // Inner concentric ribs (filled + stroked)
     c.shadowBlur = 0;
     c.lineWidth  = 0.45;
     [0.58, 0.27].forEach(function (frac) {
       c.beginPath();
       c.arc(this.x, this.y, r * frac, Math.PI, 0);
-      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.30) + ')';
+      c.closePath();
+      c.fillStyle = 'rgba(' + co + ',' + (op * 0.12) + ')';
+      c.fill();
+      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.35) + ')';
       c.stroke();
     }, this);
 
@@ -1343,11 +1348,12 @@
     c.beginPath();
     c.moveTo(this.x - r, this.y);
     c.lineTo(this.x + r, this.y);
-    c.strokeStyle = 'rgba(' + co + ',' + (op * 0.48) + ')';
-    c.lineWidth = 0.6;
+    c.strokeStyle = 'rgba(' + co + ',' + (op * 0.55) + ')';
+    c.lineWidth = 0.7;
     c.stroke();
 
     // Tentacles
+    c.shadowBlur = 4;
     for (var i = 0; i < this.tCount; i++) {
       var tx   = this.x + (i / (this.tCount - 1) - 0.5) * 1.75 * r;
       var tLen = r * this.tLens[i];
@@ -1359,8 +1365,8 @@
           this.y + (tLen / 10) * s
         );
       }
-      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.38) + ')';
-      c.lineWidth = 0.48;
+      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.50) + ')';
+      c.lineWidth = 0.7;
       c.stroke();
     }
     c.restore();
@@ -1369,7 +1375,7 @@
   // ── Geometric fish (Glider) ───────────────────────────────
   function Glider(scatter, cx, cy) { this.init(scatter, cx, cy); }
   Glider.prototype.init = function (scatter, cx, cy) {
-    var goRight = cx !== undefined ? (Math.random() > 0.5) : Math.random() > 0.5;
+    var goRight = Math.random() > 0.5;
     this.dir    = goRight ? 1 : -1;
     this.x      = scatter
       ? (cx !== undefined ? cx + (Math.random() - 0.5) * 22 : Math.random() * window.innerWidth)
@@ -1377,13 +1383,13 @@
     this.y      = cy !== undefined
       ? cy + (Math.random() - 0.5) * 18
       : window.innerHeight * (0.08 + Math.random() * 0.74);
-    this.size   = Math.random() * 8 + 7;            // body half-length 5–11 px
+    this.size   = Math.random() * 8 + 7;
     this.color  = Math.random() > 0.5 ? ORANGE : BLUE;
-    this.opacity = Math.random() * 0.08 + 0.09;   // 0.045–0.110
+    this.opacity = Math.random() * 0.08 + 0.09;
     this.vx     = this.dir * (Math.random() * 0.38 + 0.22);
     this.vy     = (Math.random() - 0.5) * 0.055;
     this.phase  = Math.random() * Math.PI * 2;
-    this.pSpeed = Math.random() * 0.055 + 0.035;    // tail wag speed
+    this.pSpeed = Math.random() * 0.055 + 0.035;
   };
   Glider.prototype.update = function () {
     this.phase += this.pSpeed;
@@ -1406,16 +1412,18 @@
     c.translate(this.x, this.y);
     c.shadowColor = 'rgba(' + co + ',' + (op * 1.4) + ')';
     c.shadowBlur  = 8;
-    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
-    c.lineWidth   = 0.75;
 
-    // Body: angular diamond
+    // Body: filled angular diamond
     c.beginPath();
     c.moveTo(d * s,          0);
     c.lineTo(0,             -s * 0.36);
     c.lineTo(d * -s * 0.62,  0);
     c.lineTo(0,              s * 0.36);
     c.closePath();
+    c.fillStyle = 'rgba(' + co + ',' + (op * 0.45) + ')';
+    c.fill();
+    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
+    c.lineWidth   = 0.75;
     c.stroke();
 
     // Forked tail with wag
@@ -1426,13 +1434,154 @@
     c.lineTo(d * -s * 1.15,  s * 0.32 + wag);
     c.stroke();
 
-    // Dorsal fin (tiny triangle on top)
+    // Filled dorsal fin
     c.beginPath();
     c.moveTo(d * s * 0.08,  -s * 0.36);
     c.lineTo(d * s * 0.22,  -s * 0.68);
     c.lineTo(d * -s * 0.18, -s * 0.36);
+    c.closePath();
+    c.fillStyle = 'rgba(' + co + ',' + (op * 0.28) + ')';
+    c.fill();
     c.stroke();
 
+    c.restore();
+  };
+
+  // ── Starfish ──────────────────────────────────────────────
+  function Star(scatter) { this.init(scatter); }
+  Star.prototype.init = function (scatter) {
+    this.x = scatter ? Math.random() * window.innerWidth
+                     : (Math.random() > 0.5 ? -60 : window.innerWidth + 60);
+    this.y = window.innerHeight * (0.10 + Math.random() * 0.75);
+    this.r = Math.random() * 16 + 12;
+    this.innerR = this.r * 0.42;
+    this.color  = Math.random() > 0.5 ? ORANGE : BLUE;
+    this.opacity = 0.10 + Math.random() * 0.09;
+    this.vx  = (Math.random() - 0.5) * 0.09;
+    this.vy  = (Math.random() - 0.5) * 0.05;
+    this.angle = Math.random() * Math.PI * 2;
+    this.spin  = (Math.random() - 0.5) * 0.005;
+  };
+  Star.prototype.update = function () {
+    this.angle += this.spin;
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < -70 || this.x > window.innerWidth  + 70) this.init(false);
+    if (this.y < -70 || this.y > window.innerHeight + 70) this.init(false);
+  };
+  Star.prototype.draw = function (c) {
+    var R  = this.r, ri = this.innerR;
+    var co = this.color, op = this.opacity;
+    c.save();
+    c.translate(this.x, this.y);
+    c.shadowColor = 'rgba(' + co + ',' + (op * 1.5) + ')';
+    c.shadowBlur  = 12;
+
+    // 5-pointed filled star
+    c.beginPath();
+    for (var i = 0; i < 10; i++) {
+      var rad = (i % 2 === 0) ? R : ri;
+      var a   = (Math.PI / 5) * i + this.angle - Math.PI / 2;
+      if (i === 0) c.moveTo(Math.cos(a) * rad, Math.sin(a) * rad);
+      else         c.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+    }
+    c.closePath();
+    c.fillStyle   = 'rgba(' + co + ',' + (op * 0.48) + ')';
+    c.fill();
+    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
+    c.lineWidth   = 0.85;
+    c.stroke();
+
+    c.shadowBlur = 0;
+    // Centre dot
+    c.beginPath();
+    c.arc(0, 0, R * 0.14, 0, Math.PI * 2);
+    c.fillStyle = 'rgba(' + co + ',' + (op * 0.70) + ')';
+    c.fill();
+    // Arm tip dots
+    for (var j = 0; j < 5; j++) {
+      var a2 = (Math.PI * 2 / 5) * j + this.angle - Math.PI / 2;
+      c.beginPath();
+      c.arc(Math.cos(a2) * R * 0.72, Math.sin(a2) * R * 0.72, R * 0.09, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(' + co + ',' + (op * 0.60) + ')';
+      c.fill();
+    }
+    c.restore();
+  };
+
+  // ── Octopus ───────────────────────────────────────────────
+  function Octo(scatter) { this.init(scatter); }
+  Octo.prototype.init = function (scatter) {
+    var goRight  = Math.random() > 0.5;
+    this.dir     = goRight ? 1 : -1;
+    this.x       = scatter ? Math.random() * window.innerWidth
+                           : (goRight ? -90 : window.innerWidth + 90);
+    this.y       = window.innerHeight * (0.05 + Math.random() * 0.60);
+    this.r       = Math.random() * 12 + 10;
+    this.color   = Math.random() > 0.5 ? ORANGE : BLUE;
+    this.opacity = 0.10 + Math.random() * 0.09;
+    this.vx      = this.dir * (Math.random() * 0.10 + 0.04);
+    this.vy      = (Math.random() - 0.5) * 0.03;
+    this.phase   = Math.random() * Math.PI * 2;
+    this.pSpeed  = Math.random() * 0.018 + 0.010;
+    this.tLens   = [];
+    this.tOff    = [];
+    for (var i = 0; i < 8; i++) {
+      this.tLens.push(this.r * (1.5 + Math.random() * 0.9));
+      this.tOff.push(Math.random() * Math.PI * 2);
+    }
+  };
+  Octo.prototype.update = function () {
+    this.phase += this.pSpeed;
+    this.x += this.vx;
+    this.y += this.vy + Math.sin(this.phase * 0.3) * 0.08;
+    if (this.x >  window.innerWidth  + 100) this.init(false);
+    if (this.x < -100)                       this.init(false);
+    if (this.y < -60 || this.y > window.innerHeight * 0.80) this.init(false);
+  };
+  Octo.prototype.draw = function (c) {
+    var r  = this.r;
+    var co = this.color;
+    var op = this.opacity;
+    c.save();
+    c.shadowColor = 'rgba(' + co + ',' + (op * 1.5) + ')';
+    c.shadowBlur  = 12;
+
+    // Filled head (squashed ellipse)
+    c.beginPath();
+    c.ellipse(this.x, this.y, r, r * 0.80, 0, 0, Math.PI * 2);
+    c.fillStyle   = 'rgba(' + co + ',' + (op * 0.40) + ')';
+    c.fill();
+    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
+    c.lineWidth   = 0.9;
+    c.stroke();
+
+    // Eyes
+    c.shadowBlur = 0;
+    [-r * 0.28, r * 0.28].forEach(function (ex) {
+      c.beginPath();
+      c.arc(this.x + ex, this.y - r * 0.15, r * 0.11, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(' + co + ',' + (op * 0.85) + ')';
+      c.fill();
+    }, this);
+
+    // 8 tentacles
+    c.shadowBlur = 5;
+    for (var i = 0; i < 8; i++) {
+      var spread = (i / 7 - 0.5) * r * 1.7;
+      var tx = this.x + spread;
+      var ty = this.y + r * 0.65;
+      var tLen = this.tLens[i];
+      c.beginPath();
+      c.moveTo(tx, ty);
+      for (var s = 1; s <= 9; s++) {
+        var wag = Math.sin(this.phase + this.tOff[i] + s * 0.48) * (r * 0.20 + s * 0.28);
+        c.lineTo(tx + wag, ty + (tLen / 9) * s);
+      }
+      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.58) + ')';
+      c.lineWidth   = Math.max(0.4, 0.9 - i * 0.05);
+      c.stroke();
+    }
     c.restore();
   };
 
@@ -1443,12 +1592,17 @@
   var jellies = [];
   for (var j = 0; j < 5; j++) jellies.push(new Jelly(true));
 
-  // 6 fish in 2 loose schools of 3
   var gliders = [];
   var s1x = Math.random() * window.innerWidth, s1y = window.innerHeight * (0.2 + Math.random() * 0.5);
   var s2x = Math.random() * window.innerWidth, s2y = window.innerHeight * (0.2 + Math.random() * 0.5);
   for (var k = 0; k < 3; k++) gliders.push(new Glider(true, s1x, s1y));
   for (var m = 0; m < 3; m++) gliders.push(new Glider(true, s2x, s2y));
+
+  var stars = [];
+  for (var n = 0; n < 4; n++) stars.push(new Star(true));
+
+  var octos = [];
+  for (var p = 0; p < 3; p++) octos.push(new Octo(true));
 
   var t = 0;
   function frame() {
@@ -1457,11 +1611,13 @@
     bubbles.forEach(function (b) { b.update(); b.draw(ctx); });
     jellies.forEach(function (j) { j.update(); j.draw(ctx); });
     gliders.forEach(function (g) { g.update(); g.draw(ctx); });
+    stars.forEach(function  (s) { s.update(); s.draw(ctx); });
+    octos.forEach(function  (o) { o.update(); o.draw(ctx); });
     t++;
     requestAnimationFrame(frame);
   }
   frame();
-})();
+}());
 </script>
 
 <!-- ═══════════════════════════════════════════ COPY INSTALL -->
