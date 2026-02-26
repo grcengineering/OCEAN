@@ -1202,424 +1202,314 @@
 (function () {
   var canvas = document.getElementById('ocean-bg');
   var ctx = canvas.getContext('2d');
-
-  function resize() {
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
   resize();
   window.addEventListener('resize', resize);
 
   var ORANGE = '255,168,79';
   var BLUE   = '27,149,193';
   var PALE   = '160,215,235';
-  var COLORS = [BLUE, BLUE, BLUE, ORANGE, ORANGE, PALE];
+  var COLORS = [BLUE,BLUE,BLUE,ORANGE,ORANGE,PALE];
 
-  // ── Bubble ────────────────────────────────────────────────
-  function Bubble(scatterY) { this.reset(scatterY); }
-  Bubble.prototype.reset = function (scatterY) {
-    this.x      = Math.random() * window.innerWidth;
-    this.y      = scatterY ? Math.random() * window.innerHeight
-                           : window.innerHeight + Math.random() * 80;
-    this.r      = Math.random() * 3.5 + 1.2;
-    this.color  = COLORS[Math.floor(Math.random() * COLORS.length)];
-    this.vy     = Math.random() * 0.32 + 0.10;
-    this.vx     = (Math.random() - 0.5) * 0.07;
-    this.wAmp   = Math.random() * 0.55 + 0.12;
-    this.wFreq  = Math.random() * 0.022 + 0.008;
-    this.wPhase = Math.random() * Math.PI * 2;
-    var depth   = (this.r - 1.2) / 3.5;
-    this.opacity = 0.055 + (1 - depth) * 0.10;
-    this.hollow  = Math.random() > 0.55;
-  };
-  Bubble.prototype.update = function () {
-    this.wPhase += this.wFreq;
-    this.y -= this.vy;
-    this.x += this.vx + Math.sin(this.wPhase) * this.wAmp * 0.12;
-    if (this.y < -12) this.reset(false);
-  };
-  Bubble.prototype.draw = function (c) {
-    c.beginPath();
-    c.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-    if (this.hollow) {
-      c.strokeStyle = 'rgba(' + this.color + ',' + this.opacity + ')';
-      c.lineWidth = 0.7;
-      c.stroke();
-      c.beginPath();
-      c.arc(this.x - this.r * 0.28, this.y - this.r * 0.28, this.r * 0.22, 0, Math.PI * 2);
-      c.fillStyle = 'rgba(' + this.color + ',' + (this.opacity * 0.55) + ')';
-      c.fill();
-    } else {
-      c.fillStyle = 'rgba(' + this.color + ',' + this.opacity + ')';
-      c.fill();
+  // ── Pixel-art sprite renderer ──────────────────────────────
+  // v: 0=transparent 1=body 2=highlight 3=shadow/fin 4=eye/accent
+  function spr(c, grid, x0, y0, co, op, PS, flipX) {
+    var rows=grid.length, cols=grid[0].length;
+    for (var r=0; r<rows; r++) {
+      for (var cc=0; cc<cols; cc++) {
+        var v = grid[r][flipX ? cols-1-cc : cc];
+        if (!v) continue;
+        var a = v===4 ? op*0.90 : v===2 ? op*0.65 : v===3 ? op*0.22 : op*0.44;
+        c.fillStyle = 'rgba('+co+','+a+')';
+        c.fillRect(x0+cc*PS, y0+r*PS, PS, PS);
+      }
     }
+  }
+
+  // ── Bubbles ───────────────────────────────────────────────
+  function Bubble(sy) { this.reset(sy); }
+  Bubble.prototype.reset = function(sy) {
+    this.x=Math.random()*window.innerWidth;
+    this.y=sy?Math.random()*window.innerHeight:window.innerHeight+Math.random()*80;
+    this.r=Math.random()*3.5+1.2;
+    this.color=COLORS[Math.floor(Math.random()*COLORS.length)];
+    this.vy=Math.random()*0.32+0.10; this.vx=(Math.random()-0.5)*0.07;
+    this.wAmp=Math.random()*0.55+0.12; this.wFreq=Math.random()*0.022+0.008;
+    this.wPhase=Math.random()*Math.PI*2;
+    var d=(this.r-1.2)/3.5; this.opacity=0.055+(1-d)*0.10;
+    this.hollow=Math.random()>0.55;
+  };
+  Bubble.prototype.update=function(){
+    this.wPhase+=this.wFreq; this.y-=this.vy;
+    this.x+=this.vx+Math.sin(this.wPhase)*this.wAmp*0.12;
+    if(this.y<-12) this.reset(false);
+  };
+  Bubble.prototype.draw=function(c){
+    c.beginPath(); c.arc(this.x,this.y,this.r,0,Math.PI*2);
+    if(this.hollow){
+      c.strokeStyle='rgba('+this.color+','+this.opacity+')';
+      c.lineWidth=0.7; c.stroke();
+      c.beginPath(); c.arc(this.x-this.r*0.28,this.y-this.r*0.28,this.r*0.22,0,Math.PI*2);
+      c.fillStyle='rgba('+this.color+','+(this.opacity*0.55)+')'; c.fill();
+    } else { c.fillStyle='rgba('+this.color+','+this.opacity+')'; c.fill(); }
   };
 
   // ── Waves ─────────────────────────────────────────────────
-  var WAVES = [
-    { amp: 22, freq: 0.0055, speed: 0.00078, yFrac: 0.76, opacity: 0.022 },
-    { amp: 14, freq: 0.0072, speed: 0.00118, yFrac: 0.83, opacity: 0.015 },
-    { amp:  9, freq: 0.0090, speed: 0.00168, yFrac: 0.90, opacity: 0.009 }
+  var WAVES=[
+    {amp:22,freq:0.0055,speed:0.00078,yFrac:0.76,opacity:0.022},
+    {amp:14,freq:0.0072,speed:0.00118,yFrac:0.83,opacity:0.015},
+    {amp: 9,freq:0.0090,speed:0.00168,yFrac:0.90,opacity:0.009}
   ];
-  function drawWave(w, t) {
-    var yBase = canvas.height * w.yFrac;
-    ctx.beginPath();
-    ctx.moveTo(0, yBase);
-    for (var x = 0; x <= canvas.width; x += 5) {
-      ctx.lineTo(x, yBase + Math.sin(x * w.freq + t * w.speed) * w.amp);
-    }
-    ctx.lineTo(canvas.width, canvas.height);
-    ctx.lineTo(0, canvas.height);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(27,149,193,' + w.opacity + ')';
-    ctx.fill();
+  function drawWave(w,t){
+    var yB=canvas.height*w.yFrac;
+    ctx.beginPath(); ctx.moveTo(0,yB);
+    for(var x=0;x<=canvas.width;x+=5) ctx.lineTo(x,yB+Math.sin(x*w.freq+t*w.speed)*w.amp);
+    ctx.lineTo(canvas.width,canvas.height); ctx.lineTo(0,canvas.height);
+    ctx.closePath(); ctx.fillStyle='rgba(27,149,193,'+w.opacity+')'; ctx.fill();
   }
 
-  // ── Jellyfish ─────────────────────────────────────────────
-  function Jelly(scatter) { this.init(scatter); }
-  Jelly.prototype.init = function (scatter) {
-    var goRight  = Math.random() > 0.5;
-    this.dir     = goRight ? 1 : -1;
-    this.x       = scatter ? Math.random() * window.innerWidth
-                           : (goRight ? -70 : window.innerWidth + 70);
-    this.y       = window.innerHeight * (0.04 + Math.random() * 0.62);
-    this.r       = Math.random() * 30 + 20;
-    this.color   = Math.random() > 0.5 ? ORANGE : BLUE;
-    var depth    = (this.r - 20) / 30;
-    this.opacity = 0.10 + (1 - depth) * 0.08;
-    this.vx      = this.dir * (Math.random() * 0.15 + 0.07);
-    this.drift   = (Math.random() - 0.5) * 0.025;
-    this.phase   = Math.random() * Math.PI * 2;
-    this.pSpeed  = Math.random() * 0.022 + 0.012;
-    this.tCount  = Math.floor(Math.random() * 3) + 4;
-    this.tLens = [];
-    for (var i = 0; i < 7; i++) this.tLens.push(0.75 + Math.random() * 0.55);
+  // ── Fish (Glider) — 2-frame pixel art ─────────────────────
+  // 10 cols x 5 rows, PS=3. Nose faces RIGHT (col9), tail at LEFT (col0).
+  var FISH_PS=3;
+  var FISH_FRAMES=[
+    // Frame 0: tail fork up
+    [[0,0,0,0,0,3,3,1,0,0],
+     [1,0,1,1,1,1,1,1,1,0],
+     [0,0,1,1,1,1,4,1,1,2],
+     [0,0,1,1,1,1,1,1,1,0],
+     [0,0,0,0,1,1,1,0,0,0]],
+    // Frame 1: tail fork down
+    [[0,0,0,0,0,3,3,1,0,0],
+     [0,0,1,1,1,1,1,1,1,0],
+     [1,0,1,1,1,1,4,1,1,2],
+     [0,0,1,1,1,1,1,1,1,0],
+     [0,0,0,0,1,1,1,0,0,0]]
+  ];
+
+  function Glider(scatter,cx,cy){ this.init(scatter,cx,cy); }
+  Glider.prototype.init=function(scatter,cx,cy){
+    var gr=Math.random()>0.5; this.dir=gr?1:-1;
+    this.x=scatter?(cx!==undefined?cx+(Math.random()-0.5)*22:Math.random()*window.innerWidth):(gr?-40:window.innerWidth+40);
+    this.y=cy!==undefined?cy+(Math.random()-0.5)*18:window.innerHeight*(0.08+Math.random()*0.74);
+    this.color=Math.random()>0.5?ORANGE:BLUE;
+    this.opacity=0.10+Math.random()*0.09;
+    this.vx=this.dir*(Math.random()*0.40+0.22);
+    this.vy=(Math.random()-0.5)*0.06;
+    this.phase=Math.random()*Math.PI*2;
+    this.frame=0; this.fTick=0;
   };
-  Jelly.prototype.update = function () {
-    this.phase += this.pSpeed;
-    this.x += this.vx;
-    this.y += this.drift + Math.sin(this.phase * 0.38) * 0.13;
-    if (this.x >  window.innerWidth  + 80) this.init(false);
-    if (this.x < -80)                       this.init(false);
-    if (this.y < -60) this.y = window.innerHeight * 0.68;
-    if (this.y >  window.innerHeight * 0.72) this.y = 10;
+  Glider.prototype.update=function(){
+    this.phase+=0.038; this.x+=this.vx;
+    this.y+=this.vy+Math.sin(this.phase)*0.09;
+    if(++this.fTick>20){this.frame=1-this.frame;this.fTick=0;}
+    if(this.x>window.innerWidth+50) this.init(false);
+    if(this.x<-50) this.init(false);
+    if(this.y<0||this.y>window.innerHeight) this.y=window.innerHeight*(0.1+Math.random()*0.7);
   };
-  Jelly.prototype.draw = function (c) {
-    var pulse = 1 + Math.sin(this.phase) * 0.055;
-    var r  = this.r * pulse;
-    var op = this.opacity;
-    var co = this.color;
+  Glider.prototype.draw=function(c){
+    var W=FISH_FRAMES[0][0].length*FISH_PS, H=FISH_FRAMES[0].length*FISH_PS;
+    var x0=Math.round(this.x-W/2), y0=Math.round(this.y-H/2);
     c.save();
-    c.shadowColor = 'rgba(' + co + ',' + (op * 1.6) + ')';
-    c.shadowBlur  = 14;
+    c.shadowColor='rgba('+this.color+','+(this.opacity*1.3)+')'; c.shadowBlur=8;
+    spr(c,FISH_FRAMES[this.frame],x0,y0,this.color,this.opacity,FISH_PS,this.dir<0);
+    c.restore();
+  };
 
-    // Filled dome
-    c.beginPath();
-    c.arc(this.x, this.y, r, Math.PI, 0);
-    c.closePath();
-    c.fillStyle = 'rgba(' + co + ',' + (op * 0.30) + ')';
-    c.fill();
-    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
-    c.lineWidth = 1.2;
-    c.stroke();
+  // ── Jellyfish — pixel dome + waving pixel tentacles ───────
+  var JELLY_PS=4;
+  var JELLY_DOME=[
+    [0,0,1,1,1,1,1,0,0],
+    [0,1,1,2,1,2,1,1,0],
+    [1,1,2,1,1,1,2,1,1],
+    [1,1,1,1,2,1,1,1,1],
+    [1,2,1,1,1,1,1,2,1],
+    [0,1,1,1,1,1,1,1,0],
+    [0,0,1,1,1,1,1,0,0]
+  ];
+  var JELLY_TCOLS=[1,3,5,7];  // which columns get tentacles (0-8)
 
-    // Inner concentric ribs (filled + stroked)
-    c.shadowBlur = 0;
-    c.lineWidth  = 0.45;
-    [0.58, 0.27].forEach(function (frac) {
-      c.beginPath();
-      c.arc(this.x, this.y, r * frac, Math.PI, 0);
-      c.closePath();
-      c.fillStyle = 'rgba(' + co + ',' + (op * 0.12) + ')';
-      c.fill();
-      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.35) + ')';
-      c.stroke();
-    }, this);
-
-    // Centre mast
-    c.beginPath();
-    c.moveTo(this.x, this.y - r);
-    c.lineTo(this.x, this.y);
-    c.strokeStyle = 'rgba(' + co + ',' + (op * 0.22) + ')';
-    c.lineWidth = 0.45;
-    c.stroke();
-
-    // Bottom rim
-    c.beginPath();
-    c.moveTo(this.x - r, this.y);
-    c.lineTo(this.x + r, this.y);
-    c.strokeStyle = 'rgba(' + co + ',' + (op * 0.55) + ')';
-    c.lineWidth = 0.7;
-    c.stroke();
-
-    // Tentacles
-    c.shadowBlur = 4;
-    for (var i = 0; i < this.tCount; i++) {
-      var tx   = this.x + (i / (this.tCount - 1) - 0.5) * 1.75 * r;
-      var tLen = r * this.tLens[i];
-      c.beginPath();
-      c.moveTo(tx, this.y);
-      for (var s = 1; s <= 10; s++) {
-        c.lineTo(
-          tx + Math.sin(this.phase + i * 1.4 + s * 0.55) * (2.2 + s * 0.38),
-          this.y + (tLen / 10) * s
-        );
+  function Jelly(scatter){ this.init(scatter); }
+  Jelly.prototype.init=function(scatter){
+    var gr=Math.random()>0.5; this.dir=gr?1:-1;
+    this.x=scatter?Math.random()*window.innerWidth:(gr?-80:window.innerWidth+80);
+    this.y=window.innerHeight*(0.04+Math.random()*0.55);
+    this.color=Math.random()>0.5?ORANGE:BLUE;
+    this.opacity=0.10+Math.random()*0.09;
+    this.vx=this.dir*(Math.random()*0.09+0.04);
+    this.phase=Math.random()*Math.PI*2; this.pSpeed=0.012+Math.random()*0.010;
+    this.tPhase=Math.random()*Math.PI*2;
+    this.tLens=[5,7,7,5];  // pre-computed per-tentacle lengths in pixels
+  };
+  Jelly.prototype.update=function(){
+    this.phase+=this.pSpeed; this.tPhase+=0.055;
+    this.x+=this.vx; this.y+=Math.sin(this.phase*0.4)*0.12;
+    if(this.x>window.innerWidth+100) this.init(false);
+    if(this.x<-100) this.init(false);
+    if(this.y<-80) this.y=window.innerHeight*0.65;
+    if(this.y>window.innerHeight*0.70) this.y=20;
+  };
+  Jelly.prototype.draw=function(c){
+    var W=JELLY_DOME[0].length*JELLY_PS, H=JELLY_DOME.length*JELLY_PS;
+    var x0=Math.round(this.x-W/2), y0=Math.round(this.y);
+    c.save();
+    c.shadowColor='rgba('+this.color+','+(this.opacity*1.5)+')'; c.shadowBlur=14;
+    spr(c,JELLY_DOME,x0,y0,this.color,this.opacity,JELLY_PS,false);
+    // Pixel tentacles
+    c.shadowBlur=4;
+    var co=this.color,op=this.opacity,PS=JELLY_PS,tp=this.tPhase,tL=this.tLens;
+    JELLY_TCOLS.forEach(function(tcol,ti){
+      var tx=x0+tcol*PS;
+      for(var seg=0;seg<tL[ti];seg++){
+        var wag=Math.round(Math.sin(tp+tcol*0.9+seg*0.6)*1.5);
+        var fa=op*(0.55-seg*0.06); if(fa<0.02) break;
+        c.fillStyle='rgba('+co+','+fa+')';
+        c.fillRect(tx+wag*PS, y0+H+seg*PS, PS, PS);
       }
-      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.50) + ')';
-      c.lineWidth = 0.7;
-      c.stroke();
-    }
+    });
     c.restore();
   };
 
-  // ── Geometric fish (Glider) ───────────────────────────────
-  function Glider(scatter, cx, cy) { this.init(scatter, cx, cy); }
-  Glider.prototype.init = function (scatter, cx, cy) {
-    var goRight = Math.random() > 0.5;
-    this.dir    = goRight ? 1 : -1;
-    this.x      = scatter
-      ? (cx !== undefined ? cx + (Math.random() - 0.5) * 22 : Math.random() * window.innerWidth)
-      : (goRight ? -35 : window.innerWidth + 35);
-    this.y      = cy !== undefined
-      ? cy + (Math.random() - 0.5) * 18
-      : window.innerHeight * (0.08 + Math.random() * 0.74);
-    this.size   = Math.random() * 8 + 7;
-    this.color  = Math.random() > 0.5 ? ORANGE : BLUE;
-    this.opacity = Math.random() * 0.08 + 0.09;
-    this.vx     = this.dir * (Math.random() * 0.38 + 0.22);
-    this.vy     = (Math.random() - 0.5) * 0.055;
-    this.phase  = Math.random() * Math.PI * 2;
-    this.pSpeed = Math.random() * 0.055 + 0.035;
-  };
-  Glider.prototype.update = function () {
-    this.phase += this.pSpeed;
-    this.x += this.vx;
-    this.y += this.vy + Math.sin(this.phase * 0.28) * 0.09;
-    if (this.x >  window.innerWidth  + 45) this.init(false);
-    if (this.x < -45)                       this.init(false);
-    if (this.y < 0 || this.y > window.innerHeight) {
-      this.y = window.innerHeight * (0.08 + Math.random() * 0.74);
+  // ── Starfish — mathematically computed pixel star + rotation ─
+  var STAR_PS=3;
+  // Pre-compute which 11x11 grid cells fall inside a 5-pointed star polygon
+  var STAR_CELLS=(function(){
+    var cells=[],N=11,R=5,r=2,cx=5,cy=5,pts=[];
+    for(var i=0;i<10;i++){
+      var rad=(i%2===0)?R:r, a=(Math.PI/5)*i-Math.PI/2;
+      pts.push([Math.cos(a)*rad+cx, Math.sin(a)*rad+cy]);
     }
-  };
-  Glider.prototype.draw = function (c) {
-    var s   = this.size;
-    var d   = this.dir;
-    var co  = this.color;
-    var op  = this.opacity;
-    var wag = Math.sin(this.phase) * s * 0.32;
-
-    c.save();
-    c.translate(this.x, this.y);
-    c.shadowColor = 'rgba(' + co + ',' + (op * 1.4) + ')';
-    c.shadowBlur  = 8;
-
-    // Body: filled angular diamond
-    c.beginPath();
-    c.moveTo(d * s,          0);
-    c.lineTo(0,             -s * 0.36);
-    c.lineTo(d * -s * 0.62,  0);
-    c.lineTo(0,              s * 0.36);
-    c.closePath();
-    c.fillStyle = 'rgba(' + co + ',' + (op * 0.45) + ')';
-    c.fill();
-    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
-    c.lineWidth   = 0.75;
-    c.stroke();
-
-    // Forked tail with wag
-    c.beginPath();
-    c.moveTo(d * -s * 0.62, 0);
-    c.lineTo(d * -s * 1.15, -s * 0.32 + wag);
-    c.moveTo(d * -s * 0.62, 0);
-    c.lineTo(d * -s * 1.15,  s * 0.32 + wag);
-    c.stroke();
-
-    // Filled dorsal fin
-    c.beginPath();
-    c.moveTo(d * s * 0.08,  -s * 0.36);
-    c.lineTo(d * s * 0.22,  -s * 0.68);
-    c.lineTo(d * -s * 0.18, -s * 0.36);
-    c.closePath();
-    c.fillStyle = 'rgba(' + co + ',' + (op * 0.28) + ')';
-    c.fill();
-    c.stroke();
-
-    c.restore();
-  };
-
-  // ── Starfish ──────────────────────────────────────────────
-  function Star(scatter) { this.init(scatter); }
-  Star.prototype.init = function (scatter) {
-    this.x = scatter ? Math.random() * window.innerWidth
-                     : (Math.random() > 0.5 ? -60 : window.innerWidth + 60);
-    this.y = window.innerHeight * (0.10 + Math.random() * 0.75);
-    this.r = Math.random() * 16 + 12;
-    this.innerR = this.r * 0.42;
-    this.color  = Math.random() > 0.5 ? ORANGE : BLUE;
-    this.opacity = 0.10 + Math.random() * 0.09;
-    this.vx  = (Math.random() - 0.5) * 0.09;
-    this.vy  = (Math.random() - 0.5) * 0.05;
-    this.angle = Math.random() * Math.PI * 2;
-    this.spin  = (Math.random() - 0.5) * 0.005;
-  };
-  Star.prototype.update = function () {
-    this.angle += this.spin;
-    this.x += this.vx;
-    this.y += this.vy;
-    if (this.x < -70 || this.x > window.innerWidth  + 70) this.init(false);
-    if (this.y < -70 || this.y > window.innerHeight + 70) this.init(false);
-  };
-  Star.prototype.draw = function (c) {
-    var R  = this.r, ri = this.innerR;
-    var co = this.color, op = this.opacity;
-    c.save();
-    c.translate(this.x, this.y);
-    c.shadowColor = 'rgba(' + co + ',' + (op * 1.5) + ')';
-    c.shadowBlur  = 12;
-
-    // 5-pointed filled star
-    c.beginPath();
-    for (var i = 0; i < 10; i++) {
-      var rad = (i % 2 === 0) ? R : ri;
-      var a   = (Math.PI / 5) * i + this.angle - Math.PI / 2;
-      if (i === 0) c.moveTo(Math.cos(a) * rad, Math.sin(a) * rad);
-      else         c.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
-    }
-    c.closePath();
-    c.fillStyle   = 'rgba(' + co + ',' + (op * 0.48) + ')';
-    c.fill();
-    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
-    c.lineWidth   = 0.85;
-    c.stroke();
-
-    c.shadowBlur = 0;
-    // Centre dot
-    c.beginPath();
-    c.arc(0, 0, R * 0.14, 0, Math.PI * 2);
-    c.fillStyle = 'rgba(' + co + ',' + (op * 0.70) + ')';
-    c.fill();
-    // Arm tip dots
-    for (var j = 0; j < 5; j++) {
-      var a2 = (Math.PI * 2 / 5) * j + this.angle - Math.PI / 2;
-      c.beginPath();
-      c.arc(Math.cos(a2) * R * 0.72, Math.sin(a2) * R * 0.72, R * 0.09, 0, Math.PI * 2);
-      c.fillStyle = 'rgba(' + co + ',' + (op * 0.60) + ')';
-      c.fill();
-    }
-    c.restore();
-  };
-
-  // ── Octopus ───────────────────────────────────────────────
-  function Octo(scatter) { this.init(scatter); }
-  Octo.prototype.init = function (scatter) {
-    var goRight  = Math.random() > 0.5;
-    this.dir     = goRight ? 1 : -1;
-    this.x       = scatter ? Math.random() * window.innerWidth
-                           : (goRight ? -90 : window.innerWidth + 90);
-    this.y       = window.innerHeight * (0.05 + Math.random() * 0.60);
-    this.r       = Math.random() * 12 + 10;
-    this.color   = Math.random() > 0.5 ? ORANGE : BLUE;
-    this.opacity = 0.10 + Math.random() * 0.09;
-    this.vx      = this.dir * (Math.random() * 0.10 + 0.04);
-    this.vy      = (Math.random() - 0.5) * 0.03;
-    this.phase   = Math.random() * Math.PI * 2;
-    this.pSpeed  = Math.random() * 0.018 + 0.010;
-    this.tLens   = [];
-    this.tOff    = [];
-    for (var i = 0; i < 8; i++) {
-      this.tLens.push(this.r * (1.5 + Math.random() * 0.9));
-      this.tOff.push(Math.random() * Math.PI * 2);
-    }
-  };
-  Octo.prototype.update = function () {
-    this.phase += this.pSpeed;
-    this.x += this.vx;
-    this.y += this.vy + Math.sin(this.phase * 0.3) * 0.08;
-    if (this.x >  window.innerWidth  + 100) this.init(false);
-    if (this.x < -100)                       this.init(false);
-    if (this.y < -60 || this.y > window.innerHeight * 0.80) this.init(false);
-  };
-  Octo.prototype.draw = function (c) {
-    var r  = this.r;
-    var co = this.color;
-    var op = this.opacity;
-    c.save();
-    c.shadowColor = 'rgba(' + co + ',' + (op * 1.5) + ')';
-    c.shadowBlur  = 12;
-
-    // Filled head (squashed ellipse)
-    c.beginPath();
-    c.ellipse(this.x, this.y, r, r * 0.80, 0, 0, Math.PI * 2);
-    c.fillStyle   = 'rgba(' + co + ',' + (op * 0.40) + ')';
-    c.fill();
-    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
-    c.lineWidth   = 0.9;
-    c.stroke();
-
-    // Eyes
-    c.shadowBlur = 0;
-    [-r * 0.28, r * 0.28].forEach(function (ex) {
-      c.beginPath();
-      c.arc(this.x + ex, this.y - r * 0.15, r * 0.11, 0, Math.PI * 2);
-      c.fillStyle = 'rgba(' + co + ',' + (op * 0.85) + ')';
-      c.fill();
-    }, this);
-
-    // 8 tentacles
-    c.shadowBlur = 5;
-    for (var i = 0; i < 8; i++) {
-      var spread = (i / 7 - 0.5) * r * 1.7;
-      var tx = this.x + spread;
-      var ty = this.y + r * 0.65;
-      var tLen = this.tLens[i];
-      c.beginPath();
-      c.moveTo(tx, ty);
-      for (var s = 1; s <= 9; s++) {
-        var wag = Math.sin(this.phase + this.tOff[i] + s * 0.48) * (r * 0.20 + s * 0.28);
-        c.lineTo(tx + wag, ty + (tLen / 9) * s);
+    for(var gr=0;gr<N;gr++){
+      for(var gc=0;gc<N;gc++){
+        var px=gc+0.5,py=gr+0.5,inside=false;
+        for(var pi=0,pj=pts.length-1;pi<pts.length;pj=pi++){
+          if((pts[pi][1]>py)!==(pts[pj][1]>py) &&
+             px<(pts[pj][0]-pts[pi][0])*(py-pts[pi][1])/(pts[pj][1]-pts[pi][1])+pts[pi][0])
+            inside=!inside;
+        }
+        if(inside){
+          var dx=gc-cx,dy=gr-cy,dist=Math.sqrt(dx*dx+dy*dy);
+          cells.push({gx:(gc-cx)*STAR_PS, gy:(gr-cy)*STAR_PS, bright:dist<1.8});
+        }
       }
-      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.58) + ')';
-      c.lineWidth   = Math.max(0.4, 0.9 - i * 0.05);
-      c.stroke();
     }
+    return cells;
+  }());
+
+  function Star(scatter){ this.init(scatter); }
+  Star.prototype.init=function(scatter){
+    this.x=scatter?Math.random()*window.innerWidth:(Math.random()>0.5?-60:window.innerWidth+60);
+    this.y=window.innerHeight*(0.10+Math.random()*0.75);
+    this.color=Math.random()>0.5?ORANGE:BLUE;
+    this.opacity=0.11+Math.random()*0.09;
+    this.vx=(Math.random()-0.5)*0.09; this.vy=(Math.random()-0.5)*0.05;
+    this.angle=Math.random()*Math.PI*2; this.spin=(Math.random()-0.5)*0.005;
+  };
+  Star.prototype.update=function(){
+    this.angle+=this.spin; this.x+=this.vx; this.y+=this.vy;
+    if(this.x<-70||this.x>window.innerWidth+70) this.init(false);
+    if(this.y<-70||this.y>window.innerHeight+70) this.init(false);
+  };
+  Star.prototype.draw=function(c){
+    var co=this.color,op=this.opacity;
+    c.save();
+    c.translate(this.x,this.y); c.rotate(this.angle);
+    c.shadowColor='rgba('+co+','+(op*1.5)+')'; c.shadowBlur=12;
+    STAR_CELLS.forEach(function(cell){
+      c.fillStyle='rgba('+co+','+(cell.bright?op*0.72:op*0.46)+')';
+      c.fillRect(cell.gx,cell.gy,STAR_PS,STAR_PS);
+    });
+    c.restore();
+  };
+
+  // ── Octopus — pixel head + 8 pixel tentacle columns ───────
+  var OCTO_PS=3;
+  var OCTO_HEAD=[
+    [0,0,1,1,1,1,1,0,0],
+    [0,1,1,2,1,2,1,1,0],
+    [1,1,2,4,1,4,2,1,1],
+    [1,1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,1,0],
+    [0,0,1,1,1,1,1,0,0]
+  ];
+  var OCTO_TCOLS=[0,1,2,3,5,6,7,8];  // 8 tentacle col positions in 9-wide sprite
+
+  function Octo(scatter){ this.init(scatter); }
+  Octo.prototype.init=function(scatter){
+    var gr=Math.random()>0.5; this.dir=gr?1:-1;
+    this.x=scatter?Math.random()*window.innerWidth:(gr?-90:window.innerWidth+90);
+    this.y=window.innerHeight*(0.05+Math.random()*0.60);
+    this.color=Math.random()>0.5?ORANGE:BLUE;
+    this.opacity=0.10+Math.random()*0.09;
+    this.vx=this.dir*(Math.random()*0.09+0.04);
+    this.vy=(Math.random()-0.5)*0.03;
+    this.phase=Math.random()*Math.PI*2; this.pSpeed=0.014+Math.random()*0.010;
+    this.tLens=[]; this.tOff=[];
+    for(var i=0;i<8;i++){
+      this.tLens.push(4+Math.floor(i%3+2));  // 4-7 segments, varied per tentacle
+      this.tOff.push((i/8)*Math.PI*2);       // evenly spaced phase offsets
+    }
+  };
+  Octo.prototype.update=function(){
+    this.phase+=this.pSpeed; this.x+=this.vx;
+    this.y+=this.vy+Math.sin(this.phase*0.3)*0.08;
+    if(this.x>window.innerWidth+100) this.init(false);
+    if(this.x<-100) this.init(false);
+    if(this.y<-60||this.y>window.innerHeight*0.80) this.init(false);
+  };
+  Octo.prototype.draw=function(c){
+    var W=OCTO_HEAD[0].length*OCTO_PS, H=OCTO_HEAD.length*OCTO_PS;
+    var x0=Math.round(this.x-W/2), y0=Math.round(this.y);
+    c.save();
+    c.shadowColor='rgba('+this.color+','+(this.opacity*1.5)+')'; c.shadowBlur=12;
+    spr(c,OCTO_HEAD,x0,y0,this.color,this.opacity,OCTO_PS,false);
+    // Pixel tentacles
+    c.shadowBlur=4;
+    var co=this.color,op=this.opacity,PS=OCTO_PS,ph=this.phase,tL=this.tLens,tO=this.tOff;
+    OCTO_TCOLS.forEach(function(tcol,ti){
+      var tx=x0+tcol*PS;
+      for(var seg=0;seg<tL[ti];seg++){
+        var wag=Math.round(Math.sin(ph+tO[ti]+seg*0.5)*1.5);
+        var fa=op*(0.58-seg*0.08); if(fa<0.02) break;
+        c.fillStyle='rgba('+co+','+fa+')';
+        c.fillRect(tx+wag*PS, y0+H+seg*PS, PS, PS);
+      }
+    });
     c.restore();
   };
 
   // ── Init ──────────────────────────────────────────────────
-  var bubbles = [];
-  for (var i = 0; i < 45; i++) bubbles.push(new Bubble(true));
+  var bubbles=[];
+  for(var i=0;i<45;i++) bubbles.push(new Bubble(true));
 
-  var jellies = [];
-  for (var j = 0; j < 5; j++) jellies.push(new Jelly(true));
+  var jellies=[];
+  for(var j=0;j<5;j++) jellies.push(new Jelly(true));
 
-  var gliders = [];
-  var s1x = Math.random() * window.innerWidth, s1y = window.innerHeight * (0.2 + Math.random() * 0.5);
-  var s2x = Math.random() * window.innerWidth, s2y = window.innerHeight * (0.2 + Math.random() * 0.5);
-  for (var k = 0; k < 3; k++) gliders.push(new Glider(true, s1x, s1y));
-  for (var m = 0; m < 3; m++) gliders.push(new Glider(true, s2x, s2y));
+  var gliders=[];
+  var s1x=Math.random()*window.innerWidth, s1y=window.innerHeight*(0.2+Math.random()*0.5);
+  var s2x=Math.random()*window.innerWidth, s2y=window.innerHeight*(0.2+Math.random()*0.5);
+  for(var k=0;k<3;k++) gliders.push(new Glider(true,s1x,s1y));
+  for(var m=0;m<3;m++) gliders.push(new Glider(true,s2x,s2y));
 
-  var stars = [];
-  for (var n = 0; n < 4; n++) stars.push(new Star(true));
+  var stars=[];
+  for(var n=0;n<4;n++) stars.push(new Star(true));
 
-  var octos = [];
-  for (var p = 0; p < 3; p++) octos.push(new Octo(true));
+  var octos=[];
+  for(var p=0;p<3;p++) octos.push(new Octo(true));
 
-  var t = 0;
-  function frame() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    WAVES.forEach(function (w) { drawWave(w, t); });
-    bubbles.forEach(function (b) { b.update(); b.draw(ctx); });
-    jellies.forEach(function (j) { j.update(); j.draw(ctx); });
-    gliders.forEach(function (g) { g.update(); g.draw(ctx); });
-    stars.forEach(function  (s) { s.update(); s.draw(ctx); });
-    octos.forEach(function  (o) { o.update(); o.draw(ctx); });
-    t++;
-    requestAnimationFrame(frame);
+  var t=0;
+  function frame(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    WAVES.forEach(function(w){drawWave(w,t);});
+    bubbles.forEach(function(b){b.update();b.draw(ctx);});
+    jellies.forEach(function(j){j.update();j.draw(ctx);});
+    gliders.forEach(function(g){g.update();g.draw(ctx);});
+    stars.forEach(function(s){s.update();s.draw(ctx);});
+    octos.forEach(function(o){o.update();o.draw(ctx);});
+    t++; requestAnimationFrame(frame);
   }
   frame();
 }());
 </script>
-
 <!-- ═══════════════════════════════════════════ COPY INSTALL -->
 <script>
 function copyInstall() {
