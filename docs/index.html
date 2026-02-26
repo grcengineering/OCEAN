@@ -1206,53 +1206,7 @@
   resize();
   window.addEventListener('resize', resize);
 
-  var ORANGE = '255,168,79';
-  var BLUE   = '27,149,193';
-  var PALE   = '160,215,235';
-  var COLORS = [BLUE,BLUE,BLUE,ORANGE,ORANGE,PALE];
 
-  // ── Pixel-art sprite renderer ──────────────────────────────
-  // v: 0=transparent 1=body 2=highlight 3=fin/shadow 4=eye/accent
-  function spr(c, grid, x0, y0, co, op, PS, flipX) {
-    var rows=grid.length, cols=grid[0].length;
-    for (var r=0; r<rows; r++) {
-      for (var cc=0; cc<cols; cc++) {
-        var v = grid[r][flipX ? cols-1-cc : cc];
-        if (!v) continue;
-        var a = v===4 ? Math.min(op*1.0,1.0) : v===2 ? op*0.72 : v===3 ? op*0.30 : op*0.55;
-        c.fillStyle = 'rgba('+co+','+a+')';
-        c.fillRect(x0+cc*PS, y0+r*PS, PS, PS);
-      }
-    }
-  }
-
-  // ── Bubbles ───────────────────────────────────────────────
-  function Bubble(sy) { this.reset(sy); }
-  Bubble.prototype.reset = function(sy) {
-    this.x=Math.random()*window.innerWidth;
-    this.y=sy?Math.random()*window.innerHeight:window.innerHeight+Math.random()*80;
-    this.r=Math.random()*3.5+1.2;
-    this.color=COLORS[Math.floor(Math.random()*COLORS.length)];
-    this.vy=Math.random()*0.32+0.10; this.vx=(Math.random()-0.5)*0.07;
-    this.wAmp=Math.random()*0.55+0.12; this.wFreq=Math.random()*0.022+0.008;
-    this.wPhase=Math.random()*Math.PI*2;
-    var d=(this.r-1.2)/3.5; this.opacity=0.06+(1-d)*0.08;
-    this.hollow=Math.random()>0.55;
-  };
-  Bubble.prototype.update=function(){
-    this.wPhase+=this.wFreq; this.y-=this.vy;
-    this.x+=this.vx+Math.sin(this.wPhase)*this.wAmp*0.12;
-    if(this.y<-12) this.reset(false);
-  };
-  Bubble.prototype.draw=function(c){
-    c.beginPath(); c.arc(this.x,this.y,this.r,0,Math.PI*2);
-    if(this.hollow){
-      c.strokeStyle='rgba('+this.color+','+this.opacity+')';
-      c.lineWidth=0.7; c.stroke();
-      c.beginPath(); c.arc(this.x-this.r*0.28,this.y-this.r*0.28,this.r*0.22,0,Math.PI*2);
-      c.fillStyle='rgba('+this.color+','+(this.opacity*0.55)+')'; c.fill();
-    } else { c.fillStyle='rgba('+this.color+','+this.opacity+')'; c.fill(); }
-  };
 
   // ── Surface shimmer — WebGL wave-band caustic + interactive ripples ─
   // 5-wave organic caustic runs as a GPU fragment shader: full resolution,
@@ -1280,7 +1234,7 @@
     '}',
     'void main(){',
     '  float t=uT;',
-    '  float pl=0.68+sin(t*.38)*.32;',
+    '  float pl=0.55+sin(t*.55)*.45;', // 0.10→1.0, faster dramatic shimmer cycle
     '  float ox=gl_FragCoord.x*.25,oy=gl_FragCoord.y*.25;',
     '  float dx1=sin(oy*.031+t*.19)*6.+cos(ox*.027-t*.13)*4.5;',
     '  float dy1=cos(ox*.028+t*.22)*5.5+sin(oy*.033-t*.16)*4.;',
@@ -1292,19 +1246,23 @@
     '  float w3=cos(-u*.125+v*.112+t*.61+4.18);',
     '  float w4=cos(u*.177+v*.041-t*.87+1.57);',
     '  float w5=cos(-u*.046+v*.189+t*.73+3.14);',
-    '  float b1=pow(max(0.,w1),6.);',
-    '  float b2=pow(max(0.,w2),6.);',
-    '  float b3=pow(max(0.,w3),6.);',
-    '  float b4=pow(max(0.,w4),6.);',
-    '  float b5=pow(max(0.,w5),6.);',
+    '  float b1=pow(max(0.,w1),8.);', // pow 8: crisper, narrower bright bands
+    '  float b2=pow(max(0.,w2),8.);',
+    '  float b3=pow(max(0.,w3),8.);',
+    '  float b4=pow(max(0.,w4),8.);',
+    '  float b5=pow(max(0.,w5),8.);',
     '  float s=b1+b2+b3+b4+b5;',
     '  float val=s>.6?sqrt((s-.6)/4.4):0.;',
+    '  float spark=pow(max(0.,s-1.4),2.)*.5;', // specular hotspot at band intersections
     // Unrolled ripple sum (constant indices required by GLSL ES 1.00)
     '  vec2 px=gl_FragCoord.xy;',
     '  float rv=rip(uR[0],px)+rip(uR[1],px)+rip(uR[2],px)+rip(uR[3],px)',
     '          +rip(uR[4],px)+rip(uR[5],px)+rip(uR[6],px)+rip(uR[7],px)',
     '          +rip(uR[8],px)+rip(uR[9],px)+rip(uR[10],px)+rip(uR[11],px);',
-    '  gl_FragColor=vec4(.580,.824,.925,clamp(val*pl*.353+rv*.7,0.,1.));',
+    '  float a=clamp(val*pl*.58+spark*pl+rv*.7,0.,1.);', // brighter peaks (0.58 vs 0.353)
+    '  vec3 base=vec3(.52,.80,.93);',   // deeper ocean blue
+    '  vec3 hot=vec3(.93,.97,1.);',     // near-white at intersection hotspots
+    '  gl_FragColor=vec4(mix(base,hot,clamp(val*val*3.,0.,1.)),a);', // bleach to white at peaks
     '}'
   ].join('\n');
 
@@ -1410,275 +1368,12 @@
     wAddRipple(e.changedTouches[0].clientX,e.changedTouches[0].clientY,.22);
   },{passive:true});
 
-  // ── Fish — 28 cols x 12 rows, PS=2 (56x24px) ─────────────
-  // Nose at RIGHT (col 27), tail V-fork at LEFT (cols 0-2).
-  // Frame 0: upper tail fork prominent. Frame 1: lower tail fork prominent.
-  var FISH_PS=2;
-  var FISH_FRAMES=[
-    // Frame 0: upper tail tip out (row 0, col 0)
-    [[1,0,0,0,0,0,0,0,0,0,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0], // R0 upper tail tip + dorsal fin
-     [1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0], // R1 upper tail fork + body
-     [0,0,0,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0], // R2 body + highlight
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0], // R3 body
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0], // R4 body wider
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,4,1,1,1,1,1,0,0], // R5 body + eye col 20
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2], // R6 body + nose col 27
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0], // R7 body
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0], // R8 body narrowing
-     [0,0,1,1,3,3,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0], // R9 pectoral fin + body
-     [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0], // R10 lower body (no lower tip)
-     [0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]], // R11 lower tail connector
-    // Frame 1: lower tail tip out (row 11, col 0)
-    [[0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0], // R0 dorsal fin only
-     [0,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0], // R1 upper tail connector + body
-     [0,0,0,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0], // R2 body + highlight
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0], // R3 body
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0], // R4 body wider
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,4,1,1,1,1,1,0,0], // R5 body + eye
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2], // R6 body + nose
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0], // R7 body
-     [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0], // R8 body narrowing
-     [0,0,1,1,3,3,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0], // R9 pectoral fin + body
-     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0], // R10 lower tail fork
-     [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]] // R11 lower tail tip
-  ];
+  // ── REMOVED: pixel-art creatures (fish, jellyfish, starfish, octopus) ─
 
-  function Glider(scatter,cx,cy){ this.init(scatter,cx,cy); }
-  Glider.prototype.init=function(scatter,cx,cy){
-    var gr=Math.random()>0.5; this.dir=gr?1:-1;
-    this.x=scatter?(cx!==undefined?cx+(Math.random()-0.5)*22:Math.random()*window.innerWidth):(gr?-70:window.innerWidth+70);
-    this.y=cy!==undefined?cy+(Math.random()-0.5)*18:window.innerHeight*(0.08+Math.random()*0.74);
-    this.color=Math.random()>0.5?ORANGE:BLUE;
-    this.opacity=0.18+Math.random()*0.10;
-    this.vx=this.dir*(Math.random()*0.40+0.22);
-    this.vy=(Math.random()-0.5)*0.06;
-    this.phase=Math.random()*Math.PI*2;
-    this.frame=0; this.fTick=0;
-  };
-  Glider.prototype.update=function(){
-    this.phase+=0.038; this.x+=this.vx;
-    this.y+=this.vy+Math.sin(this.phase)*0.09;
-    if(++this.fTick>20){this.frame=1-this.frame;this.fTick=0;}
-    if(this.x>window.innerWidth+80) this.init(false);
-    if(this.x<-80) this.init(false);
-    if(this.y<0||this.y>window.innerHeight) this.y=window.innerHeight*(0.1+Math.random()*0.7);
-  };
-  Glider.prototype.draw=function(c){
-    var W=FISH_FRAMES[0][0].length*FISH_PS, H=FISH_FRAMES[0].length*FISH_PS;
-    var x0=Math.round(this.x-W/2), y0=Math.round(this.y-H/2);
-    c.save();
-    c.shadowColor='rgba('+this.color+','+(this.opacity*1.3)+')'; c.shadowBlur=8;
-    spr(c,FISH_FRAMES[this.frame],x0,y0,this.color,this.opacity,FISH_PS,this.dir<0);
-    c.restore();
-  };
-
-  // ── Jellyfish — 22 cols x 16 rows dome, PS=2 (44x32px) ───
-  // JELLY_TCOLS: 5 tentacles within 22-wide base (cols 4-17).
-  var JELLY_PS=2;
-  var JELLY_DOME=[
-    [0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0], // R0  top (4 wide)
-    [0,0,0,0,0,0,0,0,1,1,2,2,1,1,0,0,0,0,0,0,0,0], // R1  6 wide
-    [0,0,0,0,0,0,0,1,1,2,1,1,2,1,1,0,0,0,0,0,0,0], // R2  7 wide
-    [0,0,0,0,0,0,1,1,2,1,1,1,1,2,1,1,0,0,0,0,0,0], // R3  9 wide
-    [0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0], // R4  11 wide
-    [0,0,0,0,1,1,2,1,1,1,1,1,1,1,2,1,1,1,0,0,0,0], // R5  13 wide
-    [0,0,0,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,0,0,0], // R6  15 wide
-    [0,0,1,1,1,2,1,1,1,1,1,1,1,1,1,2,1,1,1,1,0,0], // R7  16 wide
-    [0,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,0], // R8  20 wide
-    [1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1], // R9  22 wide
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // R10 22 wide solid
-    [1,2,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,2,1], // R11 22 wide highlights
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0], // R12 20 wide
-    [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0], // R13 18 wide
-    [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0], // R14 16 wide
-    [0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0]  // R15 14 wide base
-  ];
-  var JELLY_TCOLS=[4,7,10,13,16];
-
-  function Jelly(scatter){ this.init(scatter); }
-  Jelly.prototype.init=function(scatter){
-    var gr=Math.random()>0.5; this.dir=gr?1:-1;
-    this.x=scatter?Math.random()*window.innerWidth:(gr?-60:window.innerWidth+60);
-    this.y=window.innerHeight*(0.04+Math.random()*0.55);
-    this.color=Math.random()>0.5?ORANGE:BLUE;
-    this.opacity=0.16+Math.random()*0.10;
-    this.vx=this.dir*(Math.random()*0.09+0.04);
-    this.phase=Math.random()*Math.PI*2; this.pSpeed=0.012+Math.random()*0.010;
-    this.tPhase=Math.random()*Math.PI*2;
-    this.tLens=[9,12,14,12,9];
-  };
-  Jelly.prototype.update=function(){
-    this.phase+=this.pSpeed; this.tPhase+=0.055;
-    this.x+=this.vx; this.y+=Math.sin(this.phase*0.4)*0.12;
-    if(this.x>window.innerWidth+80) this.init(false);
-    if(this.x<-80) this.init(false);
-    if(this.y<-80) this.y=window.innerHeight*0.65;
-    if(this.y>window.innerHeight*0.70) this.y=20;
-  };
-  Jelly.prototype.draw=function(c){
-    var W=JELLY_DOME[0].length*JELLY_PS, H=JELLY_DOME.length*JELLY_PS;
-    var x0=Math.round(this.x-W/2), y0=Math.round(this.y);
-    c.save();
-    c.shadowColor='rgba('+this.color+','+(this.opacity*1.4)+')'; c.shadowBlur=10;
-    spr(c,JELLY_DOME,x0,y0,this.color,this.opacity,JELLY_PS,false);
-    c.shadowBlur=3;
-    var co=this.color,op=this.opacity,PS=JELLY_PS,tp=this.tPhase,tL=this.tLens;
-    JELLY_TCOLS.forEach(function(tcol,ti){
-      var tx=x0+tcol*PS;
-      for(var seg=0;seg<tL[ti];seg++){
-        var wag=Math.round(Math.sin(tp+tcol*0.9+seg*0.6)*1.5);
-        var fa=op*(0.58-seg*0.035); if(fa<0.02) break;
-        c.fillStyle='rgba('+co+','+fa+')';
-        c.fillRect(tx+wag*PS, y0+H+seg*PS, PS, PS);
-      }
-    });
-    c.restore();
-  };
-
-  // ── Starfish — N=27 polygon, STAR_PS=2 (~54x54px) ─────────
-  var STAR_PS=2;
-  var STAR_CELLS=(function(){
-    var cells=[],N=27,R=13,r=5,cx=13,cy=13,pts=[];
-    for(var i=0;i<10;i++){
-      var rad=(i%2===0)?R:r, a=(Math.PI/5)*i-Math.PI/2;
-      pts.push([Math.cos(a)*rad+cx, Math.sin(a)*rad+cy]);
-    }
-    for(var gr=0;gr<N;gr++){
-      for(var gc=0;gc<N;gc++){
-        var px=gc+0.5,py=gr+0.5,inside=false;
-        for(var pi=0,pj=pts.length-1;pi<pts.length;pj=pi++){
-          if((pts[pi][1]>py)!==(pts[pj][1]>py) &&
-             px<(pts[pj][0]-pts[pi][0])*(py-pts[pi][1])/(pts[pj][1]-pts[pi][1])+pts[pi][0])
-            inside=!inside;
-        }
-        if(inside){
-          var dx=gc-cx,dy=gr-cy,dist=Math.sqrt(dx*dx+dy*dy);
-          cells.push({gx:(gc-cx)*STAR_PS, gy:(gr-cy)*STAR_PS, bright:dist<4.0});
-        }
-      }
-    }
-    return cells;
-  }());
-
-  function Star(scatter){ this.init(scatter); }
-  Star.prototype.init=function(scatter){
-    this.x=scatter?Math.random()*window.innerWidth:(Math.random()>0.5?-80:window.innerWidth+80);
-    this.y=window.innerHeight*(0.10+Math.random()*0.75);
-    this.color=Math.random()>0.5?ORANGE:BLUE;
-    this.opacity=0.17+Math.random()*0.10;
-    this.vx=(Math.random()-0.5)*0.09; this.vy=(Math.random()-0.5)*0.05;
-    this.angle=Math.random()*Math.PI*2; this.spin=(Math.random()-0.5)*0.005;
-  };
-  Star.prototype.update=function(){
-    this.angle+=this.spin; this.x+=this.vx; this.y+=this.vy;
-    if(this.x<-90||this.x>window.innerWidth+90) this.init(false);
-    if(this.y<-90||this.y>window.innerHeight+90) this.init(false);
-  };
-  Star.prototype.draw=function(c){
-    var co=this.color,op=this.opacity;
-    c.save();
-    c.translate(this.x,this.y); c.rotate(this.angle);
-    c.shadowColor='rgba('+co+','+(op*1.5)+')'; c.shadowBlur=10;
-    STAR_CELLS.forEach(function(cell){
-      c.fillStyle='rgba('+co+','+(cell.bright?op*0.78:op*0.50)+')';
-      c.fillRect(cell.gx,cell.gy,STAR_PS,STAR_PS);
-    });
-    c.restore();
-  };
-
-  // ── Octopus — 22 cols x 14 rows head, PS=2 (44x28px) ─────
-  // Eyes symmetric at cols 9 and 12. OCTO_TCOLS: 8 tentacles.
-  var OCTO_PS=2;
-  var OCTO_HEAD=[
-    [0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0], // R0  top
-    [0,0,0,0,0,0,0,1,1,2,1,1,2,1,1,0,0,0,0,0,0,0], // R1
-    [0,0,0,0,0,0,1,1,2,4,1,1,4,2,1,1,0,0,0,0,0,0], // R2  eyes at col 9 & 12
-    [0,0,0,0,0,1,1,2,1,1,1,1,1,1,2,1,1,0,0,0,0,0], // R3
-    [0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0], // R4
-    [0,0,0,1,1,2,1,1,1,1,1,1,1,1,1,2,1,1,1,0,0,0], // R5
-    [0,0,1,1,1,1,1,1,2,1,1,1,1,2,1,1,1,1,1,1,0,0], // R6
-    [0,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,0], // R7
-    [1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1], // R8
-    [1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1], // R9  22 wide
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // R10 22 wide solid
-    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0], // R11
-    [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0], // R12
-    [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0]  // R13 base (cols 3-18)
-  ];
-  var OCTO_TCOLS=[3,5,7,9,12,14,16,18];
-
-  function Octo(scatter){ this.init(scatter); }
-  Octo.prototype.init=function(scatter){
-    var gr=Math.random()>0.5; this.dir=gr?1:-1;
-    this.x=scatter?Math.random()*window.innerWidth:(gr?-70:window.innerWidth+70);
-    this.y=window.innerHeight*(0.05+Math.random()*0.60);
-    this.color=Math.random()>0.5?ORANGE:BLUE;
-    this.opacity=0.16+Math.random()*0.12;
-    this.vx=this.dir*(Math.random()*0.09+0.04);
-    this.vy=(Math.random()-0.5)*0.03;
-    this.phase=Math.random()*Math.PI*2; this.pSpeed=0.014+Math.random()*0.010;
-    this.tLens=[]; this.tOff=[];
-    for(var i=0;i<8;i++){
-      this.tLens.push(7+Math.floor(i%3+2));
-      this.tOff.push((i/8)*Math.PI*2);
-    }
-  };
-  Octo.prototype.update=function(){
-    this.phase+=this.pSpeed; this.x+=this.vx;
-    this.y+=this.vy+Math.sin(this.phase*0.3)*0.08;
-    if(this.x>window.innerWidth+80) this.init(false);
-    if(this.x<-80) this.init(false);
-    if(this.y<-60||this.y>window.innerHeight*0.80) this.init(false);
-  };
-  Octo.prototype.draw=function(c){
-    var W=OCTO_HEAD[0].length*OCTO_PS, H=OCTO_HEAD.length*OCTO_PS;
-    var x0=Math.round(this.x-W/2), y0=Math.round(this.y);
-    c.save();
-    c.shadowColor='rgba('+this.color+','+(this.opacity*1.4)+')'; c.shadowBlur=10;
-    spr(c,OCTO_HEAD,x0,y0,this.color,this.opacity,OCTO_PS,false);
-    c.shadowBlur=3;
-    var co=this.color,op=this.opacity,PS=OCTO_PS,ph=this.phase,tL=this.tLens,tO=this.tOff;
-    OCTO_TCOLS.forEach(function(tcol,ti){
-      var tx=x0+tcol*PS;
-      for(var seg=0;seg<tL[ti];seg++){
-        var wag=Math.round(Math.sin(ph+tO[ti]+seg*0.5)*2);
-        var fa=op*(0.60-seg*0.055); if(fa<0.02) break;
-        c.fillStyle='rgba('+co+','+fa+')';
-        c.fillRect(tx+wag*PS, y0+H+seg*PS, PS, PS);
-      }
-    });
-    c.restore();
-  };
-
-  // ── Init ──────────────────────────────────────────────────
-  var bubbles=[];
-  for(var i=0;i<30;i++) bubbles.push(new Bubble(true));
-
-  var jellies=[];
-  for(var j=0;j<3;j++) jellies.push(new Jelly(true));
-
-  var gliders=[];
-  var s1x=Math.random()*window.innerWidth, s1y=window.innerHeight*(0.2+Math.random()*0.5);
-  var s2x=Math.random()*window.innerWidth, s2y=window.innerHeight*(0.2+Math.random()*0.5);
-  for(var k=0;k<2;k++) gliders.push(new Glider(true,s1x,s1y));
-  for(var m=0;m<2;m++) gliders.push(new Glider(true,s2x,s2y));
-
-  var stars=[];
-  for(var n=0;n<3;n++) stars.push(new Star(true));
-
-  var octos=[];
-  for(var p=0;p<2;p++) octos.push(new Octo(true));
-
-  var t=0;
   function frame(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawSurface();
-    bubbles.forEach(function(b){b.update();b.draw(ctx);});
-    jellies.forEach(function(j){j.update();j.draw(ctx);});
-    gliders.forEach(function(g){g.update();g.draw(ctx);});
-    stars.forEach(function(s){s.update();s.draw(ctx);});
-    octos.forEach(function(o){o.update();o.draw(ctx);});
-    t++; requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
   }
   frame();
 }());
