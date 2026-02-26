@@ -1196,42 +1196,37 @@
 <!-- ═══════════════════════════════════════════ OCEAN BG ANIMATION -->
 <script>
 (function () {
-  const canvas = document.getElementById('ocean-bg');
-  const ctx = canvas.getContext('2d');
+  var canvas = document.getElementById('ocean-bg');
+  var ctx = canvas.getContext('2d');
 
   function resize() {
-    canvas.width = window.innerWidth;
+    canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
   }
   resize();
   window.addEventListener('resize', resize);
 
-  // Palette (RGB strings)
-  const ORANGE = '255,168,79';
-  const BLUE   = '27,149,193';
-  const PALE   = '160,215,235';
-  const COLORS = [BLUE, BLUE, BLUE, ORANGE, ORANGE, PALE];
+  var ORANGE = '255,168,79';
+  var BLUE   = '27,149,193';
+  var PALE   = '160,215,235';
+  var COLORS = [BLUE, BLUE, BLUE, ORANGE, ORANGE, PALE];
 
   // ── Bubble ────────────────────────────────────────────────
-  function Bubble(scatterY) {
-    this.reset(scatterY);
-  }
+  function Bubble(scatterY) { this.reset(scatterY); }
   Bubble.prototype.reset = function (scatterY) {
     this.x      = Math.random() * window.innerWidth;
-    this.y      = scatterY
-                    ? Math.random() * window.innerHeight
-                    : window.innerHeight + Math.random() * 80;
-    this.r      = Math.random() * 3.5 + 1.2;                 // 1.2–4.7 px
+    this.y      = scatterY ? Math.random() * window.innerHeight
+                           : window.innerHeight + Math.random() * 80;
+    this.r      = Math.random() * 3.5 + 1.2;
     this.color  = COLORS[Math.floor(Math.random() * COLORS.length)];
-    this.vy     = Math.random() * 0.32 + 0.10;               // gentle rise
-    this.vx     = (Math.random() - 0.5) * 0.07;              // slight drift
-    this.wAmp   = Math.random() * 0.55 + 0.12;               // sway amplitude
-    this.wFreq  = Math.random() * 0.022 + 0.008;             // sway frequency
+    this.vy     = Math.random() * 0.32 + 0.10;
+    this.vx     = (Math.random() - 0.5) * 0.07;
+    this.wAmp   = Math.random() * 0.55 + 0.12;
+    this.wFreq  = Math.random() * 0.022 + 0.008;
     this.wPhase = Math.random() * Math.PI * 2;
-    // Larger bubbles appear deeper ⇒ more transparent
-    const depth  = (this.r - 1.2) / 3.5;                     // 0..1
-    this.opacity = 0.055 + (1 - depth) * 0.10;               // 0.055..0.155
-    this.hollow  = Math.random() > 0.55;                      // ~45% are rings
+    var depth   = (this.r - 1.2) / 3.5;
+    this.opacity = 0.055 + (1 - depth) * 0.10;
+    this.hollow  = Math.random() > 0.55;
   };
   Bubble.prototype.update = function () {
     this.wPhase += this.wFreq;
@@ -1244,9 +1239,8 @@
     c.arc(this.x, this.y, this.r, 0, Math.PI * 2);
     if (this.hollow) {
       c.strokeStyle = 'rgba(' + this.color + ',' + this.opacity + ')';
-      c.lineWidth   = 0.7;
+      c.lineWidth = 0.7;
       c.stroke();
-      // tiny inner highlight
       c.beginPath();
       c.arc(this.x - this.r * 0.28, this.y - this.r * 0.28, this.r * 0.22, 0, Math.PI * 2);
       c.fillStyle = 'rgba(' + this.color + ',' + (this.opacity * 0.55) + ')';
@@ -1257,13 +1251,12 @@
     }
   };
 
-  // ── Wave shimmer (fixed to viewport bottom) ───────────────
+  // ── Waves (3.5× faster than before) ──────────────────────
   var WAVES = [
-    { amp: 22, freq: 0.0055, speed: 0.00022, yFrac: 0.76, opacity: 0.022 },
-    { amp: 14, freq: 0.0072, speed: 0.00034, yFrac: 0.83, opacity: 0.015 },
-    { amp:  9, freq: 0.0090, speed: 0.00048, yFrac: 0.90, opacity: 0.009 }
+    { amp: 22, freq: 0.0055, speed: 0.00078, yFrac: 0.76, opacity: 0.022 },
+    { amp: 14, freq: 0.0072, speed: 0.00118, yFrac: 0.83, opacity: 0.015 },
+    { amp:  9, freq: 0.0090, speed: 0.00168, yFrac: 0.90, opacity: 0.009 }
   ];
-
   function drawWave(w, t) {
     var yBase = canvas.height * w.yFrac;
     ctx.beginPath();
@@ -1278,15 +1271,178 @@
     ctx.fill();
   }
 
+  // ── Jellyfish ─────────────────────────────────────────────
+  function Jelly(scatter) { this.init(scatter); }
+  Jelly.prototype.init = function (scatter) {
+    var goRight  = Math.random() > 0.5;
+    this.dir     = goRight ? 1 : -1;
+    this.x       = scatter ? Math.random() * window.innerWidth
+                           : (goRight ? -70 : window.innerWidth + 70);
+    this.y       = window.innerHeight * (0.04 + Math.random() * 0.62);
+    this.r       = Math.random() * 22 + 15;
+    this.color   = Math.random() > 0.5 ? ORANGE : BLUE;
+    var depth    = (this.r - 15) / 22;
+    this.opacity = 0.045 + (1 - depth) * 0.065;
+    this.vx      = this.dir * (Math.random() * 0.15 + 0.07);
+    this.drift   = (Math.random() - 0.5) * 0.025;
+    this.phase   = Math.random() * Math.PI * 2;
+    this.pSpeed  = Math.random() * 0.022 + 0.012;
+    this.tCount  = Math.floor(Math.random() * 3) + 4;
+    this.tLens = [];
+    for (var i = 0; i < 7; i++) this.tLens.push(0.75 + Math.random() * 0.55);
+  };
+  Jelly.prototype.update = function () {
+    this.phase += this.pSpeed;
+    this.x += this.vx;
+    this.y += this.drift + Math.sin(this.phase * 0.38) * 0.13;
+    if (this.x >  window.innerWidth  + 80) this.init(false);
+    if (this.x < -80)                       this.init(false);
+    if (this.y < -60) this.y = window.innerHeight * 0.68;
+    if (this.y >  window.innerHeight * 0.72) this.y = 10;
+  };
+  Jelly.prototype.draw = function (c) {
+    var pulse = 1 + Math.sin(this.phase) * 0.055;
+    var r  = this.r * pulse;
+    var op = this.opacity;
+    var co = this.color;
+    c.save();
+    c.shadowColor = 'rgba(' + co + ',' + (op * 1.6) + ')';
+    c.shadowBlur  = 7;
+
+    c.beginPath();
+    c.arc(this.x, this.y, r, Math.PI, 0);
+    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
+    c.lineWidth = 0.9;
+    c.stroke();
+
+    c.shadowBlur = 0;
+    c.lineWidth  = 0.45;
+    [0.58, 0.27].forEach(function (frac) {
+      c.beginPath();
+      c.arc(this.x, this.y, r * frac, Math.PI, 0);
+      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.30) + ')';
+      c.stroke();
+    }, this);
+
+    c.beginPath();
+    c.moveTo(this.x, this.y - r);
+    c.lineTo(this.x, this.y);
+    c.strokeStyle = 'rgba(' + co + ',' + (op * 0.22) + ')';
+    c.lineWidth = 0.45;
+    c.stroke();
+
+    c.beginPath();
+    c.moveTo(this.x - r, this.y);
+    c.lineTo(this.x + r, this.y);
+    c.strokeStyle = 'rgba(' + co + ',' + (op * 0.48) + ')';
+    c.lineWidth = 0.6;
+    c.stroke();
+
+    for (var i = 0; i < this.tCount; i++) {
+      var tx   = this.x + (i / (this.tCount - 1) - 0.5) * 1.75 * r;
+      var tLen = r * this.tLens[i];
+      c.beginPath();
+      c.moveTo(tx, this.y);
+      for (var s = 1; s <= 10; s++) {
+        c.lineTo(
+          tx + Math.sin(this.phase + i * 1.4 + s * 0.55) * (2.2 + s * 0.38),
+          this.y + (tLen / 10) * s
+        );
+      }
+      c.strokeStyle = 'rgba(' + co + ',' + (op * 0.38) + ')';
+      c.lineWidth = 0.48;
+      c.stroke();
+    }
+    c.restore();
+  };
+
+  // ── Geometric fish (Glider) ───────────────────────────────
+  function Glider(scatter, cx, cy) { this.init(scatter, cx, cy); }
+  Glider.prototype.init = function (scatter, cx, cy) {
+    var goRight = Math.random() > 0.5;
+    this.dir    = goRight ? 1 : -1;
+    this.x      = scatter
+      ? (cx !== undefined ? cx + (Math.random() - 0.5) * 22 : Math.random() * window.innerWidth)
+      : (goRight ? -35 : window.innerWidth + 35);
+    this.y      = cy !== undefined
+      ? cy + (Math.random() - 0.5) * 18
+      : window.innerHeight * (0.08 + Math.random() * 0.74);
+    this.size   = Math.random() * 6 + 5;
+    this.color  = Math.random() > 0.5 ? ORANGE : BLUE;
+    this.opacity = Math.random() * 0.065 + 0.045;
+    this.vx     = this.dir * (Math.random() * 0.38 + 0.22);
+    this.vy     = (Math.random() - 0.5) * 0.055;
+    this.phase  = Math.random() * Math.PI * 2;
+    this.pSpeed = Math.random() * 0.055 + 0.035;
+  };
+  Glider.prototype.update = function () {
+    this.phase += this.pSpeed;
+    this.x += this.vx;
+    this.y += this.vy + Math.sin(this.phase * 0.28) * 0.09;
+    if (this.x >  window.innerWidth  + 45) this.init(false);
+    if (this.x < -45)                       this.init(false);
+    if (this.y < 0 || this.y > window.innerHeight) {
+      this.y = window.innerHeight * (0.08 + Math.random() * 0.74);
+    }
+  };
+  Glider.prototype.draw = function (c) {
+    var s   = this.size;
+    var d   = this.dir;
+    var co  = this.color;
+    var op  = this.opacity;
+    var wag = Math.sin(this.phase) * s * 0.32;
+
+    c.save();
+    c.translate(this.x, this.y);
+    c.shadowColor = 'rgba(' + co + ',' + (op * 1.4) + ')';
+    c.shadowBlur  = 4;
+    c.strokeStyle = 'rgba(' + co + ',' + op + ')';
+    c.lineWidth   = 0.75;
+
+    c.beginPath();
+    c.moveTo(d * s,          0);
+    c.lineTo(0,             -s * 0.36);
+    c.lineTo(d * -s * 0.62,  0);
+    c.lineTo(0,              s * 0.36);
+    c.closePath();
+    c.stroke();
+
+    c.beginPath();
+    c.moveTo(d * -s * 0.62, 0);
+    c.lineTo(d * -s * 1.15, -s * 0.32 + wag);
+    c.moveTo(d * -s * 0.62, 0);
+    c.lineTo(d * -s * 1.15,  s * 0.32 + wag);
+    c.stroke();
+
+    c.beginPath();
+    c.moveTo(d * s * 0.08,  -s * 0.36);
+    c.lineTo(d * s * 0.22,  -s * 0.68);
+    c.lineTo(d * -s * 0.18, -s * 0.36);
+    c.stroke();
+
+    c.restore();
+  };
+
   // ── Init ──────────────────────────────────────────────────
   var bubbles = [];
   for (var i = 0; i < 45; i++) bubbles.push(new Bubble(true));
+
+  var jellies = [];
+  for (var j = 0; j < 5; j++) jellies.push(new Jelly(true));
+
+  var gliders = [];
+  var s1x = Math.random() * window.innerWidth, s1y = window.innerHeight * (0.2 + Math.random() * 0.5);
+  var s2x = Math.random() * window.innerWidth, s2y = window.innerHeight * (0.2 + Math.random() * 0.5);
+  for (var k = 0; k < 3; k++) gliders.push(new Glider(true, s1x, s1y));
+  for (var m = 0; m < 3; m++) gliders.push(new Glider(true, s2x, s2y));
 
   var t = 0;
   function frame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     WAVES.forEach(function (w) { drawWave(w, t); });
     bubbles.forEach(function (b) { b.update(); b.draw(ctx); });
+    jellies.forEach(function (j) { j.update(); j.draw(ctx); });
+    gliders.forEach(function (g) { g.update(); g.draw(ctx); });
     t++;
     requestAnimationFrame(frame);
   }
