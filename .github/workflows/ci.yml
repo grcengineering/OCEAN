@@ -74,14 +74,10 @@ jobs:
             --output-dir coverage/ \
             --exclude-files 'src/api/*' \
             --exclude-files 'src/config/*' \
-            --exclude-files 'src/eval/*' \
             --exclude-files 'src/secrets/*' \
             --exclude-files 'src/modules/*' \
             --exclude-files 'src/scheduler/cron.rs' \
             --exclude-files 'src/scheduler/runner.rs' \
-            --exclude-files 'src/control/composite.rs' \
-            --exclude-files 'src/control/evaluator.rs' \
-            --exclude-files 'src/control/framework.rs' \
             --exclude-files 'src/main.rs'
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

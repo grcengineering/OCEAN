@@ -7,6 +7,25 @@ BINARY = ocean
         coverage coverage-html clean install check
 
 # ---------------------------------------------------------------------------
+# cargo-llvm-cov: auto-detect LLVM tool paths on Windows MSVC
+# On Linux the tools are on PATH automatically; on Windows MSVC we must
+# point cargo-llvm-cov at the rustup-managed binaries explicitly.
+# ---------------------------------------------------------------------------
+ifeq ($(OS),Windows_NT)
+  RUSTUP_HOME    := $(shell rustup show home 2>/dev/null | sed 's|\\\\|/|g')
+  ACTIVE_TC      := $(shell rustup show active-toolchain 2>/dev/null | cut -d' ' -f1)
+  HOST_TRIPLE    := $(shell rustup show host 2>/dev/null)
+  LLVM_BIN       := $(RUSTUP_HOME)/toolchains/$(ACTIVE_TC)/lib/rustlib/$(HOST_TRIPLE)/bin
+  export LLVM_COV      ?= $(LLVM_BIN)/llvm-cov.exe
+  export LLVM_PROFDATA ?= $(LLVM_BIN)/llvm-profdata.exe
+endif
+
+# Regex pattern of stub/unimplemented files to exclude from coverage.
+# Update as phases complete.
+STUB_REGEX := src/(api|config|secrets|modules|main)
+STUB_SCHED := src/scheduler/(cron|runner)
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
@@ -51,20 +70,14 @@ check:
 
 coverage:
 	cargo llvm-cov \
-		--all-features \
-		--ignore-filename-regex 'src/(api|config|eval|secrets|modules|main)' \
-		--ignore-filename-regex 'src/scheduler/(cron|runner)' \
-		--ignore-filename-regex 'src/control/(composite|evaluator|framework)' \
-		--workspace
+		--ignore-filename-regex '$(STUB_REGEX)' \
+		--ignore-filename-regex '$(STUB_SCHED)'
 
 coverage-html:
 	cargo llvm-cov \
-		--all-features \
-		--ignore-filename-regex 'src/(api|config|eval|secrets|modules|main)' \
-		--ignore-filename-regex 'src/scheduler/(cron|runner)' \
-		--ignore-filename-regex 'src/control/(composite|evaluator|framework)' \
-		--workspace \
-		--open
+		--ignore-filename-regex '$(STUB_REGEX)' \
+		--ignore-filename-regex '$(STUB_SCHED)' \
+		--html --open
 
 # Alternative: cargo-tarpaulin (Linux only — matches CI)
 coverage-tarpaulin:
@@ -73,14 +86,10 @@ coverage-tarpaulin:
 		--timeout 120 \
 		--exclude-files 'src/api/*' \
 		--exclude-files 'src/config/*' \
-		--exclude-files 'src/eval/*' \
 		--exclude-files 'src/secrets/*' \
 		--exclude-files 'src/modules/*' \
 		--exclude-files 'src/scheduler/cron.rs' \
 		--exclude-files 'src/scheduler/runner.rs' \
-		--exclude-files 'src/control/composite.rs' \
-		--exclude-files 'src/control/evaluator.rs' \
-		--exclude-files 'src/control/framework.rs' \
 		--exclude-files 'src/main.rs'
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -62,6 +63,72 @@ pub struct UptimeResult {
     pub ineffective_buckets: i32,
     pub gap_buckets: i32,
     pub uptime_percent: f64,
+}
+
+// ---------------------------------------------------------------------------
+// YAML loading (from the controls/*.yaml file format)
+// ---------------------------------------------------------------------------
+
+/// Intermediate struct matching the YAML file format for controls.
+/// The file format uses `evaluation.cel` / `evaluation.preset` and
+/// `framework_mappings[].control` rather than `requirement_id`.
+#[derive(Debug, Deserialize)]
+struct ControlYaml {
+    id: String,
+    name: String,
+    description: String,
+    #[serde(default)]
+    framework_mappings: Vec<FrameworkMappingYaml>,
+    #[serde(default)]
+    evaluation: EvaluationYaml,
+    #[serde(default)]
+    component_controls: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct EvaluationYaml {
+    #[serde(default)]
+    cel: String,
+    #[serde(default)]
+    preset: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FrameworkMappingYaml {
+    framework: String,
+    /// Accepts both "control" (file format) and "requirement_id" (SDK format).
+    #[serde(alias = "requirement_id")]
+    control: String,
+    #[serde(default)]
+    description: String,
+}
+
+impl Control {
+    /// Load a Control from a YAML string (matches the controls/**/*.yaml file format).
+    pub fn load_yaml(yaml: &str) -> Result<Self> {
+        let raw: ControlYaml = serde_yaml::from_str(yaml)
+            .context("parsing control YAML")?;
+
+        Ok(Control {
+            id: raw.id,
+            name: raw.name,
+            description: raw.description,
+            evaluation_logic: EvaluationLogic {
+                cel_expression: raw.evaluation.cel,
+                preset: raw.evaluation.preset,
+            },
+            framework_mappings: raw.framework_mappings
+                .into_iter()
+                .map(|m| FrameworkMapping {
+                    framework: m.framework,
+                    requirement_id: m.control,
+                    description: m.description,
+                })
+                .collect(),
+            component_controls: raw.component_controls,
+            evaluation_expression_hash: String::new(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -148,5 +215,70 @@ mod tests {
         let decoded: UptimeResult = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.total_buckets, 100);
         assert!((decoded.uptime_percent - 95.0).abs() < f64::EPSILON);
+    }
+
+    // --- Control::load_yaml ---
+
+    const CONTROL_YAML: &str = r#"
+id: iam.mfa_enforcement
+name: MFA Enforcement Policy
+description: Verifies MFA is enforced.
+framework_mappings:
+  - framework: soc2
+    control: CC6.1
+  - framework: iso27001
+    control: A.9.4.2
+    description: Authentication controls
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"
+"#;
+
+    #[test]
+    fn control_load_yaml_parses_id_name() {
+        let ctrl = Control::load_yaml(CONTROL_YAML).unwrap();
+        assert_eq!(ctrl.id, "iam.mfa_enforcement");
+        assert_eq!(ctrl.name, "MFA Enforcement Policy");
+    }
+
+    #[test]
+    fn control_load_yaml_parses_framework_mappings() {
+        let ctrl = Control::load_yaml(CONTROL_YAML).unwrap();
+        assert_eq!(ctrl.framework_mappings.len(), 2);
+        assert_eq!(ctrl.framework_mappings[0].framework, "soc2");
+        assert_eq!(ctrl.framework_mappings[0].requirement_id, "CC6.1");
+        assert_eq!(ctrl.framework_mappings[1].description, "Authentication controls");
+    }
+
+    #[test]
+    fn control_load_yaml_parses_cel_expression() {
+        let ctrl = Control::load_yaml(CONTROL_YAML).unwrap();
+        assert!(ctrl.evaluation_logic.preset.is_empty());
+        assert!(ctrl.evaluation_logic.cel_expression.contains("effective_count"));
+    }
+
+    #[test]
+    fn control_load_yaml_with_preset() {
+        let yaml = r#"
+id: ctrl.a
+name: Control A
+description: A control.
+evaluation:
+  preset: all_effective
+"#;
+        let ctrl = Control::load_yaml(yaml).unwrap();
+        assert_eq!(ctrl.evaluation_logic.preset, "all_effective");
+        assert!(ctrl.evaluation_logic.cel_expression.is_empty());
+    }
+
+    #[test]
+    fn control_load_yaml_invalid_returns_error() {
+        let result = Control::load_yaml("- not a mapping");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn control_load_yaml_empty_component_controls_by_default() {
+        let ctrl = Control::load_yaml(CONTROL_YAML).unwrap();
+        assert!(ctrl.component_controls.is_empty());
     }
 }
