@@ -1,0 +1,72 @@
+[package]
+name = "ocean"
+version = "0.1.0"
+edition = "2021"
+description = "Open Control Evidence Acquisition Normalizer — the Metasploit for GRC"
+license = "Apache-2.0"
+repository = "https://github.com/grcengineering/ocean"
+authors = ["GRC Engineering <team@grc.engineering>"]
+
+[lib]
+name = "ocean"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ocean"
+path = "src/main.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Storage
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# IDs and time
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Cryptography (AWS SigV4 signing — no attestation)
+sha2 = "0.10"
+hmac = "0.12"
+base64 = "0.22"
+hex = "0.4"
+
+# HTTP (sync)
+ureq = { version = "2", features = ["json"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Regex
+regex = "1"
+
+# Cron scheduling
+cron = "0.12"
+
+# Async runtime (for ocean serve)
+tokio = { version = "1", features = ["full"] }
+
+# REST API
+axum = "0.7"
+
+# CEL evaluation
+cel-interpreter = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+strip = true
+opt-level = 3
+lto = true

@@ -40,3 +40,9 @@ Thumbs.db
 # Coverage
 coverage.out
 coverage.html
+
+# Rust build output
+/target/
+
+# Temp/misc
+*.png
