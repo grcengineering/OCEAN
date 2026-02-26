@@ -1254,28 +1254,52 @@
     } else { c.fillStyle='rgba('+this.color+','+this.opacity+')'; c.fill(); }
   };
 
-  // ── Surface shimmer — overhead caustic water effect ───────
-  var SURF_TS=22;
-  function drawSurface(t){
-    var W=canvas.width, H=canvas.height;
-    var cols=Math.ceil(W/SURF_TS)+1, rows=Math.ceil(H/SURF_TS)+1;
-    var ft=t*0.0011;
-    var gBright=0.68+Math.sin(t*0.00038)*0.32;
-    for(var r=0;r<rows;r++){
-      var wy=r*SURF_TS;
-      for(var c=0;c<cols;c++){
-        var wx=c*SURF_TS;
-        var s1=Math.sin(wx*0.036+wy*0.021+ft*1.6);
-        var s2=Math.sin(wx*0.019-wy*0.044+ft*1.4+2.1);
-        var s3=Math.sin(-wx*0.027+wy*0.031+ft*1.8+4.5);
-        var intensity=(s1+s2+s3+3)*(1/6);
-        if(intensity>0.58){
-          var op=(intensity-0.58)*(1/0.42)*0.055*gBright;
-          ctx.fillStyle='rgba(147,210,230,'+op+')';
-          ctx.fillRect(wx,wy,SURF_TS,SURF_TS);
+  // ── Surface shimmer — tileable water caustic (Shadertoy MdlXz8 port) ─
+  // Original: "Tileable Water Caustic" by D. Hoskins / joltz0r (shadertoy.com/view/MdlXz8)
+  // Ported to Canvas 2D imageData. Runs at 1/6 resolution, upscaled bilinearly.
+  // Produces organic caustic light patterns — sunlight refracted through water from above.
+  var WC_SCALE=6, wcW, wcH, wcOff, wcCtx2, wcImg;
+  function wcInit(){
+    wcW=Math.max(4,Math.ceil(canvas.width/WC_SCALE));
+    wcH=Math.max(4,Math.ceil(canvas.height/WC_SCALE));
+    wcOff=document.createElement('canvas');
+    wcOff.width=wcW; wcOff.height=wcH;
+    wcCtx2=wcOff.getContext('2d');
+    wcImg=wcCtx2.createImageData(wcW,wcH);
+  }
+  function drawSurface(){
+    if(!wcOff||wcOff.width!==Math.ceil(canvas.width/WC_SCALE)) wcInit();
+    var W=wcW, H=wcH, data=wcImg.data;
+    var TAU=6.28318530718, MAX_ITER=4;
+    var time=performance.now()*0.00028+23.0; // slow organic evolution
+    for(var y=0;y<H;y++){
+      for(var x=0;x<W;x++){
+        var px=((x/W)*TAU%TAU)-250, py=((y/H)*TAU%TAU)-250;
+        var ix=px, iy=py, c=1.0, inten=0.005;
+        for(var n=0;n<MAX_ITER;n++){
+          var nt=time*(1.0-3.5/(n+1));
+          var nix=px+Math.cos(nt-ix)+Math.sin(nt+iy);
+          var niy=py+Math.sin(nt-iy)+Math.cos(nt+ix);
+          ix=nix; iy=niy;
+          var dxv=px/(Math.sin(ix+nt)/inten);
+          var dyv=py/(Math.cos(iy+nt)/inten);
+          c+=1.0/Math.sqrt(dxv*dxv+dyv*dyv);
         }
+        c/=MAX_ITER;
+        c=1.17-Math.pow(c,1.4);
+        var b=Math.pow(Math.abs(c),8.0);
+        b=b>1?1:b<0?0:b;
+        var idx=(y*W+x)*4;
+        data[idx]=152; data[idx+1]=212; data[idx+2]=238;
+        data[idx+3]=Math.round(b*40); // subtle max opacity ~40/255
       }
     }
+    wcCtx2.putImageData(wcImg,0,0);
+    ctx.save();
+    ctx.imageSmoothingEnabled=true;
+    ctx.imageSmoothingQuality='high';
+    ctx.drawImage(wcOff,0,0,canvas.width,canvas.height);
+    ctx.restore();
   }
 
   // ── Fish — 28 cols x 12 rows, PS=2 (56x24px) ─────────────
@@ -1540,7 +1564,7 @@
   var t=0;
   function frame(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawSurface(t);
+    drawSurface();
     bubbles.forEach(function(b){b.update();b.draw(ctx);});
     jellies.forEach(function(j){j.update();j.draw(ctx);});
     gliders.forEach(function(g){g.update();g.draw(ctx);});
