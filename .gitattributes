@@ -1,0 +1,19 @@
+# Enforce LF line endings for all text files
+* text=auto eol=lf
+
+# Rust source — always LF
+*.rs text eol=lf
+
+# TOML / YAML / Markdown / JSON — always LF
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+
+# Shell scripts — always LF
+*.sh text eol=lf
+
+# Windows binaries — keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
