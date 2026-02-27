@@ -5,7 +5,7 @@ edition = "2021"
 description = "Open Control Evidence Assessment Normalizer — the Metasploit for GRC"
 license = "Apache-2.0"
 repository = "https://github.com/grcengineering/ocean"
-authors = ["p4gs <https://github.com/p4gs>", "GRC Engineering <team@grc.engineering>"]
+authors = ["Justin Pagano <https://github.com/p4gs>", "GRC Engineering <team@grc.engineering>"]
 
 [lib]
 name = "ocean"

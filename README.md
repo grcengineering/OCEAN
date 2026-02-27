@@ -244,7 +244,7 @@ When creating new modules, follow the [Module Development Guide](docs/modules.md
 
 ## Author
 
-Created by [@p4gs](https://github.com/p4gs).
+Created by [Justin Pagano](https://github.com/p4gs).
 
 ## License
 
