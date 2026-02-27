@@ -185,7 +185,7 @@
       display: flex; align-items: center; justify-content: center;
       font-family: var(--heading); font-weight: 700; font-size: 0.9rem;
       letter-spacing: 0.06em;
-      color: #fff;
+      color: #000;
       box-shadow: 0 0 20px var(--orange-glow);
       white-space: nowrap;
     }
@@ -597,6 +597,7 @@
       <div class="nav-links">
         <a href="#pillars" class="nav-link">Pillars</a>
         <a href="#modules"  class="nav-link">Modules</a>
+        <a href="#schema"   class="nav-link">Schema</a>
         <a href="#corsair" class="nav-link">Corsair</a>
         <a href="https://github.com/grcengineering/ocean" class="btn btn-secondary" target="_blank" rel="noopener">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -613,7 +614,7 @@
 
     <div class="hero-eyebrow">
       <span class="hero-eyebrow-dot"></span>
-      Open Source &nbsp;·&nbsp; Apache 2.0 &nbsp;·&nbsp; Go 1.22+
+      Open Source &nbsp;·&nbsp; Apache 2.0 &nbsp;·&nbsp; Rust
     </div>
 
     <h1 class="hero-title">
@@ -708,7 +709,7 @@
   <div class="container">
     <div class="section-header">
       <div class="section-label">// architecture</div>
-      <h2 class="section-title">Three Pillars of<br><span class="grad-main">Control Assurance</span></h2>
+      <h2 class="section-title">Four Pillars of<br><span class="grad-main">Control Assurance</span></h2>
       <p class="section-desc">OCEAN isn't a GRC platform. It's the evidence and verification layer that GRC platforms should consume. Pair it with <a href="#corsair" style="color:var(--orange);text-decoration:none">Corsair</a> for audit-grade cryptographic provenance.</p>
     </div>
 
@@ -739,7 +740,7 @@
 
       <div class="pillar-card" style="border-color:var(--border-orange);border-style:dashed;background:rgba(255,168,79,0.04)">
         <div class="pillar-icon pillar-icon-orange">🔗</div>
-        <div class="pillar-num" style="color:var(--orange)">+ CORSAIR</div>
+        <div class="pillar-num" style="color:var(--orange)">PILLAR 04</div>
         <div class="pillar-title">Cryptographic Provenance</div>
         <p class="pillar-desc">OCEAN pipes evidence to <a href="https://grcorsair.com" target="_blank" rel="noopener" style="color:var(--orange);text-decoration:none">Corsair</a> — an open-source signing tool that produces W3C JWT-VC Certificates of Proof of Operational Effectiveness (CPOEs). Any auditor can verify independently.</p>
         <span class="pillar-tag">ocean collect okta.mfa_policy | corsair sign</span>
@@ -913,6 +914,176 @@
   </div>
 </section>
 
+<div class="section-divider"></div>
+
+<!-- ═══════════════════════════════════════════ SCHEMA -->
+<section class="section" id="schema">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">// normalized evidence schema</div>
+      <h2 class="section-title">OCSF for <span class="grad-orange">GRC</span></h2>
+      <p class="section-desc">Every piece of evidence OCEAN produces maps to a normalized class in the taxonomy — making evidence portable, queryable, and framework-agnostic. Eight control domains. Twenty-three evidence classes.</p>
+    </div>
+
+    <!-- Domain grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:48px">
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--orange);background:var(--orange-glow);padding:3px 8px;border-radius:4px;font-weight:700">1000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">iam</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Identity &amp; Access</div>
+        <p class="module-desc" style="font-size:0.8rem">Auth policy, privilege config, session control, entitlement enumeration.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 1001 · 1002 · 1003 · 1004</div>
+      </div>
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--orange);background:var(--orange-glow);padding:3px 8px;border-radius:4px;font-weight:700">2000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">dat</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Data Protection</div>
+        <p class="module-desc" style="font-size:0.8rem">Encryption config, DLP rules, backup verification, public exposure testing.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 2001 · 2002 · 2003 · 2004</div>
+      </div>
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--blue);background:var(--blue-glow);padding:3px 8px;border-radius:4px;font-weight:700">3000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">net</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Network Security</div>
+        <p class="module-desc" style="font-size:0.8rem">Firewall rules, WAF coverage, TLS config, network segmentation evidence.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 3001 · 3002 · 3003</div>
+      </div>
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--blue);background:var(--blue-glow);padding:3px 8px;border-radius:4px;font-weight:700">4000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">code</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Code &amp; Pipeline Security</div>
+        <p class="module-desc" style="font-size:0.8rem">Repo policy, secret detection, SAST/SCA findings, container image scanning.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 4001 · 4002 · 4003 · 4004</div>
+      </div>
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--cyan);background:rgba(34,211,238,0.1);padding:3px 8px;border-radius:4px;font-weight:700">5000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">vuln</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Vulnerability Management</div>
+        <p class="module-desc" style="font-size:0.8rem">Scan coverage, patch cadence SLAs, end-of-life detection, mean time to remediation.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 5001 · 5002 · 5003</div>
+      </div>
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--cyan);background:rgba(34,211,238,0.1);padding:3px 8px;border-radius:4px;font-weight:700">6000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">infra</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Infrastructure</div>
+        <p class="module-desc" style="font-size:0.8rem">Cloud config baselines, IaC drift detection, inventory enumeration.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 6001 · 6002 · 6003</div>
+      </div>
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--green);background:rgba(16,185,129,0.1);padding:3px 8px;border-radius:4px;font-weight:700">7000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">log</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Logging &amp; Monitoring</div>
+        <p class="module-desc" style="font-size:0.8rem">Audit log coverage, SIEM alert validation, retention policy compliance.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 7001 · 7002</div>
+      </div>
+
+      <div class="module-card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--green);background:rgba(16,185,129,0.1);padding:3px 8px;border-radius:4px;font-weight:700">8000</span>
+          <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">tpr</span>
+        </div>
+        <div class="module-name" style="font-size:0.95rem;margin-bottom:6px">Third-Party &amp; Vendor</div>
+        <p class="module-desc" style="font-size:0.8rem">Vendor assessments, supply chain integrity, SLA monitoring evidence.</p>
+        <div style="margin-top:10px;font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">Classes: 8001 · 8002 · 8003</div>
+      </div>
+
+    </div>
+
+    <!-- class_uid formula + key fields callout -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
+
+      <div class="terminal" style="max-width:100%">
+        <div class="terminal-header">
+          <span class="terminal-dot td-red"></span>
+          <span class="terminal-dot td-amber"></span>
+          <span class="terminal-dot td-green"></span>
+          <span class="terminal-title">evidence class_uid — okta.mfa_policy</span>
+        </div>
+        <div class="terminal-body" style="font-size:0.78rem">
+          <div class="terminal-line"><span class="terminal-out" style="color:var(--text-dim)"># class_uid = (category_uid × 1000) + class_index</span></div>
+          <div class="terminal-line"><span class="terminal-out" style="color:var(--text-dim)"># iam domain (1000) + Auth Policy (1) = 1001</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean collect okta.mfa_policy --output json | jq .class_uid</span></div>
+          <div class="terminal-line"><span class="terminal-ok">1001</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean collect okta.mfa_policy --output json | jq '{class_uid,domain,subject,activity_id}'</span></div>
+          <div class="terminal-line"><span class="terminal-ok">{</span></div>
+          <div class="terminal-line"><span class="terminal-ok">&nbsp; "class_uid": 1001,</span></div>
+          <div class="terminal-line"><span class="terminal-ok">&nbsp; "domain": "iam",</span></div>
+          <div class="terminal-line"><span class="terminal-ok">&nbsp; "subject": { "type": "population", "id": "okta-tenant" },</span></div>
+          <div class="terminal-line"><span class="terminal-ok">&nbsp; "activity_id": 7</span></div>
+          <div class="terminal-line"><span class="terminal-ok">}</span></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Seven Assessment Activities</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:0.83rem">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-family:var(--mono);color:var(--orange);min-width:20px">1</span>
+            <span style="color:var(--text-muted)"><strong style="color:var(--text)">config_inspection</strong> — read-only API observation</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-family:var(--mono);color:var(--orange);min-width:20px">2</span>
+            <span style="color:var(--text-muted)"><strong style="color:var(--text)">resource_enumeration</strong> — list and count resources</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-family:var(--mono);color:var(--orange);min-width:20px">3</span>
+            <span style="color:var(--text-muted)"><strong style="color:var(--text)">log_query</strong> — mine audit / SIEM data</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-family:var(--mono);color:var(--blue);min-width:20px">4</span>
+            <span style="color:var(--text-muted)"><strong style="color:var(--text)">behavioral_test</strong> — active control exercise</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-family:var(--mono);color:var(--blue);min-width:20px">5</span>
+            <span style="color:var(--text-muted)"><strong style="color:var(--text)">bypass_attempt</strong> — try what controls prevent</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-family:var(--mono);color:var(--cyan);min-width:20px">6</span>
+            <span style="color:var(--text-muted)"><strong style="color:var(--text)">probe</strong> — network / API reachability test</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-family:var(--mono);color:var(--cyan);min-width:20px">7</span>
+            <span style="color:var(--text-muted)"><strong style="color:var(--text)">population_analysis</strong> — fleet-level compliance %</span>
+          </div>
+        </div>
+        <div style="margin-top:8px;padding:14px 16px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);font-size:0.8rem;color:var(--text-muted);line-height:1.6">
+          Evidence is <strong style="color:var(--text)">framework-agnostic</strong>. Controls map to SOC 2, ISO 27001, NIST, PCI-DSS etc. in YAML control files — not in the evidence schema itself.
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:32px;text-align:center">
+      <a href="https://github.com/grcengineering/ocean/blob/main/.specify/specs/ocean-core/evidence-schema.md" class="btn btn-ghost" target="_blank" rel="noopener">
+        Read the full schema spec →
+      </a>
+    </div>
+  </div>
+</section>
+
 <div class="scan-bar"></div>
 
 <!-- ═══════════════════════════════════════════ CORSAIR -->
@@ -1057,10 +1228,10 @@
         Start Verifying Controls<br>
         <span class="grad-orange">in Minutes</span>
       </h2>
-      <p class="cta-desc">Single Go binary. Zero dependencies. Works anywhere.</p>
+      <p class="cta-desc">Single Rust binary. Zero dependencies. Works anywhere.</p>
 
       <div class="install-cmd" id="install-cmd-box">
-        <span class="install-cmd-text">go install github.com/grcengineering/ocean/cmd/ocean@latest</span>
+        <span class="install-cmd-text">cargo install --git https://github.com/grcengineering/ocean</span>
         <button class="copy-btn" id="copy-btn" onclick="copyInstall()">copy</button>
       </div>
 
@@ -1199,7 +1370,7 @@
 <!-- ═══════════════════════════════════════════ COPY INSTALL -->
 <script>
 function copyInstall() {
-  const text = 'go install github.com/grcengineering/ocean/cmd/ocean@latest';
+  const text = 'cargo install --git https://github.com/grcengineering/ocean';
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-btn');
     btn.textContent = 'copied!';
