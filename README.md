@@ -138,7 +138,7 @@ Control effectiveness is determined by user-defined [CEL expressions](https://gi
 
 ```yaml
 evaluation:
-  cel: "status_counts.effective > 0 && status_counts.ineffective == 0 && has_active"
+  cel: "effective_count > 0 && ineffective_count == 0 && has_active"
 ```
 
 Built-in presets available: `all_effective`, `any_effective`, `active_verified`.

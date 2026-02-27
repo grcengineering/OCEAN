@@ -30,7 +30,7 @@ impl Collector for MockCollector {
         let now = Utc::now();
         Ok(vec![Evidence {
             id: Uuid::new_v4(),
-            control_id: "mfa.enforcement".to_string(),
+            control_id: "mock.mfa_enforcement".to_string(),
             class_uid: 1001,
             category_uid: 1,
             activity_id: 1,
@@ -98,7 +98,7 @@ impl Collector for MockNetworkCollector {
         let now = Utc::now();
         Ok(vec![Evidence {
             id: Uuid::new_v4(),
-            control_id: "waf.protection".to_string(),
+            control_id: "mock.waf_protection".to_string(),
             class_uid: 1002,
             category_uid: 4,
             activity_id: 1,
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn mock_collector_collect_core_fields() {
         let ev = &MockCollector.collect(&HashMap::new()).unwrap()[0];
-        assert_eq!(ev.control_id, "mfa.enforcement");
+        assert_eq!(ev.control_id, "mock.mfa_enforcement");
         assert_eq!(ev.class_uid, 1001);
         assert_eq!(ev.category_uid, 1);
         assert_eq!(ev.activity_id, 1);
@@ -277,7 +277,7 @@ mod tests {
     #[test]
     fn mock_network_collect_core_fields() {
         let ev = &MockNetworkCollector.collect(&HashMap::new()).unwrap()[0];
-        assert_eq!(ev.control_id, "waf.protection");
+        assert_eq!(ev.control_id, "mock.waf_protection");
         assert_eq!(ev.class_uid, 1002);
         assert_eq!(ev.category_uid, 4);
         assert_eq!(ev.activity_id, 1);

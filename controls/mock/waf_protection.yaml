@@ -8,4 +8,4 @@ collectors:
 testers:
   - module_id: mock.safety_test
 evaluation:
-  cel: "status_counts.effective > 0 && status_counts.ineffective == 0"
+  cel: "effective_count > 0 && ineffective_count == 0"

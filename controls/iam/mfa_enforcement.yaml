@@ -26,4 +26,4 @@ collectors:
 testers:
   - module_id: okta.mfa_bypass
 evaluation:
-  cel: "status_counts.effective > 0 && status_counts.ineffective == 0 && has_active"
+  cel: "effective_count > 0 && ineffective_count == 0 && has_active"

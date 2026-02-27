@@ -337,9 +337,14 @@ fn parse_date(s: &str) -> Result<DateTime<Utc>> {
 }
 
 fn load_control(control_id: &str, controls_dir: &str, cel_override: Option<&str>) -> Result<Control> {
+    // Support both flat (controls/mock.mfa_enforcement.yaml) and
+    // namespaced (controls/mock/mfa_enforcement.yaml) layouts.
+    let slash_id = control_id.replacen('.', "/", 1);
     let candidates = [
         format!("{controls_dir}/{control_id}.yaml"),
         format!("{controls_dir}/{control_id}.yml"),
+        format!("{controls_dir}/{slash_id}.yaml"),
+        format!("{controls_dir}/{slash_id}.yml"),
     ];
 
     let mut yaml_content = String::new();

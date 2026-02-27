@@ -70,7 +70,7 @@ impl Tester for MockTester {
 
         Ok(vec![Evidence {
             id: Uuid::new_v4(),
-            control_id: "mfa.enforcement".to_string(),
+            control_id: "mock.mfa_enforcement".to_string(),
             class_uid: 1001,
             category_uid: 1,
             activity_id: 2, // Active Test
@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn mock_tester_test_core_fields() {
         let ev = &MockTester.test(&HashMap::new()).unwrap()[0];
-        assert_eq!(ev.control_id, "mfa.enforcement");
+        assert_eq!(ev.control_id, "mock.mfa_enforcement");
         assert_eq!(ev.class_uid, 1001);
         assert_eq!(ev.category_uid, 1);
         assert_eq!(ev.activity_id, 2);

@@ -28,4 +28,4 @@ collectors:
 testers:
   - module_id: waf.bypass_test
 evaluation:
-  cel: "status_counts.effective > 0 && status_counts.ineffective == 0 && evidence.size() >= 2"
+  cel: "effective_count > 0 && ineffective_count == 0 && evidence_count >= 2"
