@@ -24,9 +24,7 @@ pub fn evaluate_composite(control: &Control, component_results: &[ComponentResul
     }
 
     for comp_id in &control.component_controls {
-        let found = component_results
-            .iter()
-            .find(|r| &r.control_id == comp_id);
+        let found = component_results.iter().find(|r| &r.control_id == comp_id);
 
         match found {
             Some(r) if r.status == "effective" => {}
@@ -93,7 +91,10 @@ mod tests {
     #[test]
     fn composite_one_ineffective_returns_ineffective() {
         let ctrl = make_composite(vec!["ctrl.a", "ctrl.b"]);
-        let results = vec![result("ctrl.a", "effective"), result("ctrl.b", "ineffective")];
+        let results = vec![
+            result("ctrl.a", "effective"),
+            result("ctrl.b", "ineffective"),
+        ];
         assert_eq!(evaluate_composite(&ctrl, &results), "ineffective");
     }
 

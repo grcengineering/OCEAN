@@ -101,7 +101,10 @@ mod tests {
     #[test]
     fn recorder_records_all_types() {
         let mut rec = TranscriptRecorder::new();
-        rec.record_action("send_request", Some(serde_json::json!({"url": "http://example.com"})));
+        rec.record_action(
+            "send_request",
+            Some(serde_json::json!({"url": "http://example.com"})),
+        );
         rec.record_action("second_action", None);
         rec.record_observation("response_blocked", true);
         rec.record_observation("alert_fired", false);
@@ -115,7 +118,7 @@ mod tests {
 
         assert_eq!(t.actions_attempted[0].action, "send_request");
         assert!(!t.actions_attempted[0].parameters.is_null()); // has params
-        assert!(t.actions_attempted[1].parameters.is_null());  // None → Null
+        assert!(t.actions_attempted[1].parameters.is_null()); // None → Null
 
         assert!(t.observations[0].expected);
         assert!(!t.observations[1].expected);

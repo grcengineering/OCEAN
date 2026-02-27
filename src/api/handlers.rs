@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{HeaderMap, Request, StatusCode, header::AUTHORIZATION},
+    http::{header::AUTHORIZATION, HeaderMap, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     routing::{delete, get},
@@ -380,7 +380,12 @@ mod tests {
         let state = make_state();
         let app = router(state);
         let res = app
-            .oneshot(Request::builder().uri("/api/v1/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         let body = axum::body::to_bytes(res.into_body(), usize::MAX)
@@ -407,11 +412,7 @@ mod tests {
     #[tokio::test]
     async fn get_evidence_unknown_id_returns_404() {
         let state = make_state();
-        let res = oneshot_get(
-            &format!("/api/v1/evidence/{}", Uuid::new_v4()),
-            state,
-        )
-        .await;
+        let res = oneshot_get(&format!("/api/v1/evidence/{}", Uuid::new_v4()), state).await;
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
     }
 

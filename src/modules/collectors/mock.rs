@@ -17,12 +17,24 @@ use crate::module::{collector::Collector, CredentialReq, Module};
 pub struct MockCollector;
 
 impl Module for MockCollector {
-    fn id(&self) -> &str { "mock.test" }
-    fn name(&self) -> &str { "Mock Test Collector" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "mock" }
-    fn evidence_types(&self) -> &[i32] { &[1001] }
-    fn credential_requirements(&self) -> Vec<CredentialReq> { vec![] }
+    fn id(&self) -> &str {
+        "mock.test"
+    }
+    fn name(&self) -> &str {
+        "Mock Test Collector"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "mock"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1001]
+    }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![]
+    }
 }
 
 impl Collector for MockCollector {
@@ -69,7 +81,8 @@ impl Collector for MockCollector {
             }),
             findings: vec![Finding {
                 title: "MFA Policy Active".to_string(),
-                description: "MFA enforcement is set to 'required' with zero user exceptions".to_string(),
+                description: "MFA enforcement is set to 'required' with zero user exceptions"
+                    .to_string(),
                 severity_id: 0,
             }],
             test_transcript: None,
@@ -85,12 +98,24 @@ impl Collector for MockCollector {
 pub struct MockNetworkCollector;
 
 impl Module for MockNetworkCollector {
-    fn id(&self) -> &str { "mock.network" }
-    fn name(&self) -> &str { "Mock Network Collector" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "mock" }
-    fn evidence_types(&self) -> &[i32] { &[1002] }
-    fn credential_requirements(&self) -> Vec<CredentialReq> { vec![] }
+    fn id(&self) -> &str {
+        "mock.network"
+    }
+    fn name(&self) -> &str {
+        "Mock Network Collector"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "mock"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1002]
+    }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![]
+    }
 }
 
 impl Collector for MockNetworkCollector {
@@ -120,8 +145,14 @@ impl Collector for MockNetworkCollector {
                 safety_classification: None,
             },
             observables: vec![
-                Observable { obs_type: "resource".to_string(), value: "waf_global_config".to_string() },
-                Observable { obs_type: "resource".to_string(), value: "waf_rule_sets".to_string() },
+                Observable {
+                    obs_type: "resource".to_string(),
+                    value: "waf_global_config".to_string(),
+                },
+                Observable {
+                    obs_type: "resource".to_string(),
+                    value: "waf_rule_sets".to_string(),
+                },
             ],
             status_id: StatusId::Effective,
             status: "WAF is enabled in block mode with current rule sets".to_string(),
@@ -141,7 +172,8 @@ impl Collector for MockNetworkCollector {
             }),
             findings: vec![Finding {
                 title: "WAF Active".to_string(),
-                description: "WAF is enabled in block mode with OWASP CRS 3.3 and custom rules".to_string(),
+                description: "WAF is enabled in block mode with OWASP CRS 3.3 and custom rules"
+                    .to_string(),
                 severity_id: 0,
             }],
             test_transcript: None,
@@ -157,19 +189,29 @@ mod tests {
     // ─── MockCollector ────────────────────────────────────────────────────────
 
     #[test]
-    fn mock_collector_id() { assert_eq!(MockCollector.id(), "mock.test"); }
+    fn mock_collector_id() {
+        assert_eq!(MockCollector.id(), "mock.test");
+    }
 
     #[test]
-    fn mock_collector_name() { assert_eq!(MockCollector.name(), "Mock Test Collector"); }
+    fn mock_collector_name() {
+        assert_eq!(MockCollector.name(), "Mock Test Collector");
+    }
 
     #[test]
-    fn mock_collector_version() { assert_eq!(MockCollector.version(), "0.1.0"); }
+    fn mock_collector_version() {
+        assert_eq!(MockCollector.version(), "0.1.0");
+    }
 
     #[test]
-    fn mock_collector_source_system() { assert_eq!(MockCollector.source_system(), "mock"); }
+    fn mock_collector_source_system() {
+        assert_eq!(MockCollector.source_system(), "mock");
+    }
 
     #[test]
-    fn mock_collector_evidence_types() { assert_eq!(MockCollector.evidence_types(), &[1001]); }
+    fn mock_collector_evidence_types() {
+        assert_eq!(MockCollector.evidence_types(), &[1001]);
+    }
 
     #[test]
     fn mock_collector_credential_requirements_empty() {
@@ -249,19 +291,29 @@ mod tests {
     // ─── MockNetworkCollector ─────────────────────────────────────────────────
 
     #[test]
-    fn mock_network_id() { assert_eq!(MockNetworkCollector.id(), "mock.network"); }
+    fn mock_network_id() {
+        assert_eq!(MockNetworkCollector.id(), "mock.network");
+    }
 
     #[test]
-    fn mock_network_name() { assert_eq!(MockNetworkCollector.name(), "Mock Network Collector"); }
+    fn mock_network_name() {
+        assert_eq!(MockNetworkCollector.name(), "Mock Network Collector");
+    }
 
     #[test]
-    fn mock_network_version() { assert_eq!(MockNetworkCollector.version(), "0.1.0"); }
+    fn mock_network_version() {
+        assert_eq!(MockNetworkCollector.version(), "0.1.0");
+    }
 
     #[test]
-    fn mock_network_source_system() { assert_eq!(MockNetworkCollector.source_system(), "mock"); }
+    fn mock_network_source_system() {
+        assert_eq!(MockNetworkCollector.source_system(), "mock");
+    }
 
     #[test]
-    fn mock_network_evidence_types() { assert_eq!(MockNetworkCollector.evidence_types(), &[1002]); }
+    fn mock_network_evidence_types() {
+        assert_eq!(MockNetworkCollector.evidence_types(), &[1002]);
+    }
 
     #[test]
     fn mock_network_credential_requirements_empty() {
@@ -317,7 +369,10 @@ mod tests {
         assert!(ev.raw_data.get("waf_config").is_some());
         assert!(ev.raw_data.get("protected_origins").is_some());
         assert!(ev.raw_data.get("blocked_requests_24h").is_some());
-        assert_eq!(ev.raw_data["waf_config"]["enabled"].as_bool().unwrap(), true);
+        assert_eq!(
+            ev.raw_data["waf_config"]["enabled"].as_bool().unwrap(),
+            true
+        );
     }
 
     #[test]

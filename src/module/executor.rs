@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
-use crate::evidence::{Evidence, ConfidenceLevel};
 use super::{
-    Registry, Authorizer, AutoAuthorizer, EnvironmentScope,
-    safety::{required_auth_level, enforce_scope},
+    safety::{enforce_scope, required_auth_level},
+    Authorizer, AutoAuthorizer, EnvironmentScope, Registry,
 };
+use crate::evidence::{ConfidenceLevel, Evidence};
 
 /// Configuration for executing a tester.
 pub struct TestConfig {
@@ -53,11 +53,7 @@ impl Executor {
     /// 5. Set confidence_level = active_verification
     /// 6. Tag safety classification in metadata
     /// 7. Attach cleanup transcript to evidence
-    pub fn execute_tester(
-        &self,
-        module_id: &str,
-        cfg: &TestConfig,
-    ) -> Result<Vec<Evidence>> {
+    pub fn execute_tester(&self, module_id: &str, cfg: &TestConfig) -> Result<Vec<Evidence>> {
         let tester = self.registry.get_tester(module_id)?;
 
         // Pre-flight: scope enforcement.
@@ -65,7 +61,9 @@ impl Executor {
 
         // Pre-flight: authorization.
         let auth_level = required_auth_level(tester.safety_class());
-        let authorized = cfg.authorizer.authorize(tester.id(), tester.safety_class(), auth_level)?;
+        let authorized =
+            cfg.authorizer
+                .authorize(tester.id(), tester.safety_class(), auth_level)?;
         if !authorized {
             return Err(anyhow!(
                 "authorization denied for tester {:?} (safety: {}, auth level: {})",
@@ -90,9 +88,8 @@ impl Executor {
             .collect();
 
         // Surface test error after cleanup.
-        let mut evidences = test_result.map_err(|e| {
-            anyhow!("test execution failed (cleanup completed): {e}")
-        })?;
+        let mut evidences =
+            test_result.map_err(|e| anyhow!("test execution failed (cleanup completed): {e}"))?;
 
         // Post-process each evidence record.
         let safety_str = tester.safety_class().to_string();
@@ -118,10 +115,10 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
-    use crate::testutil::{MockCollector, MockTester, DenyAuthorizer};
     use crate::evidence::ConfidenceLevel;
     use crate::module::EnvironmentScope;
+    use crate::testutil::{DenyAuthorizer, MockCollector, MockTester};
+    use std::sync::Arc;
 
     fn make_executor() -> (Arc<Registry>, Executor) {
         let reg = Arc::new(Registry::new());
@@ -142,14 +139,18 @@ mod tests {
     #[test]
     fn execute_collector_not_found() {
         let (_, exec) = make_executor();
-        assert!(exec.execute_collector("col.missing", &HashMap::new()).is_err());
+        assert!(exec
+            .execute_collector("col.missing", &HashMap::new())
+            .is_err());
     }
 
     #[test]
     fn execute_collector_module_error_propagated() {
         let (reg, exec) = make_executor();
         reg.register_collector(Arc::new(MockCollector::failing("col.fail")));
-        let err = exec.execute_collector("col.fail", &HashMap::new()).unwrap_err();
+        let err = exec
+            .execute_collector("col.fail", &HashMap::new())
+            .unwrap_err();
         assert!(err.to_string().contains("mock collector failure"));
     }
 

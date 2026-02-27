@@ -2,19 +2,19 @@
 //
 // Public SDK re-exports. Import `ocean::*` to access all core types.
 
-pub mod evidence;
-pub mod module;
-pub mod storage;
-pub mod eval;
-pub mod control;
-pub mod scheduler;
-pub mod secrets;
 pub mod api;
 pub mod config;
+pub mod control;
+pub mod eval;
+pub mod evidence;
+pub mod module;
 pub mod modules;
+pub mod scheduler;
+pub mod secrets;
+pub mod storage;
 
-pub use evidence::{Evidence, ConfidenceLevel, StatusId};
-pub use module::{Module, Collector, Tester, Registry};
+pub use evidence::{ConfidenceLevel, Evidence, StatusId};
+pub use module::{Collector, Module, Registry, Tester};
 
 #[cfg(test)]
 pub mod testutil;

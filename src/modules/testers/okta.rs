@@ -25,11 +25,21 @@ use crate::module::{
 pub struct MfaBypassTester;
 
 impl Module for MfaBypassTester {
-    fn id(&self) -> &str { "okta.mfa_bypass" }
-    fn name(&self) -> &str { "Okta MFA Bypass Tester" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "okta" }
-    fn evidence_types(&self) -> &[i32] { &[1001] }
+    fn id(&self) -> &str {
+        "okta.mfa_bypass"
+    }
+    fn name(&self) -> &str {
+        "Okta MFA Bypass Tester"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "okta"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1001]
+    }
 
     fn credential_requirements(&self) -> Vec<CredentialReq> {
         vec![
@@ -62,8 +72,12 @@ impl Module for MfaBypassTester {
 }
 
 impl Tester for MfaBypassTester {
-    fn safety_class(&self) -> SafetyClassification { SafetyClassification::Safe }
-    fn environment_scope(&self) -> EnvironmentScope { EnvironmentScope::Production }
+    fn safety_class(&self) -> SafetyClassification {
+        SafetyClassification::Safe
+    }
+    fn environment_scope(&self) -> EnvironmentScope {
+        EnvironmentScope::Production
+    }
 
     fn pre_flight_checks(&self) -> Vec<String> {
         vec![
@@ -153,9 +167,7 @@ impl Tester for MfaBypassTester {
         };
 
         // Determine control effectiveness from the response.
-        let (status_id, status_text, bypass_blocked) = if http_status == 401
-            || http_status == 403
-        {
+        let (status_id, status_text, bypass_blocked) = if http_status == 401 || http_status == 403 {
             recorder.record_observation(
                 format!("authentication rejected with HTTP {}", http_status),
                 true,
@@ -178,14 +190,8 @@ impl Tester for MfaBypassTester {
                 true,
             )
         } else if authn_status == "SUCCESS" {
-            recorder.record_observation(
-                "authentication succeeded without MFA challenge",
-                false,
-            );
-            recorder.record_observation(
-                "session token issued without MFA verification",
-                false,
-            );
+            recorder.record_observation("authentication succeeded without MFA challenge", false);
+            recorder.record_observation("session token issued without MFA verification", false);
             (
                 StatusId::Ineffective,
                 "MFA bypass succeeded — authentication completed without MFA".to_string(),
@@ -328,28 +334,44 @@ mod tests {
     // ── Metadata ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn mfa_bypass_id() { assert_eq!(MfaBypassTester.id(), "okta.mfa_bypass"); }
+    fn mfa_bypass_id() {
+        assert_eq!(MfaBypassTester.id(), "okta.mfa_bypass");
+    }
 
     #[test]
-    fn mfa_bypass_name() { assert_eq!(MfaBypassTester.name(), "Okta MFA Bypass Tester"); }
+    fn mfa_bypass_name() {
+        assert_eq!(MfaBypassTester.name(), "Okta MFA Bypass Tester");
+    }
 
     #[test]
-    fn mfa_bypass_version() { assert_eq!(MfaBypassTester.version(), "0.1.0"); }
+    fn mfa_bypass_version() {
+        assert_eq!(MfaBypassTester.version(), "0.1.0");
+    }
 
     #[test]
-    fn mfa_bypass_source_system() { assert_eq!(MfaBypassTester.source_system(), "okta"); }
+    fn mfa_bypass_source_system() {
+        assert_eq!(MfaBypassTester.source_system(), "okta");
+    }
 
     #[test]
-    fn mfa_bypass_evidence_types() { assert_eq!(MfaBypassTester.evidence_types(), &[1001]); }
+    fn mfa_bypass_evidence_types() {
+        assert_eq!(MfaBypassTester.evidence_types(), &[1001]);
+    }
 
     #[test]
     fn mfa_bypass_credential_requirements() {
         let reqs = MfaBypassTester.credential_requirements();
         assert_eq!(reqs.len(), 4);
-        assert!(reqs.iter().any(|r| r.name == "OKTA_API_TOKEN" && r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "OKTA_API_TOKEN" && r.required));
         assert!(reqs.iter().any(|r| r.name == "OKTA_DOMAIN" && r.required));
-        assert!(reqs.iter().any(|r| r.name == "OKTA_TEST_USER" && r.required));
-        assert!(reqs.iter().any(|r| r.name == "OKTA_TEST_PASSWORD" && r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "OKTA_TEST_USER" && r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "OKTA_TEST_PASSWORD" && r.required));
     }
 
     #[test]
@@ -359,7 +381,10 @@ mod tests {
 
     #[test]
     fn mfa_bypass_environment_scope() {
-        assert_eq!(MfaBypassTester.environment_scope(), EnvironmentScope::Production);
+        assert_eq!(
+            MfaBypassTester.environment_scope(),
+            EnvironmentScope::Production
+        );
     }
 
     #[test]
@@ -443,7 +468,10 @@ mod tests {
         let srv = mock_server(200, r#"{"status":"SUCCESS","sessionToken":"tok123"}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        assert!(ev.findings.iter().any(|f| f.title == "MFA Bypass Succeeded"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "MFA Bypass Succeeded"));
         assert_eq!(ev.findings[0].severity_id, 3);
     }
 
@@ -460,7 +488,10 @@ mod tests {
 
     #[test]
     fn http_403_is_effective() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        );
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
     }

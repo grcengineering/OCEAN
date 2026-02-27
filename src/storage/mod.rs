@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::control::ControlStatus;
-use crate::evidence::{Evidence, ConfidenceLevel};
+use crate::evidence::{ConfidenceLevel, Evidence};
 use crate::scheduler::{Schedule, ScheduleRun};
 
 /// Filters for querying evidence records.

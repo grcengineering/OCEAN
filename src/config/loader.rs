@@ -204,7 +204,10 @@ server:
             storage_path: "/db/test.db".to_string(),
             controls_dir: "ctrl".to_string(),
             output_format: "yaml".to_string(),
-            server: ServerConfig { port: 1234, auth_token: "tok".to_string() },
+            server: ServerConfig {
+                port: 1234,
+                auth_token: "tok".to_string(),
+            },
         };
         let yaml = serde_yaml::to_string(&cfg).unwrap();
         let decoded: Config = serde_yaml::from_str(&yaml).unwrap();

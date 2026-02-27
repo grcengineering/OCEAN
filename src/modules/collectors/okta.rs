@@ -50,11 +50,21 @@ fn okta_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16)> {
 pub struct MfaPolicyCollector;
 
 impl Module for MfaPolicyCollector {
-    fn id(&self) -> &str { "okta.mfa_policy" }
-    fn name(&self) -> &str { "Okta MFA Policy Collector" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "okta" }
-    fn evidence_types(&self) -> &[i32] { &[1001] }
+    fn id(&self) -> &str {
+        "okta.mfa_policy"
+    }
+    fn name(&self) -> &str {
+        "Okta MFA Policy Collector"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "okta"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1001]
+    }
 
     fn credential_requirements(&self) -> Vec<CredentialReq> {
         vec![
@@ -291,25 +301,37 @@ mod tests {
     // ── Metadata ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn mfa_policy_id() { assert_eq!(MfaPolicyCollector.id(), "okta.mfa_policy"); }
+    fn mfa_policy_id() {
+        assert_eq!(MfaPolicyCollector.id(), "okta.mfa_policy");
+    }
 
     #[test]
-    fn mfa_policy_name() { assert_eq!(MfaPolicyCollector.name(), "Okta MFA Policy Collector"); }
+    fn mfa_policy_name() {
+        assert_eq!(MfaPolicyCollector.name(), "Okta MFA Policy Collector");
+    }
 
     #[test]
-    fn mfa_policy_version() { assert_eq!(MfaPolicyCollector.version(), "0.1.0"); }
+    fn mfa_policy_version() {
+        assert_eq!(MfaPolicyCollector.version(), "0.1.0");
+    }
 
     #[test]
-    fn mfa_policy_source_system() { assert_eq!(MfaPolicyCollector.source_system(), "okta"); }
+    fn mfa_policy_source_system() {
+        assert_eq!(MfaPolicyCollector.source_system(), "okta");
+    }
 
     #[test]
-    fn mfa_policy_evidence_types() { assert_eq!(MfaPolicyCollector.evidence_types(), &[1001]); }
+    fn mfa_policy_evidence_types() {
+        assert_eq!(MfaPolicyCollector.evidence_types(), &[1001]);
+    }
 
     #[test]
     fn mfa_policy_credential_requirements() {
         let reqs = MfaPolicyCollector.credential_requirements();
         assert_eq!(reqs.len(), 2);
-        assert!(reqs.iter().any(|r| r.name == "OKTA_API_TOKEN" && r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "OKTA_API_TOKEN" && r.required));
         assert!(reqs.iter().any(|r| r.name == "OKTA_DOMAIN" && r.required));
     }
 
@@ -318,9 +340,10 @@ mod tests {
     #[test]
     fn missing_api_token_errors() {
         let err = MfaPolicyCollector
-            .collect(&HashMap::from([
-                ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
-            ]))
+            .collect(&HashMap::from([(
+                "OKTA_DOMAIN".to_string(),
+                "example.okta.com".to_string(),
+            )]))
             .unwrap_err();
         assert!(err.to_string().contains("OKTA_API_TOKEN"));
     }
@@ -328,9 +351,10 @@ mod tests {
     #[test]
     fn missing_domain_errors() {
         let err = MfaPolicyCollector
-            .collect(&HashMap::from([
-                ("OKTA_API_TOKEN".to_string(), "tok".to_string()),
-            ]))
+            .collect(&HashMap::from([(
+                "OKTA_API_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
             .unwrap_err();
         assert!(err.to_string().contains("OKTA_DOMAIN"));
     }
@@ -406,12 +430,18 @@ mod tests {
         let srv = mock_server(200, ACTIVE_NO_REQUIRED_POLICY);
         let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        assert!(ev.findings.iter().any(|f| f.title == "No Required MFA Factors"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "No Required MFA Factors"));
     }
 
     #[test]
     fn api_error_returns_err() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        );
         let result = MfaPolicyCollector.collect(&base_config(&srv));
         assert!(result.is_err());
     }
@@ -422,7 +452,10 @@ mod tests {
         let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
         assert!(ev.raw_data.get("total_policies").is_some());
         assert!(ev.raw_data.get("inactive_policies").is_some());
-        assert!(ev.raw_data.get("policies_without_required_factors").is_some());
+        assert!(ev
+            .raw_data
+            .get("policies_without_required_factors")
+            .is_some());
     }
 
     #[test]

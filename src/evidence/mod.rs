@@ -4,9 +4,9 @@
 // once created and carries enough context to prove what was observed, when,
 // and by which module.
 
-pub mod transcript;
 pub mod observable;
 pub mod redaction;
+pub mod transcript;
 pub mod validator;
 
 use chrono::{DateTime, Utc};
@@ -14,9 +14,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-pub use transcript::{TestTranscript, TranscriptRecorder};
 pub use observable::extract_observables;
-pub use redaction::{RedactionConfig, redact_evidence};
+pub use redaction::{redact_evidence, RedactionConfig};
+pub use transcript::{TestTranscript, TranscriptRecorder};
 
 // ---------------------------------------------------------------------------
 // StatusId
@@ -212,7 +212,12 @@ mod tests {
 
     #[test]
     fn status_id_serde_round_trip() {
-        for s in [StatusId::Unknown, StatusId::Effective, StatusId::Ineffective, StatusId::Other] {
+        for s in [
+            StatusId::Unknown,
+            StatusId::Effective,
+            StatusId::Ineffective,
+            StatusId::Other,
+        ] {
             let json = serde_json::to_string(&s).unwrap();
             let decoded: StatusId = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, s);
@@ -221,7 +226,10 @@ mod tests {
 
     #[test]
     fn confidence_level_serde_round_trip() {
-        for level in [ConfidenceLevel::PassiveObservation, ConfidenceLevel::ActiveVerification] {
+        for level in [
+            ConfidenceLevel::PassiveObservation,
+            ConfidenceLevel::ActiveVerification,
+        ] {
             let json = serde_json::to_string(&level).unwrap();
             let decoded: ConfidenceLevel = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, level);
@@ -249,7 +257,10 @@ mod tests {
 
     #[test]
     fn observable_type_field_renamed_in_json() {
-        let obs = Observable { obs_type: "ip".to_string(), value: "1.2.3.4".to_string() };
+        let obs = Observable {
+            obs_type: "ip".to_string(),
+            value: "1.2.3.4".to_string(),
+        };
         let json = serde_json::to_string(&obs).unwrap();
         assert!(json.contains("\"type\""));
         let decoded: Observable = serde_json::from_str(&json).unwrap();
@@ -288,7 +299,11 @@ mod tests {
 
     #[test]
     fn finding_and_enrichment_serde() {
-        let f = Finding { title: "T".to_string(), description: "D".to_string(), severity_id: 4 };
+        let f = Finding {
+            title: "T".to_string(),
+            description: "D".to_string(),
+            severity_id: 4,
+        };
         let json = serde_json::to_string(&f).unwrap();
         let decoded: Finding = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.severity_id, 4);

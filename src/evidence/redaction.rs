@@ -1,4 +1,4 @@
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 use super::Evidence;
@@ -29,8 +29,16 @@ pub fn redact_evidence(ev: &Evidence, config: &RedactionConfig) -> Evidence {
         redacted.raw_data = serde_json::Value::Null;
     }
 
-    let mask_set: HashSet<&str> = config.mask_observable_types.iter().map(|s| s.as_str()).collect();
-    let hash_set: HashSet<&str> = config.hash_observable_types.iter().map(|s| s.as_str()).collect();
+    let mask_set: HashSet<&str> = config
+        .mask_observable_types
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
+    let hash_set: HashSet<&str> = config
+        .hash_observable_types
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
 
     for obs in &mut redacted.observables {
         if mask_set.contains(obs.obs_type.as_str()) {
@@ -63,8 +71,8 @@ fn hash_value(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evidence::{Observable, Finding};
     use crate::evidence::transcript::TranscriptRecorder;
+    use crate::evidence::{Finding, Observable};
 
     #[test]
     fn noop_config_returns_clone() {
@@ -80,7 +88,10 @@ mod tests {
     #[test]
     fn remove_raw_data() {
         let ev = crate::testutil::make_evidence();
-        let config = RedactionConfig { remove_raw_data: true, ..Default::default() };
+        let config = RedactionConfig {
+            remove_raw_data: true,
+            ..Default::default()
+        };
         let redacted = redact_evidence(&ev, &config);
         assert!(redacted.raw_data.is_null());
     }
@@ -89,8 +100,14 @@ mod tests {
     fn mask_observable_type() {
         let mut ev = crate::testutil::make_evidence();
         ev.observables = vec![
-            Observable { obs_type: "user".to_string(), value: "alice".to_string() },
-            Observable { obs_type: "ip".to_string(), value: "1.2.3.4".to_string() },
+            Observable {
+                obs_type: "user".to_string(),
+                value: "alice".to_string(),
+            },
+            Observable {
+                obs_type: "ip".to_string(),
+                value: "1.2.3.4".to_string(),
+            },
         ];
         let config = RedactionConfig {
             mask_observable_types: vec!["user".to_string()],
@@ -104,9 +121,10 @@ mod tests {
     #[test]
     fn hash_observable_type() {
         let mut ev = crate::testutil::make_evidence();
-        ev.observables = vec![
-            Observable { obs_type: "ip".to_string(), value: "10.0.0.1".to_string() },
-        ];
+        ev.observables = vec![Observable {
+            obs_type: "ip".to_string(),
+            value: "10.0.0.1".to_string(),
+        }];
         let config = RedactionConfig {
             hash_observable_types: vec!["ip".to_string()],
             ..Default::default()
@@ -119,7 +137,11 @@ mod tests {
     #[test]
     fn remove_findings() {
         let mut ev = crate::testutil::make_evidence();
-        ev.findings = vec![Finding { title: "T".to_string(), description: "D".to_string(), severity_id: 1 }];
+        ev.findings = vec![Finding {
+            title: "T".to_string(),
+            description: "D".to_string(),
+            severity_id: 1,
+        }];
         let config = RedactionConfig {
             remove_fields: vec!["findings".to_string()],
             ..Default::default()
@@ -163,7 +185,10 @@ mod tests {
     #[test]
     fn original_not_mutated() {
         let ev = crate::testutil::make_evidence();
-        let config = RedactionConfig { remove_raw_data: true, ..Default::default() };
+        let config = RedactionConfig {
+            remove_raw_data: true,
+            ..Default::default()
+        };
         let _redacted = redact_evidence(&ev, &config);
         assert!(!ev.raw_data.is_null()); // original unchanged
     }

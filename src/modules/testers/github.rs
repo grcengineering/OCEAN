@@ -33,11 +33,21 @@ const TEST_SECRET: &str = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef01";
 pub struct SecretPushTester;
 
 impl Module for SecretPushTester {
-    fn id(&self) -> &str { "github.secret_push" }
-    fn name(&self) -> &str { "GitHub Secret Push Protection Test" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "github" }
-    fn evidence_types(&self) -> &[i32] { &[1003] }
+    fn id(&self) -> &str {
+        "github.secret_push"
+    }
+    fn name(&self) -> &str {
+        "GitHub Secret Push Protection Test"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "github"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1003]
+    }
 
     fn credential_requirements(&self) -> Vec<CredentialReq> {
         vec![
@@ -64,8 +74,12 @@ impl Module for SecretPushTester {
 }
 
 impl Tester for SecretPushTester {
-    fn safety_class(&self) -> SafetyClassification { SafetyClassification::Observable }
-    fn environment_scope(&self) -> EnvironmentScope { EnvironmentScope::Staging }
+    fn safety_class(&self) -> SafetyClassification {
+        SafetyClassification::Observable
+    }
+    fn environment_scope(&self) -> EnvironmentScope {
+        EnvironmentScope::Staging
+    }
 
     fn pre_flight_checks(&self) -> Vec<String> {
         vec![
@@ -351,8 +365,10 @@ mod tests {
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
-        let responses: Vec<(u16, String)> =
-            responses.into_iter().map(|(s, b)| (s, b.to_string())).collect();
+        let responses: Vec<(u16, String)> = responses
+            .into_iter()
+            .map(|(s, b)| (s, b.to_string()))
+            .collect();
 
         thread::spawn(move || {
             for (status, body) in responses {
@@ -389,15 +405,22 @@ mod tests {
     // ── Metadata ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn secret_push_tester_id() { assert_eq!(SecretPushTester.id(), "github.secret_push"); }
-
-    #[test]
-    fn secret_push_tester_name() {
-        assert_eq!(SecretPushTester.name(), "GitHub Secret Push Protection Test");
+    fn secret_push_tester_id() {
+        assert_eq!(SecretPushTester.id(), "github.secret_push");
     }
 
     #[test]
-    fn secret_push_tester_version() { assert_eq!(SecretPushTester.version(), "0.1.0"); }
+    fn secret_push_tester_name() {
+        assert_eq!(
+            SecretPushTester.name(),
+            "GitHub Secret Push Protection Test"
+        );
+    }
+
+    #[test]
+    fn secret_push_tester_version() {
+        assert_eq!(SecretPushTester.version(), "0.1.0");
+    }
 
     #[test]
     fn secret_push_tester_source_system() {
@@ -420,12 +443,18 @@ mod tests {
 
     #[test]
     fn secret_push_tester_safety_class() {
-        assert_eq!(SecretPushTester.safety_class(), SafetyClassification::Observable);
+        assert_eq!(
+            SecretPushTester.safety_class(),
+            SafetyClassification::Observable
+        );
     }
 
     #[test]
     fn secret_push_tester_environment_scope() {
-        assert_eq!(SecretPushTester.environment_scope(), EnvironmentScope::Staging);
+        assert_eq!(
+            SecretPushTester.environment_scope(),
+            EnvironmentScope::Staging
+        );
     }
 
     #[test]
@@ -504,8 +533,18 @@ mod tests {
         let srv = mock_server(vec![(201, CREATED_BODY), (200, DELETE_OK_BODY)]);
         let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        assert!(ev.findings.iter().any(|f| f.title == "Secret Push Not Blocked"));
-        assert_eq!(ev.findings.iter().find(|f| f.title == "Secret Push Not Blocked").unwrap().severity_id, 4);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Secret Push Not Blocked"));
+        assert_eq!(
+            ev.findings
+                .iter()
+                .find(|f| f.title == "Secret Push Not Blocked")
+                .unwrap()
+                .severity_id,
+            4
+        );
     }
 
     #[test]
@@ -521,7 +560,10 @@ mod tests {
         let srv = mock_server(vec![(500, r#"{"message":"Internal Server Error"}"#)]);
         let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
-        assert!(ev.findings.iter().any(|f| f.title == "Unexpected API Response"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Unexpected API Response"));
     }
 
     #[test]

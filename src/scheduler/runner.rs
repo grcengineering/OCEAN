@@ -5,9 +5,8 @@ use uuid::Uuid;
 
 use crate::module::{AutoAuthorizer, EnvironmentScope, Executor, Registry, TestConfig};
 use crate::scheduler::{
-    ModuleRunResult, Schedule, ScheduleRun,
-    RUN_STATUS_FAILURE, RUN_STATUS_PARTIAL_FAILURE, RUN_STATUS_SUCCESS,
-    MODULE_STATUS_FAILURE, MODULE_STATUS_SKIPPED, MODULE_STATUS_SUCCESS,
+    ModuleRunResult, Schedule, ScheduleRun, MODULE_STATUS_FAILURE, MODULE_STATUS_SKIPPED,
+    MODULE_STATUS_SUCCESS, RUN_STATUS_FAILURE, RUN_STATUS_PARTIAL_FAILURE, RUN_STATUS_SUCCESS,
 };
 use crate::storage::Store;
 
@@ -55,14 +54,7 @@ pub fn execute_schedule(
     let mut skip_count = 0usize;
 
     for mod_id in &schedule.modules {
-        let result = run_one_module(
-            mod_id,
-            schedule,
-            &module_config,
-            store,
-            &executor,
-            registry,
-        );
+        let result = run_one_module(mod_id, schedule, &module_config, store, &executor, registry);
         match result.status.as_str() {
             s if s == MODULE_STATUS_SUCCESS => success_count += 1,
             s if s == MODULE_STATUS_FAILURE => fail_count += 1,
@@ -377,8 +369,16 @@ mod tests {
         let run = execute_schedule(&schedule, &store, &registry);
 
         assert_eq!(run.status, RUN_STATUS_PARTIAL_FAILURE);
-        let success = run.module_results.iter().filter(|r| r.status == MODULE_STATUS_SUCCESS).count();
-        let fail = run.module_results.iter().filter(|r| r.status == MODULE_STATUS_FAILURE).count();
+        let success = run
+            .module_results
+            .iter()
+            .filter(|r| r.status == MODULE_STATUS_SUCCESS)
+            .count();
+        let fail = run
+            .module_results
+            .iter()
+            .filter(|r| r.status == MODULE_STATUS_FAILURE)
+            .count();
         assert_eq!(success, 1);
         assert_eq!(fail, 1);
     }

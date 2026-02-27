@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
-use crate::evidence::Evidence;
 use super::Module;
+use crate::evidence::Evidence;
 
 /// Gathers passive evidence from source systems. Collectors are read-only
 /// modules that observe system state without modifying it, producing evidence

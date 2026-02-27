@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::{anyhow, Result};
 
-use super::{Collector, Tester, Module};
+use super::{Collector, Module, Tester};
 
 /// Metadata about a registered module, suitable for CLI listings and API responses.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -33,7 +33,10 @@ impl Registry {
     }
 
     pub fn register_collector(&self, c: Arc<dyn Collector>) {
-        self.collectors.write().unwrap().insert(c.id().to_string(), c);
+        self.collectors
+            .write()
+            .unwrap()
+            .insert(c.id().to_string(), c);
     }
 
     pub fn register_tester(&self, t: Arc<dyn Tester>) {
@@ -210,7 +213,10 @@ mod tests {
     fn list_modules_has_correct_types() {
         let reg = make_registry();
         let modules = reg.list_modules();
-        let col_count = modules.iter().filter(|m| m.module_type == "collector").count();
+        let col_count = modules
+            .iter()
+            .filter(|m| m.module_type == "collector")
+            .count();
         let test_count = modules.iter().filter(|m| m.module_type == "tester").count();
         assert_eq!(col_count, 2);
         assert_eq!(test_count, 1);

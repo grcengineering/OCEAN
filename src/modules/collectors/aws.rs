@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
-use sha2::{Digest, Sha256};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::evidence::{
@@ -94,8 +94,7 @@ fn do_aws_get(
     let mut canonical_headers = format!("host:{}\nx-amz-date:{}\n", host, datetime);
     let mut signed_headers = "host;x-amz-date".to_string();
     if let Some(token) = session_token {
-        canonical_headers
-            .push_str(&format!("x-amz-security-token:{}\n", token));
+        canonical_headers.push_str(&format!("x-amz-security-token:{}\n", token));
         signed_headers = "host;x-amz-date;x-amz-security-token".to_string();
     }
 
@@ -134,8 +133,11 @@ fn do_aws_get(
         req = req.set("x-amz-security-token", token);
     }
 
-    let resp = req.call().map_err(|e| anyhow!("AWS IAM request failed: {}", e))?;
-    resp.into_string().map_err(|e| anyhow!("reading AWS response: {}", e))
+    let resp = req
+        .call()
+        .map_err(|e| anyhow!("AWS IAM request failed: {}", e))?;
+    resp.into_string()
+        .map_err(|e| anyhow!("reading AWS response: {}", e))
 }
 
 // ─── XML parsing helpers ──────────────────────────────────────────────────────
@@ -146,7 +148,9 @@ fn tag_value(line: &str, tag: &str) -> Option<String> {
     let close = format!("</{}>", tag);
     line.find(&open).and_then(|s| {
         let start = s + open.len();
-        line[start..].find(&close).map(|e| line[start..start + e].to_string())
+        line[start..]
+            .find(&close)
+            .map(|e| line[start..start + e].to_string())
     })
 }
 
@@ -173,9 +177,13 @@ fn parse_list_users(xml: &str) -> Vec<IamUser> {
             cur = IamUser::default();
             in_member = false;
         } else if in_member {
-            if let Some(v) = tag_value(line, "UserName") { cur.user_name = v; }
-            else if let Some(v) = tag_value(line, "UserId") { cur.user_id = v; }
-            else if let Some(v) = tag_value(line, "Arn") { cur.arn = v; }
+            if let Some(v) = tag_value(line, "UserName") {
+                cur.user_name = v;
+            } else if let Some(v) = tag_value(line, "UserId") {
+                cur.user_id = v;
+            } else if let Some(v) = tag_value(line, "Arn") {
+                cur.arn = v;
+            }
         }
     }
     users
@@ -210,9 +218,11 @@ fn parse_access_keys(xml: &str, now: DateTime<Utc>) -> Vec<AccessKeyInfo> {
             cur = AccessKeyInfo::default();
             in_member = false;
         } else if in_member {
-            if let Some(v) = tag_value(line, "AccessKeyId") { cur.access_key_id = v; }
-            else if let Some(v) = tag_value(line, "Status") { cur.status = v; }
-            else if let Some(v) = tag_value(line, "CreateDate") {
+            if let Some(v) = tag_value(line, "AccessKeyId") {
+                cur.access_key_id = v;
+            } else if let Some(v) = tag_value(line, "Status") {
+                cur.status = v;
+            } else if let Some(v) = tag_value(line, "CreateDate") {
                 if let Ok(dt) = DateTime::parse_from_rfc3339(&v) {
                     cur.age_days = (now - dt.with_timezone(&Utc)).num_days();
                 }
@@ -232,11 +242,21 @@ fn parse_access_keys(xml: &str, now: DateTime<Utc>) -> Vec<AccessKeyInfo> {
 pub struct IamCollector;
 
 impl Module for IamCollector {
-    fn id(&self) -> &str { "aws.iam" }
-    fn name(&self) -> &str { "AWS IAM Collector" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "aws" }
-    fn evidence_types(&self) -> &[i32] { &[1002] }
+    fn id(&self) -> &str {
+        "aws.iam"
+    }
+    fn name(&self) -> &str {
+        "AWS IAM Collector"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "aws"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1002]
+    }
 
     fn credential_requirements(&self) -> Vec<CredentialReq> {
         vec![
@@ -286,7 +306,12 @@ impl Collector for IamCollector {
 
         // Step 1: List all IAM users.
         let users_xml = do_aws_get(
-            access_key, secret_key, session_token, IAM_REGION, base_url, IAM_SERVICE,
+            access_key,
+            secret_key,
+            session_token,
+            IAM_REGION,
+            base_url,
+            IAM_SERVICE,
             &[("Action", "ListUsers"), ("Version", IAM_API_VERSION)],
         )?;
         let users = parse_list_users(&users_xml);
@@ -304,7 +329,12 @@ impl Collector for IamCollector {
         let mut statuses: Vec<UserStatus> = Vec::new();
         for user in &users {
             let mfa_xml = do_aws_get(
-                access_key, secret_key, session_token, IAM_REGION, base_url, IAM_SERVICE,
+                access_key,
+                secret_key,
+                session_token,
+                IAM_REGION,
+                base_url,
+                IAM_SERVICE,
                 &[
                     ("Action", "ListMFADevices"),
                     ("UserName", &user.user_name),
@@ -314,7 +344,12 @@ impl Collector for IamCollector {
             let mfa_count = count_mfa_devices(&mfa_xml);
 
             let keys_xml = do_aws_get(
-                access_key, secret_key, session_token, IAM_REGION, base_url, IAM_SERVICE,
+                access_key,
+                secret_key,
+                session_token,
+                IAM_REGION,
+                base_url,
+                IAM_SERVICE,
                 &[
                     ("Action", "ListAccessKeys"),
                     ("UserName", &user.user_name),
@@ -340,8 +375,14 @@ impl Collector for IamCollector {
         let mut old_access_keys = 0usize;
 
         for s in &statuses {
-            observables.push(Observable { obs_type: "user".to_string(), value: s.user_name.clone() });
-            observables.push(Observable { obs_type: "resource".to_string(), value: s.arn.clone() });
+            observables.push(Observable {
+                obs_type: "user".to_string(),
+                value: s.user_name.clone(),
+            });
+            observables.push(Observable {
+                obs_type: "resource".to_string(),
+                value: s.arn.clone(),
+            });
 
             if !s.mfa_enabled {
                 users_without_mfa += 1;
@@ -687,36 +728,53 @@ mod tests {
     // ── IamCollector metadata ────────────────────────────────────────────────
 
     #[test]
-    fn iam_collector_id() { assert_eq!(IamCollector.id(), "aws.iam"); }
+    fn iam_collector_id() {
+        assert_eq!(IamCollector.id(), "aws.iam");
+    }
 
     #[test]
-    fn iam_collector_name() { assert_eq!(IamCollector.name(), "AWS IAM Collector"); }
+    fn iam_collector_name() {
+        assert_eq!(IamCollector.name(), "AWS IAM Collector");
+    }
 
     #[test]
-    fn iam_collector_version() { assert_eq!(IamCollector.version(), "0.1.0"); }
+    fn iam_collector_version() {
+        assert_eq!(IamCollector.version(), "0.1.0");
+    }
 
     #[test]
-    fn iam_collector_source_system() { assert_eq!(IamCollector.source_system(), "aws"); }
+    fn iam_collector_source_system() {
+        assert_eq!(IamCollector.source_system(), "aws");
+    }
 
     #[test]
-    fn iam_collector_evidence_types() { assert_eq!(IamCollector.evidence_types(), &[1002]); }
+    fn iam_collector_evidence_types() {
+        assert_eq!(IamCollector.evidence_types(), &[1002]);
+    }
 
     #[test]
     fn iam_collector_credential_requirements() {
         let reqs = IamCollector.credential_requirements();
         assert_eq!(reqs.len(), 4);
-        assert!(reqs.iter().any(|r| r.name == "AWS_ACCESS_KEY_ID" && r.required));
-        assert!(reqs.iter().any(|r| r.name == "AWS_SECRET_ACCESS_KEY" && r.required));
-        assert!(reqs.iter().any(|r| r.name == "AWS_SESSION_TOKEN" && !r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "AWS_ACCESS_KEY_ID" && r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "AWS_SECRET_ACCESS_KEY" && r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "AWS_SESSION_TOKEN" && !r.required));
         assert!(reqs.iter().any(|r| r.name == "AWS_REGION" && !r.required));
     }
 
     #[test]
     fn iam_collector_missing_access_key_errors() {
         let err = IamCollector
-            .collect(&HashMap::from([
-                ("AWS_SECRET_ACCESS_KEY".to_string(), "secret".to_string()),
-            ]))
+            .collect(&HashMap::from([(
+                "AWS_SECRET_ACCESS_KEY".to_string(),
+                "secret".to_string(),
+            )]))
             .unwrap_err();
         assert!(err.to_string().contains("AWS_ACCESS_KEY_ID"));
     }
@@ -724,9 +782,10 @@ mod tests {
     #[test]
     fn iam_collector_missing_secret_key_errors() {
         let err = IamCollector
-            .collect(&HashMap::from([
-                ("AWS_ACCESS_KEY_ID".to_string(), "key".to_string()),
-            ]))
+            .collect(&HashMap::from([(
+                "AWS_ACCESS_KEY_ID".to_string(),
+                "key".to_string(),
+            )]))
             .unwrap_err();
         assert!(err.to_string().contains("AWS_SECRET_ACCESS_KEY"));
     }
@@ -834,9 +893,9 @@ mod tests {
         // alice: MFA + fresh key → ok; bob: no MFA + stale key → bad
         let srv = mock_server(vec![
             TWO_USERS.to_string(),
-            MFA_ONE.to_string(),   // alice mfa
+            MFA_ONE.to_string(),    // alice mfa
             KEYS_FRESH.to_string(), // alice keys
-            MFA_NONE.to_string(),  // bob mfa (none)
+            MFA_NONE.to_string(),   // bob mfa (none)
             KEYS_STALE.to_string(), // bob keys (stale)
         ]);
         let ev = &IamCollector.collect(&base_config(&srv)).unwrap()[0];

@@ -76,7 +76,10 @@ controls:
         let fw = Framework::load_yaml(SOC2_YAML).unwrap();
         assert_eq!(fw.controls[0].ref_id, "CC6.1");
         assert_eq!(fw.controls[0].title, "Logical and Physical Access Controls");
-        assert_eq!(fw.controls[0].ocean_control_ids, vec!["iam.mfa_enforcement"]);
+        assert_eq!(
+            fw.controls[0].ocean_control_ids,
+            vec!["iam.mfa_enforcement"]
+        );
     }
 
     #[test]

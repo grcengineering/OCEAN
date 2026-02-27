@@ -106,8 +106,7 @@ struct FrameworkMappingYaml {
 impl Control {
     /// Load a Control from a YAML string (matches the controls/**/*.yaml file format).
     pub fn load_yaml(yaml: &str) -> Result<Self> {
-        let raw: ControlYaml = serde_yaml::from_str(yaml)
-            .context("parsing control YAML")?;
+        let raw: ControlYaml = serde_yaml::from_str(yaml).context("parsing control YAML")?;
 
         Ok(Control {
             id: raw.id,
@@ -117,7 +116,8 @@ impl Control {
                 cel_expression: raw.evaluation.cel,
                 preset: raw.evaluation.preset,
             },
-            framework_mappings: raw.framework_mappings
+            framework_mappings: raw
+                .framework_mappings
                 .into_iter()
                 .map(|m| FrameworkMapping {
                     framework: m.framework,
@@ -184,7 +184,10 @@ mod tests {
             id: "cc6.1".to_string(),
             name: "MFA Enforcement".to_string(),
             description: "All users must use MFA".to_string(),
-            evaluation_logic: EvaluationLogic { preset: "all_effective".to_string(), cel_expression: String::new() },
+            evaluation_logic: EvaluationLogic {
+                preset: "all_effective".to_string(),
+                cel_expression: String::new(),
+            },
             framework_mappings: vec![FrameworkMapping {
                 framework: "SOC2".to_string(),
                 requirement_id: "CC6.1".to_string(),
@@ -246,14 +249,20 @@ evaluation:
         assert_eq!(ctrl.framework_mappings.len(), 2);
         assert_eq!(ctrl.framework_mappings[0].framework, "soc2");
         assert_eq!(ctrl.framework_mappings[0].requirement_id, "CC6.1");
-        assert_eq!(ctrl.framework_mappings[1].description, "Authentication controls");
+        assert_eq!(
+            ctrl.framework_mappings[1].description,
+            "Authentication controls"
+        );
     }
 
     #[test]
     fn control_load_yaml_parses_cel_expression() {
         let ctrl = Control::load_yaml(CONTROL_YAML).unwrap();
         assert!(ctrl.evaluation_logic.preset.is_empty());
-        assert!(ctrl.evaluation_logic.cel_expression.contains("effective_count"));
+        assert!(ctrl
+            .evaluation_logic
+            .cel_expression
+            .contains("effective_count"));
     }
 
     #[test]

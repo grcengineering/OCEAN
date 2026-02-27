@@ -24,11 +24,21 @@ use crate::module::{
 pub struct S3PublicAccessTester;
 
 impl Module for S3PublicAccessTester {
-    fn id(&self) -> &str { "aws.s3_public_access" }
-    fn name(&self) -> &str { "AWS S3 Public Access Tester" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "aws" }
-    fn evidence_types(&self) -> &[i32] { &[1002] }
+    fn id(&self) -> &str {
+        "aws.s3_public_access"
+    }
+    fn name(&self) -> &str {
+        "AWS S3 Public Access Tester"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "aws"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1002]
+    }
 
     fn credential_requirements(&self) -> Vec<CredentialReq> {
         vec![CredentialReq {
@@ -41,8 +51,12 @@ impl Module for S3PublicAccessTester {
 }
 
 impl Tester for S3PublicAccessTester {
-    fn safety_class(&self) -> SafetyClassification { SafetyClassification::Safe }
-    fn environment_scope(&self) -> EnvironmentScope { EnvironmentScope::Production }
+    fn safety_class(&self) -> SafetyClassification {
+        SafetyClassification::Safe
+    }
+    fn environment_scope(&self) -> EnvironmentScope {
+        EnvironmentScope::Production
+    }
 
     fn pre_flight_checks(&self) -> Vec<String> {
         vec!["verify test bucket URL configured".to_string()]
@@ -53,9 +67,9 @@ impl Tester for S3PublicAccessTester {
     }
 
     fn test(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
-        let bucket_url = config
-            .get("AWS_TEST_BUCKET")
-            .ok_or_else(|| anyhow!("AWS_TEST_BUCKET is required: specify the S3 bucket URL to test"))?;
+        let bucket_url = config.get("AWS_TEST_BUCKET").ok_or_else(|| {
+            anyhow!("AWS_TEST_BUCKET is required: specify the S3 bucket URL to test")
+        })?;
 
         let now = Utc::now();
         let mut recorder = TranscriptRecorder::new();
@@ -84,7 +98,10 @@ impl Tester for S3PublicAccessTester {
                 match code {
                     403 | 404 => {
                         recorder.record_observation(
-                            format!("unauthenticated request returned HTTP {} (access denied)", code),
+                            format!(
+                                "unauthenticated request returned HTTP {} (access denied)",
+                                code
+                            ),
                             true,
                         );
                         recorder.record_cleanup("no cleanup required (safe read-only test)", true);
@@ -152,7 +169,10 @@ impl Tester for S3PublicAccessTester {
                 let code = r.status();
                 if code == 403 || code == 404 {
                     recorder.record_observation(
-                        format!("unauthenticated request returned HTTP {} (access denied)", code),
+                        format!(
+                            "unauthenticated request returned HTTP {} (access denied)",
+                            code
+                        ),
                         true,
                     );
                     recorder.record_cleanup("no cleanup required (safe read-only test)", true);
@@ -213,10 +233,7 @@ impl Tester for S3PublicAccessTester {
                 }
             }
             Err(e) => {
-                recorder.record_observation(
-                    format!("request failed with error: {}", e),
-                    false,
-                );
+                recorder.record_observation(format!("request failed with error: {}", e), false);
                 let transcript = recorder.finalize();
                 let raw = json!({
                     "test_scenario": "s3_public_access_check",
@@ -343,19 +360,29 @@ mod tests {
     // ── Metadata ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn s3_tester_id() { assert_eq!(S3PublicAccessTester.id(), "aws.s3_public_access"); }
+    fn s3_tester_id() {
+        assert_eq!(S3PublicAccessTester.id(), "aws.s3_public_access");
+    }
 
     #[test]
-    fn s3_tester_name() { assert_eq!(S3PublicAccessTester.name(), "AWS S3 Public Access Tester"); }
+    fn s3_tester_name() {
+        assert_eq!(S3PublicAccessTester.name(), "AWS S3 Public Access Tester");
+    }
 
     #[test]
-    fn s3_tester_version() { assert_eq!(S3PublicAccessTester.version(), "0.1.0"); }
+    fn s3_tester_version() {
+        assert_eq!(S3PublicAccessTester.version(), "0.1.0");
+    }
 
     #[test]
-    fn s3_tester_source_system() { assert_eq!(S3PublicAccessTester.source_system(), "aws"); }
+    fn s3_tester_source_system() {
+        assert_eq!(S3PublicAccessTester.source_system(), "aws");
+    }
 
     #[test]
-    fn s3_tester_evidence_types() { assert_eq!(S3PublicAccessTester.evidence_types(), &[1002]); }
+    fn s3_tester_evidence_types() {
+        assert_eq!(S3PublicAccessTester.evidence_types(), &[1002]);
+    }
 
     #[test]
     fn s3_tester_credential_requirements() {
@@ -367,12 +394,18 @@ mod tests {
 
     #[test]
     fn s3_tester_safety_class() {
-        assert_eq!(S3PublicAccessTester.safety_class(), SafetyClassification::Safe);
+        assert_eq!(
+            S3PublicAccessTester.safety_class(),
+            SafetyClassification::Safe
+        );
     }
 
     #[test]
     fn s3_tester_environment_scope() {
-        assert_eq!(S3PublicAccessTester.environment_scope(), EnvironmentScope::Production);
+        assert_eq!(
+            S3PublicAccessTester.environment_scope(),
+            EnvironmentScope::Production
+        );
     }
 
     #[test]
@@ -458,10 +491,7 @@ mod tests {
         let srv = mock_server(403, "Denied");
         let config = HashMap::from([("AWS_TEST_BUCKET".to_string(), srv)]);
         let ev = &S3PublicAccessTester.test(&config).unwrap()[0];
-        assert_eq!(
-            ev.metadata.safety_classification.as_deref(),
-            Some("safe")
-        );
+        assert_eq!(ev.metadata.safety_classification.as_deref(), Some("safe"));
     }
 
     #[test]

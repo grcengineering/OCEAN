@@ -19,7 +19,11 @@ impl OutputFormat {
 }
 
 /// Write serializable data to the given writer in the requested format.
-pub fn print_output<W: Write, T: Serialize>(writer: &mut W, data: &T, format: OutputFormat) -> Result<()> {
+pub fn print_output<W: Write, T: Serialize>(
+    writer: &mut W,
+    data: &T,
+    format: OutputFormat,
+) -> Result<()> {
     match format {
         OutputFormat::Json => {
             let s = serde_json::to_string_pretty(data)?;

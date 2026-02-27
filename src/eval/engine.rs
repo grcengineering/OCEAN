@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
 use cel_interpreter::{Context as CelContext, Program, Value as CelValue};
 
-use crate::control::EvaluationLogic;
-use crate::evidence::{Evidence, StatusId, ConfidenceLevel};
 use super::presets;
+use crate::control::EvaluationLogic;
+use crate::evidence::{ConfidenceLevel, Evidence, StatusId};
 
 /// Evaluates a control's evaluation logic against a slice of evidence.
 ///
@@ -25,7 +25,9 @@ impl CelEngine {
         if !logic.cel_expression.is_empty() {
             return Self::run_cel(&logic.cel_expression, evidence);
         }
-        Err(anyhow!("evaluation logic has neither preset nor cel_expression"))
+        Err(anyhow!(
+            "evaluation logic has neither preset nor cel_expression"
+        ))
     }
 
     fn run_preset(name: &str, evidence: &[Evidence]) -> Result<bool> {
@@ -38,17 +40,26 @@ impl CelEngine {
     }
 
     fn run_cel(expr: &str, evidence: &[Evidence]) -> Result<bool> {
-        let program = Program::compile(expr)
-            .map_err(|e| anyhow!("CEL compile error: {}", e))?;
+        let program = Program::compile(expr).map_err(|e| anyhow!("CEL compile error: {}", e))?;
 
         let mut ctx = CelContext::default();
 
         // Aggregate counts for CEL context variables.
         let total = evidence.len() as i64;
-        let effective = evidence.iter().filter(|e| e.status_id == StatusId::Effective).count() as i64;
-        let ineffective = evidence.iter().filter(|e| e.status_id == StatusId::Ineffective).count() as i64;
-        let unknown = evidence.iter().filter(|e| e.status_id == StatusId::Unknown).count() as i64;
-        let active = evidence.iter()
+        let effective = evidence
+            .iter()
+            .filter(|e| e.status_id == StatusId::Effective)
+            .count() as i64;
+        let ineffective = evidence
+            .iter()
+            .filter(|e| e.status_id == StatusId::Ineffective)
+            .count() as i64;
+        let unknown = evidence
+            .iter()
+            .filter(|e| e.status_id == StatusId::Unknown)
+            .count() as i64;
+        let active = evidence
+            .iter()
             .filter(|e| e.confidence_level == ConfidenceLevel::ActiveVerification)
             .count() as i64;
 
@@ -65,7 +76,8 @@ impl CelEngine {
         ctx.add_variable("has_active", active > 0)
             .map_err(|e| anyhow!("adding has_active: {}", e))?;
 
-        let result = program.execute(&ctx)
+        let result = program
+            .execute(&ctx)
             .map_err(|e| anyhow!("CEL execution error: {}", e))?;
 
         match result {
@@ -78,16 +90,22 @@ impl CelEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::make_evidence;
     use crate::control::definition::EvaluationLogic;
-    use crate::evidence::{StatusId, ConfidenceLevel};
+    use crate::evidence::{ConfidenceLevel, StatusId};
+    use crate::testutil::make_evidence;
 
     fn logic_preset(name: &str) -> EvaluationLogic {
-        EvaluationLogic { preset: name.to_string(), cel_expression: String::new() }
+        EvaluationLogic {
+            preset: name.to_string(),
+            cel_expression: String::new(),
+        }
     }
 
     fn logic_cel(expr: &str) -> EvaluationLogic {
-        EvaluationLogic { cel_expression: expr.to_string(), preset: String::new() }
+        EvaluationLogic {
+            cel_expression: expr.to_string(),
+            preset: String::new(),
+        }
     }
 
     fn logic_empty() -> EvaluationLogic {
@@ -170,7 +188,8 @@ mod tests {
         let result = CelEngine::evaluate(
             &logic_cel("effective_count > 0 && ineffective_count == 0"),
             &ev,
-        ).unwrap();
+        )
+        .unwrap();
         assert!(result);
     }
 
@@ -200,6 +219,8 @@ mod tests {
     #[test]
     fn empty_logic_returns_error() {
         let err = CelEngine::evaluate(&logic_empty(), &[]).unwrap_err();
-        assert!(err.to_string().contains("neither preset nor cel_expression"));
+        assert!(err
+            .to_string()
+            .contains("neither preset nor cel_expression"));
     }
 }

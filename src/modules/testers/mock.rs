@@ -21,17 +21,33 @@ use crate::module::{
 pub struct MockTester;
 
 impl Module for MockTester {
-    fn id(&self) -> &str { "mock.safety_test" }
-    fn name(&self) -> &str { "Mock Safety Test" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "mock" }
-    fn evidence_types(&self) -> &[i32] { &[1001] }
-    fn credential_requirements(&self) -> Vec<CredentialReq> { vec![] }
+    fn id(&self) -> &str {
+        "mock.safety_test"
+    }
+    fn name(&self) -> &str {
+        "Mock Safety Test"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "mock"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1001]
+    }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![]
+    }
 }
 
 impl Tester for MockTester {
-    fn safety_class(&self) -> SafetyClassification { SafetyClassification::Safe }
-    fn environment_scope(&self) -> EnvironmentScope { EnvironmentScope::Production }
+    fn safety_class(&self) -> SafetyClassification {
+        SafetyClassification::Safe
+    }
+    fn environment_scope(&self) -> EnvironmentScope {
+        EnvironmentScope::Production
+    }
 
     fn pre_flight_checks(&self) -> Vec<String> {
         vec!["verify mock target available".to_string()]
@@ -135,19 +151,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mock_tester_id() { assert_eq!(MockTester.id(), "mock.safety_test"); }
+    fn mock_tester_id() {
+        assert_eq!(MockTester.id(), "mock.safety_test");
+    }
 
     #[test]
-    fn mock_tester_name() { assert_eq!(MockTester.name(), "Mock Safety Test"); }
+    fn mock_tester_name() {
+        assert_eq!(MockTester.name(), "Mock Safety Test");
+    }
 
     #[test]
-    fn mock_tester_version() { assert_eq!(MockTester.version(), "0.1.0"); }
+    fn mock_tester_version() {
+        assert_eq!(MockTester.version(), "0.1.0");
+    }
 
     #[test]
-    fn mock_tester_source_system() { assert_eq!(MockTester.source_system(), "mock"); }
+    fn mock_tester_source_system() {
+        assert_eq!(MockTester.source_system(), "mock");
+    }
 
     #[test]
-    fn mock_tester_evidence_types() { assert_eq!(MockTester.evidence_types(), &[1001]); }
+    fn mock_tester_evidence_types() {
+        assert_eq!(MockTester.evidence_types(), &[1001]);
+    }
 
     #[test]
     fn mock_tester_credential_requirements_empty() {
@@ -198,10 +224,7 @@ mod tests {
         assert_eq!(ev.metadata.module.name, "mock.safety_test");
         assert_eq!(ev.metadata.module.module_type, "tester");
         assert_eq!(ev.metadata.source.system, "mock");
-        assert_eq!(
-            ev.metadata.safety_classification.as_deref(),
-            Some("safe")
-        );
+        assert_eq!(ev.metadata.safety_classification.as_deref(), Some("safe"));
     }
 
     #[test]

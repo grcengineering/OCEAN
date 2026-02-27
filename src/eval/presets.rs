@@ -1,4 +1,4 @@
-use crate::evidence::{Evidence, StatusId, ConfidenceLevel};
+use crate::evidence::{ConfidenceLevel, Evidence, StatusId};
 
 /// Returns true when every evidence record is Effective.
 /// Returns false for empty slices (no evidence → cannot confirm).
@@ -23,8 +23,8 @@ pub fn active_verified(evidence: &[Evidence]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::evidence::{ConfidenceLevel, StatusId};
     use crate::testutil::make_evidence;
-    use crate::evidence::{StatusId, ConfidenceLevel};
 
     fn ev_effective() -> Evidence {
         let mut e = make_evidence();

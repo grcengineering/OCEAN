@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::control::ControlStatus;
 use crate::evidence::{
-    ConfidenceLevel, Evidence, Enrichment, Finding, Metadata, Observable, StatusId,
+    ConfidenceLevel, Enrichment, Evidence, Finding, Metadata, Observable, StatusId,
 };
 use crate::scheduler::{ModuleRunResult, Schedule, ScheduleRun};
 use crate::storage::{EvidenceQuery, Store};
@@ -37,14 +37,17 @@ impl SqliteStore {
             "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;",
         )?;
 
-        let store = Self { conn: Mutex::new(conn) };
+        let store = Self {
+            conn: Mutex::new(conn),
+        };
         store.migrate()?;
         Ok(store)
     }
 
     fn migrate(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute_batch(r#"
+        conn.execute_batch(
+            r#"
             CREATE TABLE IF NOT EXISTS evidence (
                 id                   TEXT PRIMARY KEY,
                 control_id           TEXT NOT NULL,
@@ -107,7 +110,8 @@ impl SqliteStore {
             );
             CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule_id ON schedule_runs(schedule_id);
             CREATE INDEX IF NOT EXISTS idx_schedule_runs_started_at  ON schedule_runs(started_at);
-        "#)?;
+        "#,
+        )?;
         Ok(())
     }
 }
@@ -283,7 +287,10 @@ impl Store for SqliteStore {
                ORDER BY timestamp ASC"#,
         )?;
         let rows = stmt
-            .query_map(params![control_id, from.to_rfc3339(), to.to_rfc3339()], scan_control_status)?
+            .query_map(
+                params![control_id, from.to_rfc3339(), to.to_rfc3339()],
+                scan_control_status,
+            )?
             .collect::<rusqlite::Result<Vec<_>>>()
             .context("querying control history")?;
         Ok(rows)
@@ -443,30 +450,42 @@ fn scan_evidence(row: &rusqlite::Row<'_>) -> rusqlite::Result<Evidence> {
     let transcript_json: Option<String> = row.get(13)?;
     let enrichments_json: Option<String> = row.get(14)?;
 
-    let id = Uuid::parse_str(&id_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
-    let time = parse_rfc3339(&timestamp_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?;
+    let id = Uuid::parse_str(&id_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let time = parse_rfc3339(&timestamp_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))
+    })?;
     let confidence_level = match confidence_str.as_str() {
         "active_verification" => ConfidenceLevel::ActiveVerification,
         _ => ConfidenceLevel::PassiveObservation,
     };
-    let metadata: Metadata = serde_json::from_str(&metadata_json)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(e)))?;
-    let observables: Vec<Observable> = serde_json::from_str(&observables_json)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e)))?;
-    let raw_data: serde_json::Value = serde_json::from_str(&raw_data_str)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e)))?;
-    let findings: Vec<Finding> = serde_json::from_str(&findings_json)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(12, rusqlite::types::Type::Text, Box::new(e)))?;
+    let metadata: Metadata = serde_json::from_str(&metadata_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let observables: Vec<Observable> = serde_json::from_str(&observables_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let raw_data: serde_json::Value = serde_json::from_str(&raw_data_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let findings: Vec<Finding> = serde_json::from_str(&findings_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(12, rusqlite::types::Type::Text, Box::new(e))
+    })?;
     let test_transcript = transcript_json
         .as_deref()
         .map(serde_json::from_str)
         .transpose()
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(13, rusqlite::types::Type::Text, Box::new(e)))?;
+        .map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(13, rusqlite::types::Type::Text, Box::new(e))
+        })?;
     let enrichments: Vec<Enrichment> = enrichments_json
         .as_deref()
         .map(serde_json::from_str)
         .transpose()
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(14, rusqlite::types::Type::Text, Box::new(e)))?
+        .map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(14, rusqlite::types::Type::Text, Box::new(e))
+        })?
         .unwrap_or_default();
 
     Ok(Evidence {
@@ -493,10 +512,15 @@ fn scan_control_status(row: &rusqlite::Row<'_>) -> rusqlite::Result<ControlStatu
     let timestamp_str: String = row.get(2)?;
     let evidence_ids_json: String = row.get(5)?;
 
-    let id = Uuid::parse_str(&id_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
-    let timestamp = parse_rfc3339(&timestamp_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e)))?;
-    let evidence_ids: Vec<Uuid> = serde_json::from_str(&evidence_ids_json)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?;
+    let id = Uuid::parse_str(&id_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let timestamp = parse_rfc3339(&timestamp_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let evidence_ids: Vec<Uuid> = serde_json::from_str(&evidence_ids_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))
+    })?;
 
     Ok(ControlStatus {
         id,
@@ -518,14 +542,29 @@ fn scan_schedule(row: &rusqlite::Row<'_>) -> rusqlite::Result<Schedule> {
     let created_str: String = row.get(10)?;
     let updated_str: String = row.get(11)?;
 
-    let modules: Vec<String> = serde_json::from_str(&modules_json)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e)))?;
-    let created_at = parse_rfc3339(&created_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(10, rusqlite::types::Type::Text, Box::new(e)))?;
-    let updated_at = parse_rfc3339(&updated_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e)))?;
-    let last_run = last_run_str.as_deref().map(parse_rfc3339).transpose()
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e)))?;
-    let next_run = next_run_str.as_deref().map(parse_rfc3339).transpose()
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(e)))?;
+    let modules: Vec<String> = serde_json::from_str(&modules_json).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let created_at = parse_rfc3339(&created_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(10, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let updated_at = parse_rfc3339(&updated_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let last_run = last_run_str
+        .as_deref()
+        .map(parse_rfc3339)
+        .transpose()
+        .map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
+        })?;
+    let next_run = next_run_str
+        .as_deref()
+        .map(parse_rfc3339)
+        .transpose()
+        .map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
     Ok(Schedule {
         id: row.get(0)?,
@@ -548,10 +587,16 @@ fn scan_schedule_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScheduleRun> {
     let completed_str: String = row.get(3)?;
     let results_json: String = row.get(5)?;
 
-    let started_at = parse_rfc3339(&started_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e)))?;
-    let completed_at = parse_rfc3339(&completed_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e)))?;
-    let module_results: Vec<ModuleRunResult> = serde_json::from_str(&results_json)
-        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?;
+    let started_at = parse_rfc3339(&started_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let completed_at = parse_rfc3339(&completed_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let module_results: Vec<ModuleRunResult> =
+        serde_json::from_str(&results_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
     Ok(ScheduleRun {
         id: row.get(0)?,
@@ -567,7 +612,7 @@ fn scan_schedule_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScheduleRun> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scheduler::types::{RUN_STATUS_SUCCESS, MODULE_STATUS_SUCCESS};
+    use crate::scheduler::types::{MODULE_STATUS_SUCCESS, RUN_STATUS_SUCCESS};
     use crate::storage::{EvidenceQuery, Store};
     use chrono::Duration;
     use tempfile::TempDir;
@@ -708,7 +753,10 @@ mod tests {
         let id = ev.id;
         store.store_evidence(&ev).unwrap();
         let retrieved = store.get_evidence(id).unwrap();
-        assert_eq!(retrieved.confidence_level, ConfidenceLevel::ActiveVerification);
+        assert_eq!(
+            retrieved.confidence_level,
+            ConfidenceLevel::ActiveVerification
+        );
     }
 
     // --- query_evidence ---
@@ -733,7 +781,10 @@ mod tests {
         store.store_evidence(&ev1).unwrap();
         store.store_evidence(&ev2).unwrap();
 
-        let q = EvidenceQuery { control_id: Some("cc6.1".to_string()), ..Default::default() };
+        let q = EvidenceQuery {
+            control_id: Some("cc6.1".to_string()),
+            ..Default::default()
+        };
         let results = store.query_evidence(&q).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].control_id, "cc6.1");
@@ -743,7 +794,10 @@ mod tests {
     fn query_by_source() {
         let (store, _dir) = open_store();
         store.store_evidence(&make_evidence()).unwrap();
-        let q = EvidenceQuery { source: Some("mock".to_string()), ..Default::default() };
+        let q = EvidenceQuery {
+            source: Some("mock".to_string()),
+            ..Default::default()
+        };
         let results = store.query_evidence(&q).unwrap();
         assert_eq!(results.len(), 1);
     }
@@ -756,7 +810,11 @@ mod tests {
 
         let from = Utc::now() - Duration::hours(1);
         let to = Utc::now() + Duration::hours(1);
-        let q = EvidenceQuery { from_time: Some(from), to_time: Some(to), ..Default::default() };
+        let q = EvidenceQuery {
+            from_time: Some(from),
+            to_time: Some(to),
+            ..Default::default()
+        };
         let results = store.query_evidence(&q).unwrap();
         assert_eq!(results.len(), 1);
     }
@@ -767,7 +825,10 @@ mod tests {
         for _ in 0..5 {
             store.store_evidence(&make_evidence()).unwrap();
         }
-        let q = EvidenceQuery { limit: Some(2), ..Default::default() };
+        let q = EvidenceQuery {
+            limit: Some(2),
+            ..Default::default()
+        };
         let results = store.query_evidence(&q).unwrap();
         assert_eq!(results.len(), 2);
     }
@@ -935,8 +996,12 @@ mod tests {
     fn store_and_list_schedule_runs() {
         let (store, _dir) = open_store();
         store.store_schedule(&make_schedule("sched-1")).unwrap();
-        store.store_schedule_run(&make_schedule_run("sched-1", "run-1")).unwrap();
-        store.store_schedule_run(&make_schedule_run("sched-1", "run-2")).unwrap();
+        store
+            .store_schedule_run(&make_schedule_run("sched-1", "run-1"))
+            .unwrap();
+        store
+            .store_schedule_run(&make_schedule_run("sched-1", "run-2"))
+            .unwrap();
         let runs = store.list_schedule_runs("sched-1", 10).unwrap();
         assert_eq!(runs.len(), 2);
     }
@@ -946,7 +1011,9 @@ mod tests {
         let (store, _dir) = open_store();
         store.store_schedule(&make_schedule("sched-2")).unwrap();
         for i in 0..5 {
-            store.store_schedule_run(&make_schedule_run("sched-2", &format!("run-{i}"))).unwrap();
+            store
+                .store_schedule_run(&make_schedule_run("sched-2", &format!("run-{i}")))
+                .unwrap();
         }
         let runs = store.list_schedule_runs("sched-2", 3).unwrap();
         assert_eq!(runs.len(), 3);
@@ -964,7 +1031,9 @@ mod tests {
     fn schedule_run_cascade_delete() {
         let (store, _dir) = open_store();
         store.store_schedule(&make_schedule("sched-del")).unwrap();
-        store.store_schedule_run(&make_schedule_run("sched-del", "run-del")).unwrap();
+        store
+            .store_schedule_run(&make_schedule_run("sched-del", "run-del"))
+            .unwrap();
         store.delete_schedule("sched-del").unwrap();
         // After cascade delete, runs should be gone
         let runs = store.list_schedule_runs("sched-del", 10).unwrap();

@@ -24,7 +24,11 @@ use output::{print_output, OutputFormat};
 
 /// Open Control Evidence Acquisition Normalizer — "Metasploit for GRC"
 #[derive(Parser)]
-#[command(name = "ocean", version, about = "Open Control Evidence Acquisition Normalizer")]
+#[command(
+    name = "ocean",
+    version,
+    about = "Open Control Evidence Acquisition Normalizer"
+)]
 pub struct Cli {
     /// Path to the SQLite evidence database.
     #[arg(long, env = "OCEAN_DB", global = true, default_value = "")]
@@ -224,19 +228,35 @@ pub fn run() -> Result<()> {
         Commands::Collect { module, no_store } => {
             cmd_collect(&mut out, format, &cli.db, &module, !no_store)
         }
-        Commands::Test { module, target, no_store } => {
-            cmd_test(&mut out, format, &cli.db, &module, &target, !no_store)
-        }
+        Commands::Test {
+            module,
+            target,
+            no_store,
+        } => cmd_test(&mut out, format, &cli.db, &module, &target, !no_store),
         Commands::Modules { cmd } => match cmd {
             ModulesCmd::List { module_type } => {
                 cmd_modules_list(&mut out, format, module_type.as_deref())
             }
             ModulesCmd::Validate { id } => cmd_modules_validate(&mut out, format, &id),
         },
-        Commands::Evaluate { control, cel, controls_dir } => {
-            cmd_evaluate(&mut out, format, &cli.db, &control, cel.as_deref(), &controls_dir)
-        }
-        Commands::History { control, days, from, to } => cmd_history(
+        Commands::Evaluate {
+            control,
+            cel,
+            controls_dir,
+        } => cmd_evaluate(
+            &mut out,
+            format,
+            &cli.db,
+            &control,
+            cel.as_deref(),
+            &controls_dir,
+        ),
+        Commands::History {
+            control,
+            days,
+            from,
+            to,
+        } => cmd_history(
             &mut out,
             format,
             &cli.db,
@@ -245,9 +265,11 @@ pub fn run() -> Result<()> {
             from.as_deref(),
             to.as_deref(),
         ),
-        Commands::Report { period, format: rep_fmt, control } => {
-            cmd_report(&mut out, &cli.db, &period, &rep_fmt, control.as_deref())
-        }
+        Commands::Report {
+            period,
+            format: rep_fmt,
+            control,
+        } => cmd_report(&mut out, &cli.db, &period, &rep_fmt, control.as_deref()),
         Commands::Schedule { cmd } => match cmd {
             ScheduleCmd::Add {
                 control,
@@ -336,7 +358,11 @@ fn parse_date(s: &str) -> Result<DateTime<Utc>> {
     Ok(nd.and_hms_opt(0, 0, 0).unwrap().and_utc())
 }
 
-fn load_control(control_id: &str, controls_dir: &str, cel_override: Option<&str>) -> Result<Control> {
+fn load_control(
+    control_id: &str,
+    controls_dir: &str,
+    cel_override: Option<&str>,
+) -> Result<Control> {
     // Support both flat (controls/mock.mfa_enforcement.yaml) and
     // namespaced (controls/mock/mfa_enforcement.yaml) layouts.
     let slash_id = control_id.replacen('.', "/", 1);
@@ -461,11 +487,7 @@ fn cmd_modules_list<W: Write>(
     print_output(out, &modules, format)
 }
 
-fn cmd_modules_validate<W: Write>(
-    out: &mut W,
-    format: OutputFormat,
-    id: &str,
-) -> Result<()> {
+fn cmd_modules_validate<W: Write>(out: &mut W, format: OutputFormat, id: &str) -> Result<()> {
     let registry = build_registry();
     let info = registry
         .list_modules()
@@ -663,11 +685,7 @@ fn cmd_schedule_add<W: Write>(
     print_output(out, &schedule, format)
 }
 
-fn cmd_schedule_list<W: Write>(
-    out: &mut W,
-    format: OutputFormat,
-    db: &str,
-) -> Result<()> {
+fn cmd_schedule_list<W: Write>(out: &mut W, format: OutputFormat, db: &str) -> Result<()> {
     let db_store = open_store(db)?;
     let schedules = db_store.list_schedules()?;
     print_output(out, &schedules, format)
@@ -723,7 +741,11 @@ mod tests {
     #[test]
     fn resolve_db_path_empty_uses_default() {
         let path = resolve_db_path("");
-        assert!(path.ends_with("/.ocean/evidence.db") || path.ends_with("\\.ocean\\evidence.db") || path.ends_with("/.ocean/evidence.db"));
+        assert!(
+            path.ends_with("/.ocean/evidence.db")
+                || path.ends_with("\\.ocean\\evidence.db")
+                || path.ends_with("/.ocean/evidence.db")
+        );
         assert!(path.contains(".ocean"));
     }
 
@@ -731,20 +753,38 @@ mod tests {
 
     #[test]
     fn parse_env_scope_production() {
-        assert!(matches!(parse_env_scope("production"), Ok(EnvironmentScope::Production)));
-        assert!(matches!(parse_env_scope("prod"), Ok(EnvironmentScope::Production)));
+        assert!(matches!(
+            parse_env_scope("production"),
+            Ok(EnvironmentScope::Production)
+        ));
+        assert!(matches!(
+            parse_env_scope("prod"),
+            Ok(EnvironmentScope::Production)
+        ));
     }
 
     #[test]
     fn parse_env_scope_staging() {
-        assert!(matches!(parse_env_scope("staging"), Ok(EnvironmentScope::Staging)));
-        assert!(matches!(parse_env_scope("stage"), Ok(EnvironmentScope::Staging)));
+        assert!(matches!(
+            parse_env_scope("staging"),
+            Ok(EnvironmentScope::Staging)
+        ));
+        assert!(matches!(
+            parse_env_scope("stage"),
+            Ok(EnvironmentScope::Staging)
+        ));
     }
 
     #[test]
     fn parse_env_scope_isolated() {
-        assert!(matches!(parse_env_scope("isolated"), Ok(EnvironmentScope::Isolated)));
-        assert!(matches!(parse_env_scope("lab"), Ok(EnvironmentScope::Isolated)));
+        assert!(matches!(
+            parse_env_scope("isolated"),
+            Ok(EnvironmentScope::Isolated)
+        ));
+        assert!(matches!(
+            parse_env_scope("lab"),
+            Ok(EnvironmentScope::Isolated)
+        ));
     }
 
     #[test]
@@ -847,7 +887,8 @@ mod tests {
     #[test]
     fn cmd_modules_validate_unknown_module() {
         let mut buf = Vec::new();
-        let err = cmd_modules_validate(&mut buf, OutputFormat::Json, "nonexistent.module").unwrap_err();
+        let err =
+            cmd_modules_validate(&mut buf, OutputFormat::Json, "nonexistent.module").unwrap_err();
         assert!(err.to_string().contains("module not found"));
     }
 
@@ -885,7 +926,10 @@ evaluation_logic:
         let dir_str = dir.to_str().unwrap();
 
         let control = load_control("test_ctrl", dir_str, Some("evidence.size() > 0")).unwrap();
-        assert_eq!(control.evaluation_logic.cel_expression, "evidence.size() > 0");
+        assert_eq!(
+            control.evaluation_logic.cel_expression,
+            "evidence.size() > 0"
+        );
         assert!(control.evaluation_logic.preset.is_empty());
 
         let _ = std::fs::remove_file(ctrl_path);
@@ -914,7 +958,14 @@ evaluation_logic:
     #[test]
     fn cmd_test_mock_no_store() {
         let mut buf = Vec::new();
-        let result = cmd_test(&mut buf, OutputFormat::Json, "", "mock.safety_test", "production", false);
+        let result = cmd_test(
+            &mut buf,
+            OutputFormat::Json,
+            "",
+            "mock.safety_test",
+            "production",
+            false,
+        );
         assert!(result.is_ok(), "test failed: {:?}", result);
         let s = String::from_utf8(buf).unwrap();
         let ev: serde_json::Value = serde_json::from_str(&s).unwrap();
@@ -924,7 +975,15 @@ evaluation_logic:
     #[test]
     fn cmd_test_invalid_target() {
         let mut buf = Vec::new();
-        let err = cmd_test(&mut buf, OutputFormat::Json, "", "mock.safety_test", "invalid_env", false).unwrap_err();
+        let err = cmd_test(
+            &mut buf,
+            OutputFormat::Json,
+            "",
+            "mock.safety_test",
+            "invalid_env",
+            false,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("unknown environment scope"));
     }
 
@@ -952,7 +1011,15 @@ evaluation_logic:
             .unwrap()
             .to_string();
         let mut buf = Vec::new();
-        let result = cmd_history(&mut buf, OutputFormat::Json, &db_path, "cc6.1", 7, None, None);
+        let result = cmd_history(
+            &mut buf,
+            OutputFormat::Json,
+            &db_path,
+            "cc6.1",
+            7,
+            None,
+            None,
+        );
         assert!(result.is_ok());
         let s = String::from_utf8(buf).unwrap();
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
@@ -1086,7 +1153,14 @@ evaluation_logic:
             .unwrap()
             .to_string();
         let mut buf = Vec::new();
-        cmd_report(&mut buf, &db_path, "2024-01-01:2024-12-31", "markdown", None).unwrap();
+        cmd_report(
+            &mut buf,
+            &db_path,
+            "2024-01-01:2024-12-31",
+            "markdown",
+            None,
+        )
+        .unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("# OCEAN Compliance Report"));
         assert!(s.contains("**Period:**"));

@@ -19,11 +19,7 @@ const GITHUB_API_VERSION: &str = "2022-11-28";
 
 /// Performs an authenticated GET to the GitHub REST API v3.
 /// `base_url` is `https://api.github.com` by default; tests override it.
-fn github_get(
-    token: &str,
-    base_url: &str,
-    path: &str,
-) -> Result<(Value, u16)> {
+fn github_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16)> {
     let url = format!("{}{}", base_url.trim_end_matches('/'), path);
     let resp = ureq::get(&url)
         .set("Accept", "application/vnd.github+json")
@@ -60,11 +56,21 @@ fn github_get(
 pub struct BranchProtectionCollector;
 
 impl Module for BranchProtectionCollector {
-    fn id(&self) -> &str { "github.branch_protection" }
-    fn name(&self) -> &str { "GitHub Branch Protection Collector" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "github" }
-    fn evidence_types(&self) -> &[i32] { &[1003] }
+    fn id(&self) -> &str {
+        "github.branch_protection"
+    }
+    fn name(&self) -> &str {
+        "GitHub Branch Protection Collector"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "github"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1003]
+    }
 
     fn credential_requirements(&self) -> Vec<CredentialReq> {
         vec![
@@ -117,10 +123,7 @@ impl Collector for BranchProtectionCollector {
             .unwrap_or(DEFAULT_GITHUB_API);
 
         let now = Utc::now();
-        let path = format!(
-            "/repos/{}/{}/branches/{}/protection",
-            owner, repo, branch
-        );
+        let path = format!("/repos/{}/{}/branches/{}/protection", owner, repo, branch);
         let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
@@ -202,23 +205,30 @@ impl Collector for BranchProtectionCollector {
             status_id = StatusId::Ineffective;
         } else {
             let reviews = &body["required_pull_request_reviews"];
-            if reviews.get("required_approving_review_count")
+            if reviews
+                .get("required_approving_review_count")
                 .and_then(|v| v.as_i64())
-                .unwrap_or(0) < 1
+                .unwrap_or(0)
+                < 1
             {
                 findings.push(Finding {
                     title: "No Minimum Review Count".to_string(),
-                    description: "Pull request reviews configured but no minimum approving review count set.".to_string(),
+                    description:
+                        "Pull request reviews configured but no minimum approving review count set."
+                            .to_string(),
                     severity_id: 2,
                 });
             }
-            if !reviews.get("dismiss_stale_reviews")
+            if !reviews
+                .get("dismiss_stale_reviews")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false)
             {
                 findings.push(Finding {
                     title: "Stale Reviews Not Dismissed".to_string(),
-                    description: "Stale pull request reviews are not dismissed when new commits are pushed.".to_string(),
+                    description:
+                        "Stale pull request reviews are not dismissed when new commits are pushed."
+                            .to_string(),
                     severity_id: 2,
                 });
             }
@@ -234,48 +244,56 @@ impl Collector for BranchProtectionCollector {
             status_id = StatusId::Ineffective;
         } else {
             let checks = &body["required_status_checks"];
-            if checks.get("contexts")
+            if checks
+                .get("contexts")
                 .and_then(|v| v.as_array())
                 .map(|a| a.is_empty())
                 .unwrap_or(true)
             {
                 findings.push(Finding {
                     title: "No Status Check Contexts Defined".to_string(),
-                    description: "Status checks required but no specific contexts configured.".to_string(),
+                    description: "Status checks required but no specific contexts configured."
+                        .to_string(),
                     severity_id: 2,
                 });
             }
         }
 
         // Admin enforcement.
-        if !body.get("enforce_admins")
+        if !body
+            .get("enforce_admins")
             .and_then(|v| v.get("enabled"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
         {
             findings.push(Finding {
                 title: "Admin Enforcement Disabled".to_string(),
-                description: "Branch protection rules are not enforced for repository administrators.".to_string(),
+                description:
+                    "Branch protection rules are not enforced for repository administrators."
+                        .to_string(),
                 severity_id: 2,
             });
         }
 
         // Force pushes.
-        if body.get("allow_force_pushes")
+        if body
+            .get("allow_force_pushes")
             .and_then(|v| v.get("enabled"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
         {
             findings.push(Finding {
                 title: "Force Pushes Allowed".to_string(),
-                description: "Force pushes are allowed, enabling rewrite of commit history.".to_string(),
+                description: "Force pushes are allowed, enabling rewrite of commit history."
+                    .to_string(),
                 severity_id: 3,
             });
             status_id = StatusId::Ineffective;
         }
 
         // Branch deletion.
-        if body.get("allow_deletions")
+        if body
+            .get("allow_deletions")
             .and_then(|v| v.get("enabled"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
@@ -403,11 +421,16 @@ mod tests {
 
     #[test]
     fn bp_collector_name() {
-        assert_eq!(BranchProtectionCollector.name(), "GitHub Branch Protection Collector");
+        assert_eq!(
+            BranchProtectionCollector.name(),
+            "GitHub Branch Protection Collector"
+        );
     }
 
     #[test]
-    fn bp_collector_version() { assert_eq!(BranchProtectionCollector.version(), "0.1.0"); }
+    fn bp_collector_version() {
+        assert_eq!(BranchProtectionCollector.version(), "0.1.0");
+    }
 
     #[test]
     fn bp_collector_source_system() {
@@ -426,7 +449,9 @@ mod tests {
         assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
         assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
         assert!(reqs.iter().any(|r| r.name == "GITHUB_REPO" && r.required));
-        assert!(reqs.iter().any(|r| r.name == "GITHUB_BRANCH" && !r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "GITHUB_BRANCH" && !r.required));
     }
 
     // ── Config validation ────────────────────────────────────────────────────
@@ -500,7 +525,9 @@ mod tests {
     #[test]
     fn bp_collector_404_means_protection_disabled() {
         let srv = mock_server(404, r#"{"message":"Branch not protected"}"#);
-        let ev = &BranchProtectionCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &BranchProtectionCollector
+            .collect(&base_config(&srv))
+            .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert_eq!(ev.findings[0].title, "Branch Protection Disabled");
         assert_eq!(ev.control_id, "scm.branch_protection");
@@ -509,9 +536,14 @@ mod tests {
     #[test]
     fn bp_collector_full_protection_is_effective() {
         let srv = mock_server(200, FULL_PROTECTION);
-        let ev = &BranchProtectionCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &BranchProtectionCollector
+            .collect(&base_config(&srv))
+            .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
-        assert_eq!(ev.findings[0].title, "Branch Protection Properly Configured");
+        assert_eq!(
+            ev.findings[0].title,
+            "Branch Protection Properly Configured"
+        );
         assert_eq!(ev.class_uid, 1003);
         assert_eq!(ev.observables.len(), 2);
     }
@@ -519,17 +551,27 @@ mod tests {
     #[test]
     fn bp_collector_no_pr_reviews_is_ineffective() {
         let srv = mock_server(200, NO_PR_REVIEWS);
-        let ev = &BranchProtectionCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &BranchProtectionCollector
+            .collect(&base_config(&srv))
+            .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        assert!(ev.findings.iter().any(|f| f.title == "Pull Request Reviews Not Required"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Pull Request Reviews Not Required"));
     }
 
     #[test]
     fn bp_collector_force_pushes_enabled_is_ineffective() {
         let srv = mock_server(200, FORCE_PUSHES_ON);
-        let ev = &BranchProtectionCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &BranchProtectionCollector
+            .collect(&base_config(&srv))
+            .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        assert!(ev.findings.iter().any(|f| f.title == "Force Pushes Allowed"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Force Pushes Allowed"));
     }
 
     #[test]
@@ -571,8 +613,13 @@ mod tests {
             "enforce_admins": { "enabled": true }
         }"#;
         let srv = mock_server(200, body);
-        let ev = &BranchProtectionCollector.collect(&base_config(&srv)).unwrap()[0];
-        assert!(ev.findings.iter().any(|f| f.title == "Stale Reviews Not Dismissed"));
+        let ev = &BranchProtectionCollector
+            .collect(&base_config(&srv))
+            .unwrap()[0];
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Stale Reviews Not Dismissed"));
     }
 
     #[test]
@@ -586,7 +633,12 @@ mod tests {
             "enforce_admins": { "enabled": true }
         }"#;
         let srv = mock_server(200, body);
-        let ev = &BranchProtectionCollector.collect(&base_config(&srv)).unwrap()[0];
-        assert!(ev.findings.iter().any(|f| f.title == "No Status Check Contexts Defined"));
+        let ev = &BranchProtectionCollector
+            .collect(&base_config(&srv))
+            .unwrap()[0];
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "No Status Check Contexts Defined"));
     }
 }

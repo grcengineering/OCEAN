@@ -11,7 +11,10 @@ pub fn validate_collector(c: &dyn Collector) -> Result<()> {
         return Err(anyhow!("collector name must not be empty (id: {})", c.id()));
     }
     if c.source_system().is_empty() {
-        return Err(anyhow!("collector source_system must not be empty (id: {})", c.id()));
+        return Err(anyhow!(
+            "collector source_system must not be empty (id: {})",
+            c.id()
+        ));
     }
     Ok(())
 }
@@ -25,7 +28,10 @@ pub fn validate_tester(t: &dyn Tester) -> Result<()> {
         return Err(anyhow!("tester name must not be empty (id: {})", t.id()));
     }
     if t.source_system().is_empty() {
-        return Err(anyhow!("tester source_system must not be empty (id: {})", t.id()));
+        return Err(anyhow!(
+            "tester source_system must not be empty (id: {})",
+            t.id()
+        ));
     }
     Ok(())
 }
@@ -81,14 +87,22 @@ mod tests {
 
     #[test]
     fn tester_empty_name_fails() {
-        let t = TesterBadMeta { id: "t.bad", name: "", source: "mock" };
+        let t = TesterBadMeta {
+            id: "t.bad",
+            name: "",
+            source: "mock",
+        };
         let err = validate_tester(&t).unwrap_err();
         assert!(err.to_string().contains("name must not be empty"));
     }
 
     #[test]
     fn tester_empty_source_system_fails() {
-        let t = TesterBadMeta { id: "t.nosrc", name: "Bad", source: "" };
+        let t = TesterBadMeta {
+            id: "t.nosrc",
+            name: "Bad",
+            source: "",
+        };
         let err = validate_tester(&t).unwrap_err();
         assert!(err.to_string().contains("source_system must not be empty"));
     }

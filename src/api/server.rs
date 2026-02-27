@@ -2,10 +2,10 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
+use super::handlers::{router, AppState};
 use crate::module::Registry;
 use crate::modules::{register_all_collectors, register_all_testers};
 use crate::storage::SqliteStore;
-use super::handlers::{AppState, router};
 
 /// Start the OCEAN REST API server.
 ///

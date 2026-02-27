@@ -1,17 +1,19 @@
 // Module system — pluggable collectors and testers.
 
 pub mod collector;
-pub mod tester;
+pub mod executor;
 pub mod registry;
 pub mod safety;
-pub mod executor;
+pub mod tester;
 pub mod validation;
 
 pub use collector::Collector;
-pub use tester::Tester;
-pub use registry::{Registry, ModuleInfo};
-pub use safety::{SafetyClassification, EnvironmentScope, AuthorizationLevel, Authorizer, AutoAuthorizer};
 pub use executor::{Executor, TestConfig};
+pub use registry::{ModuleInfo, Registry};
+pub use safety::{
+    AuthorizationLevel, Authorizer, AutoAuthorizer, EnvironmentScope, SafetyClassification,
+};
+pub use tester::Tester;
 
 use serde::{Deserialize, Serialize};
 

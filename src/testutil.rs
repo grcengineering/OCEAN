@@ -79,36 +79,73 @@ pub struct MockCollector {
 
 impl MockCollector {
     pub fn new(id: &'static str) -> Self {
-        Self { id, name: "Mock Collector", source: "mock", fail: false }
+        Self {
+            id,
+            name: "Mock Collector",
+            source: "mock",
+            fail: false,
+        }
     }
 
     pub fn failing(id: &'static str) -> Self {
-        Self { id, name: "Mock Collector", source: "mock", fail: true }
+        Self {
+            id,
+            name: "Mock Collector",
+            source: "mock",
+            fail: true,
+        }
     }
 
     /// Collector with empty id — used to test validation.
     pub fn empty_id() -> Self {
-        Self { id: "", name: "Bad Collector", source: "mock", fail: false }
+        Self {
+            id: "",
+            name: "Bad Collector",
+            source: "mock",
+            fail: false,
+        }
     }
 
     /// Collector with empty name — used to test validation.
     pub fn empty_name(id: &'static str) -> Self {
-        Self { id, name: "", source: "mock", fail: false }
+        Self {
+            id,
+            name: "",
+            source: "mock",
+            fail: false,
+        }
     }
 
     /// Collector with empty source_system — used to test validation.
     pub fn empty_source(id: &'static str) -> Self {
-        Self { id, name: "Bad Collector", source: "", fail: false }
+        Self {
+            id,
+            name: "Bad Collector",
+            source: "",
+            fail: false,
+        }
     }
 }
 
 impl Module for MockCollector {
-    fn id(&self) -> &str { self.id }
-    fn name(&self) -> &str { self.name }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { self.source }
-    fn evidence_types(&self) -> &[i32] { &[1001] }
-    fn credential_requirements(&self) -> Vec<CredentialReq> { vec![] }
+    fn id(&self) -> &str {
+        self.id
+    }
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        self.source
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1001]
+    }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![]
+    }
 }
 
 impl Collector for MockCollector {
@@ -134,50 +171,105 @@ pub struct MockTester {
 
 impl MockTester {
     pub fn safe(id: &'static str) -> Self {
-        Self { id, safety: SafetyClassification::Safe, scope: EnvironmentScope::Production, fail: false }
+        Self {
+            id,
+            safety: SafetyClassification::Safe,
+            scope: EnvironmentScope::Production,
+            fail: false,
+        }
     }
 
     pub fn observable(id: &'static str) -> Self {
-        Self { id, safety: SafetyClassification::Observable, scope: EnvironmentScope::Staging, fail: false }
+        Self {
+            id,
+            safety: SafetyClassification::Observable,
+            scope: EnvironmentScope::Staging,
+            fail: false,
+        }
     }
 
     pub fn reversible(id: &'static str) -> Self {
-        Self { id, safety: SafetyClassification::Reversible, scope: EnvironmentScope::Isolated, fail: false }
+        Self {
+            id,
+            safety: SafetyClassification::Reversible,
+            scope: EnvironmentScope::Isolated,
+            fail: false,
+        }
     }
 
     pub fn destructive(id: &'static str) -> Self {
-        Self { id, safety: SafetyClassification::Destructive, scope: EnvironmentScope::Isolated, fail: false }
+        Self {
+            id,
+            safety: SafetyClassification::Destructive,
+            scope: EnvironmentScope::Isolated,
+            fail: false,
+        }
     }
 
     pub fn failing(id: &'static str) -> Self {
-        Self { id, safety: SafetyClassification::Safe, scope: EnvironmentScope::Production, fail: true }
+        Self {
+            id,
+            safety: SafetyClassification::Safe,
+            scope: EnvironmentScope::Production,
+            fail: true,
+        }
     }
 
     pub fn empty_id() -> Self {
-        Self { id: "", safety: SafetyClassification::Safe, scope: EnvironmentScope::Production, fail: false }
+        Self {
+            id: "",
+            safety: SafetyClassification::Safe,
+            scope: EnvironmentScope::Production,
+            fail: false,
+        }
     }
 
     pub fn empty_name_id(id: &'static str) -> Self {
         // We need a tester with an empty name — done via a different approach since
         // MockTester::name() returns a static string. Use TesterEmptyName struct instead.
-        Self { id, safety: SafetyClassification::Safe, scope: EnvironmentScope::Production, fail: false }
+        Self {
+            id,
+            safety: SafetyClassification::Safe,
+            scope: EnvironmentScope::Production,
+            fail: false,
+        }
     }
 }
 
 impl Module for MockTester {
-    fn id(&self) -> &str { self.id }
-    fn name(&self) -> &str { "Mock Tester" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { "mock" }
-    fn evidence_types(&self) -> &[i32] { &[1001] }
-    fn credential_requirements(&self) -> Vec<CredentialReq> { vec![] }
+    fn id(&self) -> &str {
+        self.id
+    }
+    fn name(&self) -> &str {
+        "Mock Tester"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        "mock"
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1001]
+    }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![]
+    }
 }
 
 impl Tester for MockTester {
-    fn safety_class(&self) -> SafetyClassification { self.safety }
-    fn environment_scope(&self) -> EnvironmentScope { self.scope }
-    fn pre_flight_checks(&self) -> Vec<String> { vec!["check connectivity".into()] }
-    fn cleanup_procedures(&self) -> Vec<String> { vec!["restore state".into()] }
+    fn safety_class(&self) -> SafetyClassification {
+        self.safety
+    }
+    fn environment_scope(&self) -> EnvironmentScope {
+        self.scope
+    }
+    fn pre_flight_checks(&self) -> Vec<String> {
+        vec!["check connectivity".into()]
+    }
+    fn cleanup_procedures(&self) -> Vec<String> {
+        vec!["restore state".into()]
+    }
     fn test(&self, _: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         if self.fail {
             anyhow::bail!("mock tester failure");
@@ -196,19 +288,39 @@ pub struct TesterBadMeta {
 }
 
 impl Module for TesterBadMeta {
-    fn id(&self) -> &str { self.id }
-    fn name(&self) -> &str { self.name }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { self.source }
-    fn evidence_types(&self) -> &[i32] { &[] }
-    fn credential_requirements(&self) -> Vec<CredentialReq> { vec![] }
+    fn id(&self) -> &str {
+        self.id
+    }
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        self.source
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[]
+    }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![]
+    }
 }
 
 impl Tester for TesterBadMeta {
-    fn safety_class(&self) -> SafetyClassification { SafetyClassification::Safe }
-    fn environment_scope(&self) -> EnvironmentScope { EnvironmentScope::Production }
-    fn pre_flight_checks(&self) -> Vec<String> { vec![] }
-    fn cleanup_procedures(&self) -> Vec<String> { vec![] }
+    fn safety_class(&self) -> SafetyClassification {
+        SafetyClassification::Safe
+    }
+    fn environment_scope(&self) -> EnvironmentScope {
+        EnvironmentScope::Production
+    }
+    fn pre_flight_checks(&self) -> Vec<String> {
+        vec![]
+    }
+    fn cleanup_procedures(&self) -> Vec<String> {
+        vec![]
+    }
     fn test(&self, _: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         Ok(vec![make_evidence()])
     }

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
+use super::{EnvironmentScope, Module, SafetyClassification};
 use crate::evidence::Evidence;
-use super::{Module, SafetyClassification, EnvironmentScope};
 
 /// Performs active control verification by interacting with target systems.
 /// Testers produce evidence at the "active_verification" confidence level and

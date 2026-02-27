@@ -198,7 +198,7 @@ curl -H "Authorization: Bearer $TOKEN" \
       "collectors": [{ "module_id": "okta.mfa_policy" }],
       "testers": [{ "module_id": "okta.mfa_bypass" }],
       "evaluation_logic": {
-        "cel_expression": "status_counts.effective > 0 && status_counts.ineffective == 0 && has_active"
+        "cel_expression": "effective_count > 0 && ineffective_count == 0 && has_active"
       }
     }
   ],

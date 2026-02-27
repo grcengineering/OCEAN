@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::control::definition::{Control, ControlStatus, UptimeResult};
-use crate::evidence::{Evidence, ConfidenceLevel};
 use crate::eval::CelEngine;
+use crate::evidence::{ConfidenceLevel, Evidence};
 
 /// Evaluate a control against a slice of evidence and produce a ControlStatus.
 ///
@@ -24,7 +24,9 @@ pub fn evaluate_control(control: &Control, evidence: &[Evidence]) -> ControlStat
     }
 
     let passing = CelEngine::evaluate(&control.evaluation_logic, evidence).unwrap_or(false);
-    let has_active = evidence.iter().any(|e| e.confidence_level == ConfidenceLevel::ActiveVerification);
+    let has_active = evidence
+        .iter()
+        .any(|e| e.confidence_level == ConfidenceLevel::ActiveVerification);
 
     let status = if passing { "effective" } else { "ineffective" };
     let confidence = if has_active { "high" } else { "medium" };
@@ -40,7 +42,11 @@ pub fn evaluate_control(control: &Control, evidence: &[Evidence]) -> ControlStat
         evaluation_details: format!(
             "{} evidence records evaluated; {}",
             evidence.len(),
-            if passing { "control effective" } else { "control ineffective" }
+            if passing {
+                "control effective"
+            } else {
+                "control ineffective"
+            }
         ),
     }
 }
@@ -62,7 +68,10 @@ pub fn calculate_uptime(
 
     let total = in_range.len() as i32;
     let effective = in_range.iter().filter(|s| s.status == "effective").count() as i32;
-    let ineffective = in_range.iter().filter(|s| s.status == "ineffective").count() as i32;
+    let ineffective = in_range
+        .iter()
+        .filter(|s| s.status == "ineffective")
+        .count() as i32;
     let gap = total - effective - ineffective; // unknown or partial
 
     let uptime_percent = if total == 0 {
@@ -87,8 +96,8 @@ pub fn calculate_uptime(
 mod tests {
     use super::*;
     use crate::control::definition::{Control, EvaluationLogic};
+    use crate::evidence::{ConfidenceLevel, StatusId};
     use crate::testutil::make_evidence;
-    use crate::evidence::{StatusId, ConfidenceLevel};
     use chrono::Duration;
 
     fn make_control(preset: &str) -> Control {
@@ -201,7 +210,12 @@ mod tests {
             make_status("ctrl", "effective", now),
             make_status("ctrl", "effective", now),
         ];
-        let result = calculate_uptime("ctrl", now - Duration::seconds(1), now + Duration::seconds(1), &statuses);
+        let result = calculate_uptime(
+            "ctrl",
+            now - Duration::seconds(1),
+            now + Duration::seconds(1),
+            &statuses,
+        );
         assert_eq!(result.total_buckets, 2);
         assert_eq!(result.effective_buckets, 2);
         assert_eq!(result.ineffective_buckets, 0);
@@ -217,7 +231,12 @@ mod tests {
             make_status("ctrl", "ineffective", now),
             make_status("ctrl", "unknown", now),
         ];
-        let result = calculate_uptime("ctrl", now - Duration::seconds(1), now + Duration::seconds(1), &statuses);
+        let result = calculate_uptime(
+            "ctrl",
+            now - Duration::seconds(1),
+            now + Duration::seconds(1),
+            &statuses,
+        );
         assert_eq!(result.total_buckets, 3);
         assert_eq!(result.effective_buckets, 1);
         assert_eq!(result.ineffective_buckets, 1);
@@ -232,7 +251,12 @@ mod tests {
             make_status("ctrl.a", "effective", now),
             make_status("ctrl.b", "ineffective", now),
         ];
-        let result = calculate_uptime("ctrl.a", now - Duration::seconds(1), now + Duration::seconds(1), &statuses);
+        let result = calculate_uptime(
+            "ctrl.a",
+            now - Duration::seconds(1),
+            now + Duration::seconds(1),
+            &statuses,
+        );
         assert_eq!(result.total_buckets, 1);
         assert_eq!(result.effective_buckets, 1);
     }
@@ -242,10 +266,15 @@ mod tests {
         let now = Utc::now();
         let old = now - Duration::days(30);
         let statuses = vec![
-            make_status("ctrl", "effective", old),    // outside range
-            make_status("ctrl", "ineffective", now),  // inside range
+            make_status("ctrl", "effective", old),   // outside range
+            make_status("ctrl", "ineffective", now), // inside range
         ];
-        let result = calculate_uptime("ctrl", now - Duration::seconds(1), now + Duration::seconds(1), &statuses);
+        let result = calculate_uptime(
+            "ctrl",
+            now - Duration::seconds(1),
+            now + Duration::seconds(1),
+            &statuses,
+        );
         assert_eq!(result.total_buckets, 1);
         assert_eq!(result.effective_buckets, 0);
         assert_eq!(result.ineffective_buckets, 1);
