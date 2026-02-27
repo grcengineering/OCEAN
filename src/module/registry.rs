@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use super::{Collector, Tester, Module};
 
 /// Metadata about a registered module, suitable for CLI listings and API responses.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ModuleInfo {
     pub id: String,
     pub name: String,

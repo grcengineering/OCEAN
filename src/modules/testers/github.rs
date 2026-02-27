@@ -357,6 +357,7 @@ mod tests {
         thread::spawn(move || {
             for (status, body) in responses {
                 if let Ok((mut stream, _)) = listener.accept() {
+                    // Drain the full request to avoid Windows TCP RST on close.
                     let mut buf = [0u8; 16384];
                     let _ = stream.read(&mut buf);
                     let resp = format!(
@@ -365,6 +366,10 @@ mod tests {
                         len = body.len()
                     );
                     let _ = stream.write_all(resp.as_bytes());
+                    // Graceful shutdown: send FIN, drain remaining data, then drop.
+                    let _ = stream.shutdown(std::net::Shutdown::Write);
+                    let mut drain = [0u8; 256];
+                    while matches!(stream.read(&mut drain), Ok(n) if n > 0) {}
                 }
             }
         });
