@@ -93,9 +93,9 @@ fn do_aws_get(
     // Build canonical headers and signed headers list.
     let mut canonical_headers = format!("host:{}\nx-amz-date:{}\n", host, datetime);
     let mut signed_headers = "host;x-amz-date".to_string();
-    if session_token.is_some() {
+    if let Some(token) = session_token {
         canonical_headers
-            .push_str(&format!("x-amz-security-token:{}\n", session_token.unwrap()));
+            .push_str(&format!("x-amz-security-token:{}\n", token));
         signed_headers = "host;x-amz-date;x-amz-security-token".to_string();
     }
 
