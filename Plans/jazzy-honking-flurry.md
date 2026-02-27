@@ -175,7 +175,7 @@ go.sum
 name = "ocean"
 version = "0.1.0"
 edition = "2021"
-description = "Open Control Evidence Acquisition Normalizer"
+description = "Open Control Evidence Assessment Normalizer"
 license = "Apache-2.0"
 
 [lib]

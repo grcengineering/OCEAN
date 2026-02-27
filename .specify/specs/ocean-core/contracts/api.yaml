@@ -2,7 +2,7 @@ openapi: "3.0.3"
 info:
   title: OCEAN REST API
   description: |
-    Open Control Evidence Acquisition Normalizer - REST API contract.
+    Open Control Evidence Assessment Normalizer - REST API contract.
 
     This API is exposed when OCEAN runs in server mode (`ocean serve`).
     It enables external GRC platforms to query evidence, inspect control

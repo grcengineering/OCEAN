@@ -1,4 +1,4 @@
-# OCEAN — Open Control Evidence Acquisition Normalizer
+# OCEAN — Open Control Evidence Assessment Normalizer
 
 **The "Metasploit for GRC"** — an open-source CLI tool and Rust library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring.
 

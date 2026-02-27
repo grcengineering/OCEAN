@@ -2,7 +2,7 @@
 name = "ocean"
 version = "0.1.0"
 edition = "2021"
-description = "Open Control Evidence Acquisition Normalizer — the Metasploit for GRC"
+description = "Open Control Evidence Assessment Normalizer — the Metasploit for GRC"
 license = "Apache-2.0"
 repository = "https://github.com/grcengineering/ocean"
 authors = ["GRC Engineering <team@grc.engineering>"]

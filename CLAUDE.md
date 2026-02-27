@@ -1,6 +1,6 @@
 # OCEAN Project Context
 
-This file provides context for Claude Code sessions working on OCEAN (Open Control Evidence Acquisition Normalizer).
+This file provides context for Claude Code sessions working on OCEAN (Open Control Evidence Assessment Normalizer).
 
 ## Project Overview
 

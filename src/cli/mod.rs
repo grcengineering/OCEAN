@@ -22,12 +22,12 @@ use output::{print_output, OutputFormat};
 // CLI structure
 // ---------------------------------------------------------------------------
 
-/// Open Control Evidence Acquisition Normalizer — "Metasploit for GRC"
+/// Open Control Evidence Assessment Normalizer — "Metasploit for GRC"
 #[derive(Parser)]
 #[command(
     name = "ocean",
     version,
-    about = "Open Control Evidence Acquisition Normalizer"
+    about = "Open Control Evidence Assessment Normalizer"
 )]
 pub struct Cli {
     /// Path to the SQLite evidence database.

@@ -6,7 +6,7 @@
 **Updated**: 2026-02-26
 **Status**: Draft
 
-This document defines the entity relationships for OCEAN (Open Control Evidence Acquisition Normalizer). All entities follow the principles established in the Constitution: evidence-first architecture, OCSF-inspired schema design, and dual-mode modules.
+This document defines the entity relationships for OCEAN (Open Control Evidence Assessment Normalizer). All entities follow the principles established in the Constitution: evidence-first architecture, OCSF-inspired schema design, and dual-mode modules.
 
 > **v3.0.0 Note**: Cryptographic provenance (DSSE attestations) is no longer a native OCEAN feature. Evidence signing is handled by [Corsair](https://grcorsair.com) when required. The `AttestationRef` field and `Attestation` entity have been removed from this data model.
 

@@ -1,5 +1,5 @@
 # OCEAN Constitution
-<!-- Open Control Evidence Acquisition Normalizer -->
+<!-- Open Control Evidence Assessment Normalizer -->
 
 <!--
 Sync Impact Report:

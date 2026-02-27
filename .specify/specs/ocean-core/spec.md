@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-OCEAN (Open Control Evidence Acquisition Normalizer) is the **"Metasploit for GRC"** — an open-source CLI tool and Go library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring. It serves as the backend for a **"StatusPage for Compliance"** — a radically transparent, shareable dashboard showing historical control operating effectiveness metrics.
+OCEAN (Open Control Evidence Assessment Normalizer) is the **"Metasploit for GRC"** — an open-source CLI tool and Go library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring. It serves as the backend for a **"StatusPage for Compliance"** — a radically transparent, shareable dashboard showing historical control operating effectiveness metrics.
 
 OCEAN operates across four pillars:
 

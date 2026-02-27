@@ -1,4 +1,4 @@
-// OCEAN — Open Control Evidence Acquisition Normalizer
+// OCEAN — Open Control Evidence Assessment Normalizer
 //
 // Public SDK re-exports. Import `ocean::*` to access all core types.
 
