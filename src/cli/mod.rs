@@ -623,6 +623,7 @@ fn cmd_report<W: Write>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_schedule_add<W: Write>(
     out: &mut W,
     format: OutputFormat,

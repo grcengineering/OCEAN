@@ -218,7 +218,7 @@ impl Tester for SecretPushTester {
             }
             other => {
                 recorder.record_observation(
-                    &format!("unexpected HTTP status {} from Contents API", other),
+                    format!("unexpected HTTP status {} from Contents API", other),
                     false,
                 );
                 (

@@ -90,7 +90,7 @@ impl Scheduler {
             .unwrap()
             .values()
             .filter(|s| s.enabled)
-            .filter(|s| s.next_run.map_or(false, |nr| nr <= now))
+            .filter(|s| s.next_run.is_some_and(|nr| nr <= now))
             .cloned()
             .collect()
     }

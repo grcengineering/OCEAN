@@ -126,7 +126,7 @@ impl Store for SqliteStore {
         let transcript_json = ev
             .test_transcript
             .as_ref()
-            .map(|t| serde_json::to_string(t))
+            .map(serde_json::to_string)
             .transpose()?;
         let enrichments_json = if ev.enrichments.is_empty() {
             None

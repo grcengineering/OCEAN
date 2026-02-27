@@ -157,7 +157,7 @@ impl Tester for MfaBypassTester {
             || http_status == 403
         {
             recorder.record_observation(
-                &format!("authentication rejected with HTTP {}", http_status),
+                format!("authentication rejected with HTTP {}", http_status),
                 true,
             );
             recorder.record_observation("MFA bypass attempt blocked", true);
@@ -194,7 +194,7 @@ impl Tester for MfaBypassTester {
         } else {
             // Other statuses (LOCKED_OUT, PASSWORD_EXPIRED, etc.) mean bypass was blocked.
             recorder.record_observation(
-                &format!(
+                format!(
                     "Okta returned status {:?} (HTTP {})",
                     authn_status, http_status
                 ),

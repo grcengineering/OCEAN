@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, Request, StatusCode, header::AUTHORIZATION},
     middleware::Next,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get},
     Json, Router,
 };
 use chrono::{DateTime, Utc};

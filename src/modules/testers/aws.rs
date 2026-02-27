@@ -84,7 +84,7 @@ impl Tester for S3PublicAccessTester {
                 match code {
                     403 | 404 => {
                         recorder.record_observation(
-                            &format!("unauthenticated request returned HTTP {} (access denied)", code),
+                            format!("unauthenticated request returned HTTP {} (access denied)", code),
                             true,
                         );
                         recorder.record_cleanup("no cleanup required (safe read-only test)", true);
@@ -127,7 +127,7 @@ impl Tester for S3PublicAccessTester {
                     }
                     other => {
                         recorder.record_observation(
-                            &format!("unauthenticated request returned unexpected HTTP {}", other),
+                            format!("unauthenticated request returned unexpected HTTP {}", other),
                             false,
                         );
                         recorder.record_cleanup("no cleanup required (safe read-only test)", true);
@@ -152,7 +152,7 @@ impl Tester for S3PublicAccessTester {
                 let code = r.status();
                 if code == 403 || code == 404 {
                     recorder.record_observation(
-                        &format!("unauthenticated request returned HTTP {} (access denied)", code),
+                        format!("unauthenticated request returned HTTP {} (access denied)", code),
                         true,
                     );
                     recorder.record_cleanup("no cleanup required (safe read-only test)", true);
@@ -192,7 +192,7 @@ impl Tester for S3PublicAccessTester {
                     )
                 } else {
                     recorder.record_observation(
-                        &format!("unauthenticated request returned unexpected HTTP {}", code),
+                        format!("unauthenticated request returned unexpected HTTP {}", code),
                         false,
                     );
                     recorder.record_cleanup("no cleanup required (safe read-only test)", true);
@@ -214,7 +214,7 @@ impl Tester for S3PublicAccessTester {
             }
             Err(e) => {
                 recorder.record_observation(
-                    &format!("request failed with error: {}", e),
+                    format!("request failed with error: {}", e),
                     false,
                 );
                 let transcript = recorder.finalize();
