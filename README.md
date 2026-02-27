@@ -242,6 +242,10 @@ OCEAN is open source under the Apache 2.0 license.
 
 When creating new modules, follow the [Module Development Guide](docs/modules.md).
 
+## Author
+
+Created by [@p4gs](https://github.com/p4gs).
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE) for details.
