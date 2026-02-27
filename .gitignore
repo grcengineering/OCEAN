@@ -1,22 +1,5 @@
-# Binaries
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-/ocean
-/bin/
-
-# Test binaries
-*.test
-*.out
-
-# Build output
-/dist/
-/build/
-
-# Go workspace
-vendor/
+# Rust build output
+/target/
 
 # IDE
 .vscode/
@@ -29,7 +12,7 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# OCEAN runtime
+# OCEAN runtime data
 .ocean/
 *.key
 
@@ -37,12 +20,11 @@ Thumbs.db
 .env
 .env.*
 
-# Coverage
-coverage.out
+# Coverage output
+/coverage/
 coverage.html
-
-# Rust build output
-/target/
+lcov.info
+cobertura.xml
 
 # Temp/misc
 *.png

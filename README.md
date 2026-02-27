@@ -1,6 +1,6 @@
-# OCEAN -- Open Control Evidence Acquisition Normalizer
+# OCEAN — Open Control Evidence Acquisition Normalizer
 
-**The "Metasploit for GRC"** -- an open-source CLI tool and Go library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring.
+**The "Metasploit for GRC"** — an open-source CLI tool and Rust library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring.
 
 Imagine a standardized API model and data model for retrieving control evidence. Something that security/GRC practitioners, control owners, and auditors could consistently validate the completeness and accuracy of and thus trust as a gold standard source of truth for compliance audits of all kinds.
 
@@ -14,38 +14,35 @@ The conversation that started it all: [LinkedIn post](https://www.linkedin.com/p
 2. **Test** control effectiveness through active verification with safety-classified tester modules
 3. **Normalize** evidence to a consistent OCSF-inspired schema with full provenance
 4. **Evaluate** control effectiveness using flexible CEL expressions or built-in presets
-5. **Store** evidence with cryptographic attestation (in-toto DSSE) for tamper-evident audit trails
+5. **Store** evidence in a local SQLite database with structured querying
 6. **Monitor** continuously with cron-based scheduling and uptime percentage tracking
 7. **Expose** a REST API for integration with external GRC platforms
 
 ## Quick Start
 
 ```bash
-# Build from source
+# Build from source (requires Rust stable)
 git clone https://github.com/grcengineering/ocean.git
 cd ocean
 make build
 
-# Generate signing keys for cryptographic attestation
-./ocean keys generate
-
 # List available modules
-./ocean modules list
+./target/debug/ocean modules list
 
 # Collect evidence using the mock collector
-./ocean collect mock.test
+./target/debug/ocean collect mock.test
 
 # Run an active control test
-./ocean test mock.safety_test --target staging
+./target/debug/ocean test mock.safety_test --target staging
 
-# Dual-mode verification (collect + test + evaluate)
-./ocean verify mock.mfa_enforcement
+# Evaluate a control against collected evidence
+./target/debug/ocean evaluate mock.mfa_enforcement
 
-# Verify cryptographic provenance
-./ocean verify-provenance run --evidence <evidence-id>
+# Query control history and uptime
+./target/debug/ocean history --control mock.mfa_enforcement --days 30
 
-# Start the API server
-./ocean serve --port 8080 --auth-token "your-token"
+# Start the REST API server
+./target/debug/ocean serve --port 8080
 ```
 
 See [docs/quickstart.md](docs/quickstart.md) for a detailed walkthrough.
@@ -56,60 +53,64 @@ OCEAN ships with 9 modules across 4 source systems:
 
 | Module | Type | Source | Safety Class | Description |
 |--------|------|--------|-------------|-------------|
-| `aws.iam` | collector | AWS | - | IAM user enumeration, MFA status, access key age |
+| `aws.iam` | collector | AWS | — | IAM user enumeration, MFA status, access key age |
 | `aws.s3_public_access` | tester | AWS | safe | Probes S3 buckets for public access |
-| `github.branch_protection` | collector | GitHub | - | Branch protection rule collection |
+| `github.branch_protection` | collector | GitHub | — | Branch protection rule collection |
 | `github.secret_push` | tester | GitHub | observable | Tests secret push protection |
-| `mock.test` | collector | mock | - | Simulated MFA policy collection |
-| `mock.network` | collector | mock | - | Simulated network/WAF evidence |
+| `mock.test` | collector | mock | — | Simulated MFA policy collection |
+| `mock.network` | collector | mock | — | Simulated network/WAF evidence |
 | `mock.safety_test` | tester | mock | safe | Simulated MFA bypass attempt |
-| `okta.mfa_policy` | collector | Okta | - | MFA enrollment policy collection |
+| `okta.mfa_policy` | collector | Okta | — | MFA enrollment policy collection |
 | `okta.mfa_bypass` | tester | Okta | safe | Attempts authentication without MFA |
+
+## CLI Commands
+
+```
+ocean version                         Print version information
+ocean collect <module>                Collect evidence via a collector module
+ocean test <module>                   Run an active tester module
+ocean modules list [--type collector|tester]
+ocean modules validate <id>           Validate module metadata
+ocean evaluate <control>              Evaluate a control against evidence
+ocean history --control <id>          Query control evaluation history
+ocean report --period YYYY-MM-DD:YYYY-MM-DD
+ocean schedule add --cron "0 * * * *" --modules mock.test
+ocean schedule list
+ocean schedule remove <id>
+ocean schedule status <id>
+ocean serve [--port 8080] [--auth-token TOKEN]
+```
 
 ## Architecture
 
 ```
-ocean
-  cmd/ocean/           CLI entrypoint
-  internal/
-    api/               REST API server (11 endpoints)
-    attestation/       Cryptographic provenance (in-toto DSSE, Ed25519)
-    cli/               Cobra command definitions
-    config/            Configuration management (YAML + env vars)
-    control/           Control definitions, CEL evaluation, framework mappings
-    eval/              CEL expression engine with presets and versioning
-    evidence/          Core evidence schema (OCSF-inspired)
-    module/            Module interfaces, registry, executor, safety classification
-    scheduler/         Cron-based continuous monitoring
-    secrets/           Credential providers (env, Vault, AWS Secrets Manager)
-    storage/           Persistence interface + SQLite implementation
-  modules/
-    collectors/
-      aws/             AWS IAM collector (SigV4 signing, stdlib only)
-      github/          GitHub branch protection collector (REST v3)
-      mock/            Reference collector implementation
-      okta/            Okta MFA policy collector (rate-limited)
-    testers/
-      aws/             S3 public access tester
-      github/          Secret push protection tester
-      mock/            Reference tester implementation
-      okta/            MFA bypass tester
-  controls/
-    iam/               IAM control definitions (MFA enforcement)
-    network/           Network control definitions (WAF protection)
-    frameworks/        Framework mappings (SOC 2, ISO 27001, NIST CSF, CIS)
-  pkg/
-    ocean/             Public Go library API for embedding
-    schema/            Stable public types for library consumers
-  schemas/             JSON Schema definitions
-  docs/                Documentation
+ocean/
+├── src/
+│   ├── main.rs             CLI entry point
+│   ├── lib.rs              Public SDK re-exports
+│   ├── cli/                CLI commands (clap 4 derive)
+│   ├── evidence/           Evidence types (OCSF-inspired schema)
+│   ├── module/             Module traits, registry, executor, safety
+│   ├── storage/            Store trait + SQLite implementation
+│   ├── eval/               CEL engine (native presets + cel-interpreter)
+│   ├── control/            Control definitions, CEL evaluator, uptime
+│   ├── scheduler/          Cron scheduler + module runner
+│   ├── secrets/            Credential providers (env, Vault, AWS Secrets Manager)
+│   ├── api/                axum REST API (9 endpoints)
+│   ├── config/             Config loading (YAML + env vars)
+│   └── modules/            Built-in modules
+│       ├── collectors/     aws, github, okta, mock
+│       └── testers/        aws, github, okta, mock
+├── controls/               YAML control definitions
+├── schemas/                JSON Schema definitions
+└── docs/                   Documentation
 ```
 
 ## Key Concepts
 
 ### Evidence-First Design
 
-Every piece of data in OCEAN is an **evidence record** with cryptographic provenance. Evidence is immutable, content-addressed, and signed using in-toto DSSE envelopes with Ed25519 keys.
+Every piece of data in OCEAN is an **evidence record** with structured provenance. Evidence is normalized to an OCSF-inspired schema and stored with metadata, observables, and findings.
 
 ### Confidence Levels
 
@@ -158,23 +159,42 @@ framework_mappings:
 
 Supported frameworks: SOC 2, ISO 27001, NIST CSF, CIS Controls.
 
+## REST API
+
+When `ocean serve` is running:
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/v1/health` | Health check |
+| `GET /api/v1/evidence` | List evidence (query: control_id, source, limit) |
+| `GET /api/v1/evidence/:id` | Get single evidence record |
+| `GET /api/v1/controls/:id/status` | Latest control status |
+| `GET /api/v1/controls/:id/history` | Control status history (from/to params) |
+| `GET /api/v1/modules` | List registered modules |
+| `GET /api/v1/schedules` | List schedules |
+| `POST /api/v1/schedules` | Create a schedule |
+| `DELETE /api/v1/schedules/:id` | Delete a schedule |
+
+Optionally protect with a bearer token: `--auth-token <token>` or `OCEAN_AUTH_TOKEN=<token>`.
+
 ## Building
 
 ```bash
-# Standard build
+# Development build
 make build
 
-# Run tests
+# Run tests (454 tests)
 make test
 
-# Stripped release binary
+# Release binary (stripped + LTO)
 make release
 
-# Run linter
-make lint
+# Lint (clippy + fmt)
+make clippy
+make fmt-check
 
-# Docker build
-docker build -t ocean .
+# Code coverage (requires cargo-llvm-cov)
+make coverage
 ```
 
 ## Configuration
@@ -183,35 +203,31 @@ OCEAN uses a YAML config file at `~/.ocean/config.yaml` with sensible defaults:
 
 ```yaml
 storage_path: ~/.ocean/ocean.db
-log_level: info
-key_path: ~/.ocean/keys
 controls_dir: controls
 output_format: json
 server:
   port: 8080
-  auth_token: ""  # Set via --auth-token or OCEAN_AUTH_TOKEN env var
+  auth_token: ""
 ```
 
 Environment variables override config file values:
-- `OCEAN_STORAGE_PATH` -- SQLite database path
-- `OCEAN_LOG_LEVEL` -- Logging verbosity
-- `OCEAN_KEY_PATH` -- Directory for signing keys
-- `OCEAN_AUTH_TOKEN` -- Bearer token for API authentication
 
-## Documentation
-
-- [Quick Start Guide](docs/quickstart.md) -- Get running in minutes
-- [Module Development Guide](docs/modules.md) -- Create custom collectors and testers
-- [API Documentation](docs/api.md) -- REST API reference
+| Variable | Purpose |
+|---|---|
+| `OCEAN_DB` | SQLite database path |
+| `OCEAN_CONTROLS_DIR` | Control YAML directory |
+| `OCEAN_PORT` | API server port |
+| `OCEAN_AUTH_TOKEN` | Bearer token for API |
 
 ## Technology Stack
 
-- **Language**: Go (single binary, zero runtime dependencies)
-- **Storage**: SQLite (via modernc.org/sqlite, pure Go)
-- **Evaluation**: CEL (Common Expression Language)
-- **Attestation**: in-toto DSSE (Dead Simple Signing Envelope) with Ed25519
+- **Language**: Rust (single binary, zero runtime dependencies)
+- **Storage**: SQLite (via rusqlite, bundled)
+- **Evaluation**: CEL (via cel-interpreter crate + native presets)
 - **Schema**: OCSF-inspired hierarchical taxonomy
-- **CLI**: Cobra + zerolog
+- **CLI**: clap 4 (derive API)
+- **API**: axum 0.7 + tokio
+- **HTTP (modules)**: ureq (sync)
 
 ## Contributing
 
@@ -228,4 +244,4 @@ When creating new modules, follow the [Module Development Guide](docs/modules.md
 
 ## License
 
-Apache 2.0 -- see [LICENSE](LICENSE) for details.
+Apache 2.0 — see [LICENSE](LICENSE) for details.

@@ -72,12 +72,7 @@ jobs:
             --timeout 120 \
             --out Xml \
             --output-dir coverage/ \
-            --exclude-files 'src/api/*' \
-            --exclude-files 'src/config/*' \
             --exclude-files 'src/secrets/*' \
-            --exclude-files 'src/modules/*' \
-            --exclude-files 'src/scheduler/cron.rs' \
-            --exclude-files 'src/scheduler/runner.rs' \
             --exclude-files 'src/main.rs'
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

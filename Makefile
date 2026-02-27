@@ -20,10 +20,10 @@ ifeq ($(OS),Windows_NT)
   export LLVM_PROFDATA ?= $(LLVM_BIN)/llvm-profdata.exe
 endif
 
-# Regex pattern of stub/unimplemented files to exclude from coverage.
-# Update as phases complete.
-STUB_REGEX := src/(api|config|secrets|modules|main)
-STUB_SCHED := src/scheduler/(cron|runner)
+# Regex pattern of files to exclude from coverage.
+# src/main.rs is the CLI entry point — not meaningfully unit-testable.
+# src/secrets/* providers (Vault, AWS Secrets Manager) require live services.
+STUB_REGEX := src/(main|secrets)
 
 # ---------------------------------------------------------------------------
 # Build
@@ -70,13 +70,11 @@ check:
 
 coverage:
 	cargo llvm-cov \
-		--ignore-filename-regex '$(STUB_REGEX)' \
-		--ignore-filename-regex '$(STUB_SCHED)'
+		--ignore-filename-regex '$(STUB_REGEX)'
 
 coverage-html:
 	cargo llvm-cov \
 		--ignore-filename-regex '$(STUB_REGEX)' \
-		--ignore-filename-regex '$(STUB_SCHED)' \
 		--html --open
 
 # Alternative: cargo-tarpaulin (Linux only — matches CI)
@@ -84,12 +82,7 @@ coverage-tarpaulin:
 	cargo tarpaulin \
 		--all-features \
 		--timeout 120 \
-		--exclude-files 'src/api/*' \
-		--exclude-files 'src/config/*' \
 		--exclude-files 'src/secrets/*' \
-		--exclude-files 'src/modules/*' \
-		--exclude-files 'src/scheduler/cron.rs' \
-		--exclude-files 'src/scheduler/runner.rs' \
 		--exclude-files 'src/main.rs'
 
 # ---------------------------------------------------------------------------
