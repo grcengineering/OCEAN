@@ -273,7 +273,10 @@ pub fn run() -> Result<()> {
             ScheduleCmd::Remove { id } => cmd_schedule_remove(&cli.db, &id),
             ScheduleCmd::Status { id } => cmd_schedule_status(&mut out, format, &cli.db, &id),
         },
-        Commands::Serve { port, auth_token } => cmd_serve(port, auth_token.as_deref()),
+        Commands::Serve { port, auth_token } => {
+            let db_path = resolve_db_path(&cli.db);
+            cmd_serve(port, auth_token.as_deref(), &db_path)
+        }
     }
 }
 
@@ -687,12 +690,13 @@ fn cmd_schedule_status<W: Write>(
     print_output(out, &result, format)
 }
 
-fn cmd_serve(_port: u16, _auth_token: Option<&str>) -> Result<()> {
-    // Phase 6: full axum REST API.
-    // For now, print a placeholder message so the binary doesn't crash.
-    eprintln!("ocean serve: REST API server is implemented in Phase 6.");
-    eprintln!("Use 'cargo run -- serve --port {}' after Phase 6 is complete.", _port);
-    Ok(())
+fn cmd_serve(port: u16, auth_token: Option<&str>, db: &str) -> Result<()> {
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(ocean::api::server::serve(
+        port,
+        auth_token.map(String::from),
+        db.to_string(),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -928,13 +932,8 @@ evaluation_logic:
     }
 
     // --- cmd_serve ---
-
-    #[test]
-    fn cmd_serve_returns_ok() {
-        // Should succeed even though Phase 6 isn't implemented yet
-        let result = cmd_serve(8080, None);
-        assert!(result.is_ok());
-    }
+    // NOTE: cmd_serve binds a real TCP port, so we don't call it in unit tests.
+    // It is exercised by the integration smoke test (`ocean serve` via CLI).
 
     // --- cmd_history + cmd_evaluate with SQLite ---
 
