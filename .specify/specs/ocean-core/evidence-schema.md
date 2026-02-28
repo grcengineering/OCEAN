@@ -250,22 +250,77 @@ Example: class_uid 1003 = Domain 1 (IAM) × 1000 + 3 = Identity Lifecycle class.
 
 **Typical sources**: Okta policy API, AWS IAM password policy, Azure AD Authentication Methods
 
-**Applicable activities**: `config_inspection` (1), `population_analysis` (7)
+**Applicable activities**: `config_inspection` (1), `behavioral_test` (4), `population_analysis` (7)
 
 **Class-specific attributes**:
 ```
+# Identity of the policy
 iam_auth.policy_type        — mfa | passwordless | password | sso | phishing_resistant
 iam_auth.provider           — okta | azure_ad | google_workspace | aws_iam | jumpcloud
+iam_auth.policy_name        — string: name of the policy evaluated
+iam_auth.policy_layer       — enrollment | sign_on | both
+                              enrollment = which factors users must enroll in (global)
+                              sign_on    = which factors are required to access a specific app
+                              both       = evidence covers both layers simultaneously
+iam_auth.policy_scope       — all | privileged | subset: who the policy applies to
+
+# Factor enrollment states (per-factor breakdown — use alongside iam_auth.factors)
+iam_auth.factor_policy.required     — array: factor types in REQUIRED enrollment state
+iam_auth.factor_policy.optional     — array: factor types in OPTIONAL enrollment state
+iam_auth.factor_policy.not_allowed  — array: factor types explicitly blocked (NOT_ALLOWED)
+
+# Phishing-resistance derived booleans (computed by collector, not raw API fields)
+iam_auth.phishing_resistant_required   — boolean: ≥1 phishing-resistant factor is REQUIRED
+iam_auth.phishing_resistant_exclusive  — boolean: all phishable factors are NOT_ALLOWED
+                                         true only when factor_policy.not_allowed ⊇ all phishable types
+iam_auth.phishable_factors_allowed     — boolean: any phishable factor is REQUIRED or OPTIONAL
+                                         true = downgrade attack surface exists (bad for PR-MFA controls)
+
+# Sign-on policy enforcement (policy_layer: sign_on or both)
+iam_auth.sign_on_assurance_level    — any_mfa | phishing_resistant | password_only | none
+                                      phishing_resistant = only PR factors accepted at sign-in
+iam_auth.app_scope                  — all_sso | named_apps | global | unscoped
+                                      all_sso = policy applied to all SSO-integrated applications
+iam_auth.sso_app_count              — integer: SSO-integrated apps governed by this policy
+iam_auth.sso_apps_without_pr_mfa    — integer: SSO apps accessible without phishing-resistant MFA
+
+# Population coverage (activity_id: 7 — population_analysis)
 iam_auth.total_users        — integer: total users in scope
 iam_auth.compliant_users    — integer: users meeting the auth policy
 iam_auth.coverage_pct       — float: compliant_users / total_users × 100
 iam_auth.non_compliant      — array: list of non-compliant user IDs/names (redacted if PII)
-iam_auth.policy_name        — string: name of the policy evaluated
-iam_auth.policy_scope       — all | privileged | subset: who the policy applies to
-iam_auth.factors            — array of factor types enforced (totp, push, webauthn, sms, etc.)
+
+# Legacy convenience field (kept for backward compat; factor_policy is authoritative)
+iam_auth.factors            — array of factor types present in the policy (any state)
 ```
 
-**Effective condition**: All users in scope (or all privileged users) are enrolled and required to use MFA.
+**Factor taxonomy note**:
+
+Phishing-resistant (PR) factors resist adversary-in-the-middle and real-time phishing attacks
+because authentication is bound to the relying party origin. Phishable factors are not.
+
+```
+Phishing-resistant (iam_auth.phishing_resistant_required must reference these):
+  webauthn       — FIDO2/WebAuthn (hardware key, platform authenticator, passkey)
+  fido_webauthn  — Okta FIDO2/WebAuthn factor type ID
+  okta_fastpass  — Okta FastPass with device binding (phishing-resistant when device-bound)
+  yubikey        — YubiKey OTP (hardware token, phishing-resistant via physical possession)
+  smartcard      — PIV/CAC card
+
+Phishable (iam_auth.phishable_factors_allowed must flag these):
+  totp           — Time-based OTP (Google Authenticator, Authy, etc.)
+  okta_otp       — Okta TOTP factor type ID
+  okta_push      — Okta Verify push notification (vulnerable to push-bombing)
+  sms            — SMS one-time code (vulnerable to SIM-swap)
+  voice          — Voice call OTP
+  email          — Email OTP
+  kba            — Knowledge-based authentication (security questions)
+  password_only  — Password alone (no second factor)
+```
+
+**Effective condition**: For standard MFA controls — all users in scope are enrolled and required
+to use MFA. For phishing-resistant MFA controls — `phishing_resistant_exclusive = true`,
+`phishable_factors_allowed = false`, `sso_apps_without_pr_mfa = 0`, and `coverage_pct >= 99.0`.
 
 ---
 
@@ -1066,7 +1121,7 @@ Full class registry for at-a-glance lookup. All 27 classes across 8 domains.
 ```
 class_uid   class_name                  domain      activity_ids
 ─────────────────────────────────────────────────────────────────────
-1001        Authentication Policy        IAM         1, 7
+1001        Authentication Policy        IAM         1, 4, 7
 1002        Authorization Policy         IAM         1, 2
 1003        Identity Lifecycle           IAM         2, 3
 1004        Privileged Access            IAM         1, 2, 3
