@@ -575,6 +575,110 @@
     }
     .conf-pill svg { width: 12px; height: 12px; }
 
+    /* ═══════════════════════════════════════════ DEMO SECTION */
+    .demo-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 40px; overflow-x: auto;
+    }
+    .demo-tab {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 22px; font-family: var(--mono); font-size: 0.82rem;
+      color: var(--text-muted); cursor: pointer; white-space: nowrap;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: all 0.15s; background: none;
+      border-left: none; border-right: none; border-top: none;
+    }
+    .demo-tab:hover { color: var(--text); }
+    .demo-tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+    .tab-verdict {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 100px;
+      font-size: 0.67rem; font-weight: 700; letter-spacing: 0.04em;
+    }
+    .tab-verdict.effective   { background: rgba(16,185,129,0.12); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .tab-verdict.ineffective { background: rgba(239,68,68,0.10);  color: var(--red);   border: 1px solid rgba(239,68,68,0.3); }
+
+    .demo-panel { display: none; }
+    .demo-panel.active {
+      display: grid; grid-template-columns: 1fr 1.25fr;
+      gap: 44px; align-items: start;
+    }
+    @media (max-width: 900px) { .demo-panel.active { grid-template-columns: 1fr; } }
+
+    .demo-control-id {
+      font-family: var(--mono); font-size: 0.76rem; color: var(--orange);
+      letter-spacing: 0.08em; margin-bottom: 8px;
+    }
+    .demo-control-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 12px; }
+    .demo-control-desc {
+      color: var(--text-muted); font-size: 0.88rem; line-height: 1.65; margin-bottom: 22px;
+    }
+    .demo-frameworks { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 22px; }
+    .framework-tag {
+      padding: 3px 10px; border-radius: 4px; font-family: var(--mono); font-size: 0.71rem;
+      background: var(--bg); border: 1px solid var(--border); color: var(--text-muted);
+    }
+    .framework-tag strong { color: var(--cyan); }
+
+    .demo-commands { margin-bottom: 18px; }
+    .demo-commands-label {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;
+    }
+    .demo-cmd-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+      padding: 8px 12px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; font-family: var(--mono); font-size: 0.77rem;
+    }
+    .demo-cmd-type {
+      font-size: 0.64rem; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; font-weight: 600;
+    }
+    .cmd-type-collect { background: var(--blue-glow);              color: var(--blue);   border: 1px solid rgba(27,149,193,0.3); }
+    .cmd-type-test    { background: var(--orange-glow);            color: var(--orange); border: 1px solid var(--border-orange); }
+    .cmd-type-eval    { background: rgba(34,211,238,0.08);         color: var(--cyan);   border: 1px solid rgba(34,211,238,0.25); }
+    .demo-cmd-text { color: var(--text); flex: 1; }
+
+    .demo-cel-block {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;
+    }
+    .demo-cel-label {
+      font-size: 0.67rem; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-bottom: 6px; font-family: var(--mono);
+    }
+    .demo-cel-expr { color: var(--cyan); font-family: var(--mono); font-size: 0.8rem; line-height: 1.8; }
+
+    .demo-evidence-class {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--mono); font-size: 0.77rem; color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .demo-class-uid {
+      background: var(--bg-card); border: 1px solid var(--border-card);
+      border-radius: 4px; padding: 3px 8px; color: var(--orange); font-size: 0.71rem; font-weight: 700;
+    }
+
+    .demo-verdict-banner {
+      padding: 14px 18px; border-radius: 8px; display: flex; align-items: center; gap: 12px;
+    }
+    .verdict-effective   { background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.22); }
+    .verdict-ineffective { background: rgba(239,68,68,0.06);  border: 1px solid rgba(239,68,68,0.22); }
+    .verdict-icon { font-size: 1.1rem; }
+    .verdict-label { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+    .verdict-effective   .verdict-label { color: var(--green); }
+    .verdict-ineffective .verdict-label { color: var(--red); }
+    .verdict-detail { font-family: var(--mono); font-size: 0.73rem; color: var(--text-muted); }
+
+    /* JSON syntax colouring in demo terminals */
+    .demo-terminal .terminal-body { min-height: 400px; max-height: 500px; overflow-y: auto; font-size: 0.79rem; }
+    .kw-key     { color: var(--text-dim); }
+    .kw-str     { color: var(--green); }
+    .kw-num     { color: var(--orange); }
+    .kw-true    { color: var(--cyan); }
+    .kw-false   { color: var(--red); }
+    .kw-bracket { color: var(--text-dim); }
+    .kw-comment { color: var(--text-dim); font-style: italic; }
+
     /* ═══════════════════════════════════════════ RESPONSIVE NAV */
     @media (max-width: 600px) {
       .nav-links .nav-link:not(.btn) { display: none; }
@@ -597,6 +701,7 @@
       <div class="nav-links">
         <a href="#pillars" class="nav-link">Pillars</a>
         <a href="#modules"  class="nav-link">Modules</a>
+        <a href="#demo"    class="nav-link">Demo</a>
         <a href="#corsair" class="nav-link">Corsair</a>
         <a href="https://github.com/grcengineering/ocean" class="btn btn-secondary" target="_blank" rel="noopener">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -613,7 +718,7 @@
 
     <div class="hero-eyebrow">
       <span class="hero-eyebrow-dot"></span>
-      Open Source &nbsp;·&nbsp; Apache 2.0 &nbsp;·&nbsp; Go 1.22+
+      Open Source &nbsp;·&nbsp; Apache 2.0 &nbsp;·&nbsp; Rust (stable)
     </div>
 
     <h1 class="hero-title">
@@ -660,7 +765,7 @@
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="mini-cards">
           <div class="mini-card">
-            <div class="mini-card-val grad-orange">9</div>
+            <div class="mini-card-val grad-orange">11</div>
             <div class="mini-card-label">modules registered</div>
           </div>
           <div class="mini-card">
@@ -794,7 +899,7 @@
   <div class="container">
     <div class="section-header">
       <div class="section-label">// modules</div>
-      <h2 class="section-title">9 Modules. <span class="grad-blue">4 Systems.</span><br>Dual-Mode.</h2>
+      <h2 class="section-title">11 Modules. <span class="grad-blue">4 Systems.</span><br>Dual-Mode.</h2>
       <p class="section-desc">Collectors observe state passively. Testers actively verify controls work. Use both for maximum confidence.</p>
     </div>
 
@@ -860,6 +965,29 @@
       <div class="module-card">
         <div class="module-header">
           <div>
+            <div class="module-name">okta.mfa_enrollment_population</div>
+            <div class="module-source">okta</div>
+          </div>
+          <span class="badge badge-collector">Collector</span>
+        </div>
+        <p class="module-desc">Analyzes per-user WebAuthn/FIDO2 enrollment coverage across all active accounts. Computes population-level compliance rate.</p>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
+            <div class="module-name">okta.pr_mfa_downgrade</div>
+            <div class="module-source">okta</div>
+          </div>
+          <span class="badge badge-tester">Tester</span>
+        </div>
+        <p class="module-desc">Tests whether the authentication flow offers phishable factors when phishing-resistant ones are available — verifying downgrade protection.</p>
+        <div class="module-safety"><span class="safety-dot safe-green"></span>safe</div>
+      </div>
+
+      <div class="module-card">
+        <div class="module-header">
+          <div>
             <div class="module-name">aws.iam</div>
             <div class="module-source">aws</div>
           </div>
@@ -910,6 +1038,286 @@
         Browse all modules on GitHub →
       </a>
     </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ═══════════════════════════════════════════ DEMO -->
+<section class="section" id="demo" style="background:var(--bg-2)">
+  <div class="container">
+    <div class="section-header" style="margin-bottom:32px">
+      <div class="section-label">// interactive demo</div>
+      <h2 class="section-title">Three Controls.<br><span class="grad-orange">Real Evidence.</span></h2>
+      <p class="section-desc">See how OCEAN collects evidence, tests effectiveness, and evaluates compliance for real-world security controls — all from the CLI.</p>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="demo-tabs">
+      <button class="demo-tab active" onclick="switchDemo(0, this)">
+        <span>okta.mfa_enforcement</span>
+        <span class="tab-verdict effective">EFFECTIVE</span>
+      </button>
+      <button class="demo-tab" onclick="switchDemo(1, this)">
+        <span>identity.timely_termination</span>
+        <span class="tab-verdict effective">EFFECTIVE</span>
+      </button>
+      <button class="demo-tab" onclick="switchDemo(2, this)">
+        <span>iam.access_review</span>
+        <span class="tab-verdict ineffective">FINDINGS</span>
+      </button>
+    </div>
+
+    <!-- ── Panel 0: Phishing-Resistant MFA ── -->
+    <div class="demo-panel active" id="demo-0">
+      <div>
+        <div class="demo-control-id">control.okta.mfa_enforcement</div>
+        <div class="demo-control-name">Phishing-Resistant MFA Enforcement</div>
+        <p class="demo-control-desc">Verifies that all Okta users are enrolled in phishing-resistant factors (WebAuthn / FIDO2) exclusively, and that the authentication flow cannot downgrade to phishable alternatives like TOTP or push.</p>
+        <div class="demo-frameworks">
+          <span class="framework-tag"><strong>SOC 2</strong> CC6.1</span>
+          <span class="framework-tag"><strong>ISO 27001</strong> A.9.4.2</span>
+          <span class="framework-tag"><strong>NIST CSF</strong> PR.AC-7</span>
+          <span class="framework-tag"><strong>CIS</strong> Control 6</span>
+        </div>
+        <div class="demo-commands">
+          <div class="demo-commands-label">CLI commands</div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-collect">collect</span>
+            <span class="demo-cmd-text">ocean collect okta.mfa_policy</span>
+          </div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-collect">collect</span>
+            <span class="demo-cmd-text">ocean collect okta.mfa_enrollment_population</span>
+          </div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-test">test</span>
+            <span class="demo-cmd-text">ocean test okta.pr_mfa_downgrade --target staging</span>
+          </div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-eval">eval</span>
+            <span class="demo-cmd-text">ocean evaluate okta.mfa_enforcement</span>
+          </div>
+        </div>
+        <div class="demo-cel-block">
+          <div class="demo-cel-label">CEL expression</div>
+          <div class="demo-cel-expr">phishing_resistant_exclusive == true<br>&amp;&amp; downgrade_possible == false<br>&amp;&amp; coverage_pct &gt;= 99.0</div>
+        </div>
+        <div class="demo-evidence-class">
+          <span class="demo-class-uid">Class 1001</span>
+          <span>Authentication Policy · activity: enrollment_scan</span>
+        </div>
+        <div class="demo-verdict-banner verdict-effective">
+          <span class="verdict-icon">✓</span>
+          <div>
+            <div class="verdict-label">EFFECTIVE</div>
+            <div class="verdict-detail">Confidence: HIGH &nbsp;·&nbsp; Passive + Active &nbsp;·&nbsp; Uptime 180d: 99.94%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="terminal demo-terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot td-red"></span>
+          <span class="terminal-dot td-amber"></span>
+          <span class="terminal-dot td-green"></span>
+          <span class="terminal-title">ocean evaluate okta.mfa_enforcement --output json</span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate okta.mfa_enforcement</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Collecting passive evidence...</span></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Running active test (safe classification)...</span></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Evaluating CEL expression...</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-out"><span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"control_id"</span>: <span class="kw-str">"okta.mfa_enforcement"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"status"</span>: <span class="kw-str">"effective"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"confidence"</span>: <span class="kw-str">"high"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"class_uid"</span>: <span class="kw-num">1001</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"iam_auth"</span>: <span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"phishing_resistant_exclusive"</span>: <span class="kw-true">true</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"phishable_factors_allowed"</span>: <span class="kw-false">false</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"coverage_pct"</span>: <span class="kw-num">99.7</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"factor_policy"</span>: <span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"required"</span>: [<span class="kw-str">"fido_webauthn"</span>],</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"not_allowed"</span>: [<span class="kw-str">"sms"</span>, <span class="kw-str">"push"</span>, <span class="kw-str">"totp"</span>]</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-bracket">}</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-bracket">}</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"active_test"</span>: <span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"module"</span>: <span class="kw-str">"okta.pr_mfa_downgrade"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"downgrade_possible"</span>: <span class="kw-false">false</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"phishable_factors_offered"</span>: [],</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"safety"</span>: <span class="kw-str">"safe"</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-bracket">}</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"uptime_180d"</span>: <span class="kw-str">"99.94%"</span></span></div>
+          <div class="terminal-line"><span class="terminal-out"><span class="kw-bracket">}</span></span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Status: EFFECTIVE | Confidence: HIGH</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Panel 1: Timely Access Termination ── -->
+    <div class="demo-panel" id="demo-1">
+      <div>
+        <div class="demo-control-id">control.identity.timely_termination</div>
+        <div class="demo-control-name">Timely Employee Access Termination</div>
+        <p class="demo-control-desc">Verifies that terminated employee accounts across all systems are deprovisioned within the SLA window after their last day, and that no deactivated user can authenticate post-termination.</p>
+        <div class="demo-frameworks">
+          <span class="framework-tag"><strong>SOC 2</strong> CC6.2</span>
+          <span class="framework-tag"><strong>ISO 27001</strong> A.9.2.6</span>
+          <span class="framework-tag"><strong>NIST CSF</strong> PR.AC-4</span>
+        </div>
+        <div class="demo-commands">
+          <div class="demo-commands-label">CLI commands</div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-collect">collect</span>
+            <span class="demo-cmd-text">ocean collect hris.termination_events --days 90</span>
+          </div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-test">test</span>
+            <span class="demo-cmd-text">ocean test okta.mfa_bypass --context offboarded_user</span>
+          </div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-eval">eval</span>
+            <span class="demo-cmd-text">ocean evaluate identity.timely_termination</span>
+          </div>
+        </div>
+        <div class="demo-cel-block">
+          <div class="demo-cel-label">CEL expression</div>
+          <div class="demo-cel-expr">on_time_rate &gt;= 0.95<br>&amp;&amp; offboarding_complete == true<br>&amp;&amp; auth_test_result == "blocked"</div>
+        </div>
+        <div class="demo-evidence-class">
+          <span class="demo-class-uid">Class 1003</span>
+          <span>Identity Lifecycle · activity: deprovisioning</span>
+        </div>
+        <div class="demo-verdict-banner verdict-effective">
+          <span class="verdict-icon">✓</span>
+          <div>
+            <div class="verdict-label">EFFECTIVE</div>
+            <div class="verdict-detail">98.2% on-time &nbsp;·&nbsp; auth test blocked &nbsp;·&nbsp; 0 open sessions</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="terminal demo-terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot td-red"></span>
+          <span class="terminal-dot td-amber"></span>
+          <span class="terminal-dot td-green"></span>
+          <span class="terminal-title">ocean evaluate identity.timely_termination --output json</span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate identity.timely_termination</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Pulling HRIS termination events (90d)...</span></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Cross-checking Okta deactivation timestamps...</span></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Auth test on offboarded user: blocked</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-out"><span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"control_id"</span>: <span class="kw-str">"identity.timely_termination"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"status"</span>: <span class="kw-str">"effective"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"confidence"</span>: <span class="kw-str">"high"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"class_uid"</span>: <span class="kw-num">1003</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"iam_lifecycle"</span>: <span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"trigger_source"</span>: <span class="kw-str">"workday"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"timely_threshold_hours"</span>: <span class="kw-num">4</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"on_time_rate"</span>: <span class="kw-num">0.982</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"late_count"</span>: <span class="kw-num">2</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"offboarding_complete"</span>: <span class="kw-true">true</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"sessions_revoked"</span>: <span class="kw-true">true</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"oauth_tokens_revoked"</span>: <span class="kw-true">true</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"auth_test_result"</span>: <span class="kw-str">"blocked"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"offboarding_scope"</span>: [<span class="kw-str">"okta"</span>, <span class="kw-str">"github"</span>, <span class="kw-str">"aws"</span>]</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-bracket">}</span></span></div>
+          <div class="terminal-line"><span class="terminal-out"><span class="kw-bracket">}</span></span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Status: EFFECTIVE | Confidence: HIGH</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-comment">// 2 events exceeded 4h SLA — on_time_rate 98.2% ≥ 95% → PASS</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Panel 2: Periodic Access Review ── -->
+    <div class="demo-panel" id="demo-2">
+      <div>
+        <div class="demo-control-id">control.iam.access_review</div>
+        <div class="demo-control-name">Periodic Access Review (Q4 2024)</div>
+        <p class="demo-control-desc">Collects access certification data from the IGA platform, verifies all flagged access was revoked within the remediation SLA, and flags self-certifications as a control failure.</p>
+        <div class="demo-frameworks">
+          <span class="framework-tag"><strong>SOC 2</strong> CC6.3</span>
+          <span class="framework-tag"><strong>ISO 27001</strong> A.9.2.5</span>
+          <span class="framework-tag"><strong>NIST CSF</strong> PR.AC-1</span>
+        </div>
+        <div class="demo-commands">
+          <div class="demo-commands-label">CLI commands</div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-collect">collect</span>
+            <span class="demo-cmd-text">ocean collect iga.access_review --period Q4-2024</span>
+          </div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-eval">eval</span>
+            <span class="demo-cmd-text">ocean evaluate iam.access_review</span>
+          </div>
+        </div>
+        <div class="demo-cel-block">
+          <div class="demo-cel-label">CEL expression</div>
+          <div class="demo-cel-expr">review_status == "completed"<br>&amp;&amp; completion_rate == 100.0<br>&amp;&amp; sla_breaches == 0<br>&amp;&amp; self_review_count == 0</div>
+        </div>
+        <div class="demo-evidence-class">
+          <span class="demo-class-uid">Class 1006</span>
+          <span>Access Review · activity: certification_run</span>
+        </div>
+        <div class="demo-verdict-banner verdict-ineffective">
+          <span class="verdict-icon">✗</span>
+          <div>
+            <div class="verdict-label">FINDINGS</div>
+            <div class="verdict-detail">3 SLA breaches on open revocations &nbsp;·&nbsp; oldest: 19 days overdue</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="terminal demo-terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot td-red"></span>
+          <span class="terminal-dot td-amber"></span>
+          <span class="terminal-dot td-green"></span>
+          <span class="terminal-title">ocean evaluate iam.access_review --output json</span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate iam.access_review</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Pulling Q4-2024 review data from SailPoint...</span></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Evaluating CEL expression...</span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line"><span class="terminal-out"><span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"control_id"</span>: <span class="kw-str">"iam.access_review"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"status"</span>: <span class="kw-str">"ineffective"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"class_uid"</span>: <span class="kw-num">1006</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-key">"iam_review"</span>: <span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"review_status"</span>: <span class="kw-str">"completed"</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"completion_rate"</span>: <span class="kw-num">100.0</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"self_review_count"</span>: <span class="kw-num">0</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"outcomes"</span>: <span class="kw-bracket">{</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"certified"</span>: <span class="kw-num">312</span>, <span class="kw-key">"revoked"</span>: <span class="kw-num">14</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-bracket">}</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"revocations_identified"</span>: <span class="kw-num">14</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"revocations_completed"</span>: <span class="kw-num">11</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"revocations_pending"</span>: <span class="kw-num">3</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"remediation_sla_days"</span>: <span class="kw-num">7</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"sla_breaches"</span>: <span class="kw-num">3</span>,</span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw-key">"oldest_open_revocation_days"</span>: <span class="kw-num">19</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-bracket">}</span></span></div>
+          <div class="terminal-line"><span class="terminal-out"><span class="kw-bracket">}</span></span></div>
+          <div class="terminal-line" style="height:10px"></div>
+          <div class="terminal-line" style="color:var(--red)">✗  Status: INEFFECTIVE | sla_breaches = 3</div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-comment">// 3 open revocations exceeded 7-day SLA</span></span></div>
+          <div class="terminal-line"><span class="terminal-out">&nbsp;&nbsp;<span class="kw-comment">// oldest outstanding: 19 days (12 beyond SLA)</span></span></div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -1057,10 +1465,10 @@
         Start Verifying Controls<br>
         <span class="grad-orange">in Minutes</span>
       </h2>
-      <p class="cta-desc">Single Go binary. Zero dependencies. Works anywhere.</p>
+      <p class="cta-desc">Single Rust binary. Zero runtime dependencies. Works anywhere.</p>
 
       <div class="install-cmd" id="install-cmd-box">
-        <span class="install-cmd-text">go install github.com/grcengineering/ocean/cmd/ocean@latest</span>
+        <span class="install-cmd-text">cargo install --git https://github.com/grcengineering/OCEAN ocean</span>
         <button class="copy-btn" id="copy-btn" onclick="copyInstall()">copy</button>
       </div>
 
@@ -1107,7 +1515,7 @@
 (function() {
   const lines = [
     { type: 'prompt', text: 'ocean modules list' },
-    { type: 'out', text: '9 modules registered across 4 systems (collectors: 5, testers: 4)' },
+    { type: 'out', text: '11 modules registered across 4 systems (collectors: 6, testers: 5)' },
     { type: 'blank' },
     { type: 'prompt', text: 'ocean collect okta.mfa_policy' },
     { type: 'ok',  text: '✓  Querying Okta API...' },
@@ -1197,10 +1605,20 @@
 })();
 </script>
 
+<!-- ═══════════════════════════════════════════ DEMO TAB SWITCHER -->
+<script>
+function switchDemo(idx, tabEl) {
+  document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.getElementById('demo-' + idx).classList.add('active');
+}
+</script>
+
 <!-- ═══════════════════════════════════════════ COPY INSTALL -->
 <script>
 function copyInstall() {
-  const text = 'go install github.com/grcengineering/ocean/cmd/ocean@latest';
+  const text = 'cargo install --git https://github.com/grcengineering/OCEAN ocean';
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-btn');
     btn.textContent = 'copied!';
