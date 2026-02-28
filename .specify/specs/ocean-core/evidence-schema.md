@@ -181,6 +181,7 @@ siem.aggregator                splunk, datadog, elastic, sumo_logic, microsoft_s
 secrets.vault                  hashicorp_vault, aws.secrets_manager, azure.key_vault, gcp.secret_manager
 container.registry             ecr, gcr, dockerhub, artifactory, ghcr
 compliance.platform            drata, vanta, vanta, secureframe, tugboat_logic
+hris                           workday, bamboohr, rippling, adp, gusto, scim_log
 ```
 
 ### Source System Attributes (common fields on every evidence record)
@@ -346,20 +347,79 @@ iam_authz.last_review_date  — timestamp: when access was last reviewed
 
 #### Class 1003: Identity Lifecycle
 
-**Description**: Evidence of account provisioning/deprovisioning hygiene and orphan account detection.
+**Description**: Evidence of account provisioning/deprovisioning hygiene and orphan account
+detection. Covers both fleet-level stale/orphan detection and individual termination event
+tracking against a timeliness threshold across multiple systems.
 
-**Typical sources**: Okta users API, Azure AD users, SCIM logs
+**Typical sources**: Okta users API, Azure AD users, SCIM logs, HRIS (Workday, BambooHR,
+Rippling, ADP), cloud IAM (AWS, GCP, Azure)
 
-**Applicable activities**: `resource_enumeration` (2), `log_query` (3)
+**Applicable activities**: `resource_enumeration` (2), `log_query` (3), `behavioral_test` (4)
 
 **Class-specific attributes**:
 ```
-iam_lifecycle.active_accounts   — integer: total enabled accounts
-iam_lifecycle.stale_accounts    — integer: accounts inactive beyond threshold
-iam_lifecycle.orphan_accounts   — integer: accounts with no owner or HR record
-iam_lifecycle.deprovo_lag_days  — integer: mean days from offboarding trigger to account disable
-iam_lifecycle.stale_threshold   — integer: inactivity days used to define "stale"
+# Fleet-level orphan and stale detection (activity_id: 2)
+iam_lifecycle.active_accounts         — integer: total enabled accounts
+iam_lifecycle.stale_accounts          — integer: accounts inactive beyond stale_threshold
+iam_lifecycle.orphan_accounts         — integer: accounts with no owner or HR record
+iam_lifecycle.stale_threshold         — integer: inactivity days used to define "stale"
+
+# HR trigger and timeliness policy (the SLA start/stop definition)
+iam_lifecycle.trigger_source          — workday | bamboohr | rippling | adp | gusto |
+                                        scim_log | manual | unknown
+                                        The authoritative source that provided the termination date.
+iam_lifecycle.termination_date        — date: HR-authoritative last day worked (SLA start)
+iam_lifecycle.trigger_event_id        — string: HR system event/ticket ID (opaque reference)
+iam_lifecycle.timely_threshold_hours  — integer: org-defined SLA for access removal
+                                        (e.g., 8 = same business day, 24 = next calendar day,
+                                         0 = must be removed before end of last day)
+iam_lifecycle.timely_threshold_source — hr_policy | it_policy | compliance_control | manual
+
+# Per-event termination tracking (populated from SCIM/IdP logs for each employee offboarding)
+iam_lifecycle.termination_events      — array of {
+    employee_id      — string: opaque/hashed identifier (never plaintext PII)
+    last_day         — date: HR-authoritative last day worked
+    deactivated_at   — timestamp: when account was disabled in this system
+    deleted_at       — timestamp: when account was permanently deleted (null if not yet deleted)
+    lag_hours        — float: hours from end-of-last-day to deactivated_at
+    on_time          — boolean: lag_hours ≤ timely_threshold_hours
+}
+iam_lifecycle.on_time_rate            — float: % of terminations completed within threshold (0–100)
+iam_lifecycle.late_count              — integer: terminations that exceeded timely_threshold_hours
+iam_lifecycle.deprovo_lag_days        — float: mean days across all termination events (legacy convenience)
+
+# Cross-system offboarding scope and completeness
+iam_lifecycle.offboarding_scope       — array: system IDs that MUST be deprovisioned
+                                        (e.g., ["okta", "github", "aws.iam", "slack", "google_workspace"])
+                                        Defines what "complete offboarding" means for this org.
+iam_lifecycle.systems_confirmed_clean — array: systems where deprov has been confirmed
+iam_lifecycle.systems_pending         — array: systems not yet confirmed deprovisioned
+iam_lifecycle.offboarding_complete    — boolean: systems_confirmed_clean ⊇ offboarding_scope
+
+# Session and token revocation (residual access after account deactivation)
+iam_lifecycle.sessions_revoked          — boolean: active IdP SSO sessions explicitly terminated
+iam_lifecycle.oauth_tokens_revoked      — boolean: OAuth refresh tokens revoked at IdP
+iam_lifecycle.sts_creds_expired         — boolean: AWS STS temporary credentials past max validity
+iam_lifecycle.session_revocation_method — automatic_on_deactivation | manual | timed_out | unknown
+
+# Permanent deletion tracking (for privacy/GDPR controls requiring full deletion)
+iam_lifecycle.deletion_required         — boolean: org policy requires permanent deletion, not just disable
+iam_lifecycle.deletion_lag_sla_days     — integer: max days allowed between deactivation and deletion
+iam_lifecycle.accounts_pending_deletion — integer: deactivated but not yet deleted, beyond SLA
+iam_lifecycle.deletion_lag_days         — float: mean days from deactivation to permanent deletion
+
+# Behavioral test (activity_id: 4) — attempt to authenticate as a deactivated account
+# Safety: observable — auth attempt appears in IdP audit logs; no lasting change
+iam_lifecycle.auth_test_result          — blocked | succeeded | error
+                                          blocked = effective (account truly disabled)
+                                          succeeded = INEFFECTIVE (critical gap — access still works!)
+iam_lifecycle.auth_test_method          — api_password_attempt | saml_assertion | api_key_probe
 ```
+
+**Effective condition**: For timely access termination controls — `offboarding_complete = true`,
+`on_time_rate >= 99.0`, `late_count = 0`, `sessions_revoked = true`, and
+`stale_accounts = 0` for any account in the terminated cohort. For controls requiring deletion:
+additionally `accounts_pending_deletion = 0`.
 
 ---
 
@@ -1123,7 +1183,7 @@ class_uid   class_name                  domain      activity_ids
 ─────────────────────────────────────────────────────────────────────
 1001        Authentication Policy        IAM         1, 4, 7
 1002        Authorization Policy         IAM         1, 2
-1003        Identity Lifecycle           IAM         2, 3
+1003        Identity Lifecycle           IAM         2, 3, 4
 1004        Privileged Access            IAM         1, 2, 3
 1005        Service Account Mgmt        IAM         2
 
