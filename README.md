@@ -49,7 +49,7 @@ See [docs/quickstart.md](docs/quickstart.md) for a detailed walkthrough.
 
 ## Modules
 
-OCEAN ships with 9 modules across 4 source systems:
+OCEAN ships with 11 modules across 4 source systems:
 
 | Module | Type | Source | Safety Class | Description |
 |--------|------|--------|-------------|-------------|
@@ -60,8 +60,10 @@ OCEAN ships with 9 modules across 4 source systems:
 | `mock.test` | collector | mock | — | Simulated MFA policy collection |
 | `mock.network` | collector | mock | — | Simulated network/WAF evidence |
 | `mock.safety_test` | tester | mock | safe | Simulated MFA bypass attempt |
-| `okta.mfa_policy` | collector | Okta | — | MFA enrollment policy collection |
+| `okta.mfa_policy` | collector | Okta | — | MFA enrollment policy + phishing-resistance attributes |
+| `okta.mfa_enrollment_population` | collector | Okta | — | Per-user WebAuthn enrollment coverage analysis |
 | `okta.mfa_bypass` | tester | Okta | safe | Attempts authentication without MFA |
+| `okta.pr_mfa_downgrade` | tester | Okta | safe | Tests whether phishable factor downgrade is possible |
 
 ## CLI Commands
 
@@ -183,7 +185,7 @@ Optionally protect with a bearer token: `--auth-token <token>` or `OCEAN_AUTH_TO
 # Development build
 make build
 
-# Run tests (454 tests)
+# Run tests (509 tests)
 make test
 
 # Release binary (stripped + LTO)

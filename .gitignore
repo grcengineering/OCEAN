@@ -26,5 +26,13 @@ coverage.html
 lcov.info
 cobertura.xml
 
+# Built binaries and distribution artifacts
+/ocean
+/bin/
+/dist/
+
+# Coverage output (Go-style)
+coverage.out
+
 # Temp/misc
 *.png
