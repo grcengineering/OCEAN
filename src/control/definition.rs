@@ -3,6 +3,116 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// ---------------------------------------------------------------------------
+// Cross-evidence component types
+// ---------------------------------------------------------------------------
+
+/// Declares a named observable export from a composite control component.
+///
+/// When the evaluator processes this component's evidence, it collects all
+/// observables whose `obs_type` matches and makes them available under `name`
+/// for cross-checks in downstream components.
+///
+/// Example YAML:
+/// ```yaml
+/// exports:
+///   - name: waf_egress_ips
+///     obs_type: ip_range
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportSpec {
+    /// The name under which these values are made available to cross-checks.
+    pub name: String,
+    /// Only observables with this `obs_type` are exported.
+    pub obs_type: String,
+}
+
+/// How to compare two sets of values in a cross-check assertion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrossCheckAssertion {
+    /// Every local value must appear in the referenced export set (local ⊆ export).
+    SubsetOf,
+    /// Every value in the referenced export must appear locally (export ⊆ local).
+    SupersetOf,
+    /// At least one local value appears in the referenced export.
+    ContainsAny,
+    /// The referenced export must be non-empty (existence check).
+    Nonempty,
+}
+
+/// A validation rule that compares this component's observables against an
+/// exported set from a previously evaluated component.
+///
+/// Example YAML:
+/// ```yaml
+/// cross_checks:
+///   - uses: waf_egress_ips
+///     obs_type: ip_range
+///     assertion: subset_of
+///     label: "Firewall allows only WAF egress IPs"
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossCheck {
+    /// Name of an export declared by an earlier component in `components`.
+    pub uses: String,
+    /// Observable type to collect from *this* component's evidence for comparison.
+    pub obs_type: String,
+    /// The assertion to evaluate.
+    pub assertion: CrossCheckAssertion,
+    /// Human-readable description surfaced in evaluation details on failure.
+    pub label: String,
+}
+
+/// A component within a composite control.  Richer than the legacy
+/// `component_controls: Vec<String>` mechanism — identifies evidence by
+/// class and activity, declares observable exports, and can validate
+/// cross-component constraints via cross_checks.
+///
+/// Example YAML:
+/// ```yaml
+/// components:
+///   - id: waf_config
+///     evidence_class: 3002
+///     activity_id: 1
+///     required: true
+///     exports:
+///       - name: waf_egress_ips
+///         obs_type: ip_range
+///   - id: origin_firewall
+///     evidence_class: 3001
+///     activity_id: 1
+///     required: true
+///     cross_checks:
+///       - uses: waf_egress_ips
+///         obs_type: ip_range
+///         assertion: subset_of
+///         label: "Firewall allows only WAF egress IPs"
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentSpec {
+    /// Local identifier for this component (used in error messages).
+    pub id: String,
+    /// Evidence class UID that this component matches (e.g. 3002 for WAF).
+    pub evidence_class: i32,
+    /// If set, only evidence with this `activity_id` is considered.
+    #[serde(default)]
+    pub activity_id: Option<i32>,
+    /// If true (default), missing or ineffective evidence fails the whole control.
+    #[serde(default = "default_true")]
+    pub required: bool,
+    /// Observable exports that downstream components can reference.
+    #[serde(default)]
+    pub exports: Vec<ExportSpec>,
+    /// Cross-component validation rules evaluated after exports are resolved.
+    #[serde(default)]
+    pub cross_checks: Vec<CrossCheck>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
 /// A YAML-defined control that specifies what to monitor and how to evaluate it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Control {
@@ -12,8 +122,14 @@ pub struct Control {
     pub evaluation_logic: EvaluationLogic,
     #[serde(default)]
     pub framework_mappings: Vec<FrameworkMapping>,
+    /// Legacy: list of component control IDs for simple all-effective composites.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub component_controls: Vec<String>,
+    /// Rich component specs with observable exports and cross-checks.
+    /// When present, `evaluate_composite_with_components` is used instead of
+    /// the simple `component_controls` path.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub components: Vec<ComponentSpec>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub evaluation_expression_hash: String,
 }
@@ -83,6 +199,8 @@ struct ControlYaml {
     evaluation: EvaluationYaml,
     #[serde(default)]
     component_controls: Vec<String>,
+    #[serde(default)]
+    components: Vec<ComponentSpec>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -126,6 +244,7 @@ impl Control {
                 })
                 .collect(),
             component_controls: raw.component_controls,
+            components: raw.components,
             evaluation_expression_hash: String::new(),
         })
     }
@@ -194,6 +313,7 @@ mod tests {
                 description: "Logical access controls".to_string(),
             }],
             component_controls: vec![],
+            components: vec![],
             evaluation_expression_hash: String::new(),
         };
         let json = serde_json::to_string(&control).unwrap();

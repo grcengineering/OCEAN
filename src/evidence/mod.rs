@@ -113,11 +113,19 @@ pub struct Metadata {
 }
 
 /// A single observable value extracted from evidence (username, IP, resource ID, etc.).
+///
+/// The optional `name` field marks a module-authored named export — a semantic
+/// label that composite controls can reference in cross-checks (e.g., a WAF
+/// module tagging its egress CIDRs as `name: "egress_ip"`).  Auto-extracted
+/// observables (via `extract_observables`) leave `name` empty.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Observable {
     #[serde(rename = "type")]
     pub obs_type: String,
     pub value: String,
+    /// Semantic export name set by the module (empty for auto-extracted observables).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
 }
 
 /// A discrete finding within an evidence record (misconfiguration, ineffective control).
@@ -260,11 +268,36 @@ mod tests {
         let obs = Observable {
             obs_type: "ip".to_string(),
             value: "1.2.3.4".to_string(),
+            name: String::new(),
         };
         let json = serde_json::to_string(&obs).unwrap();
         assert!(json.contains("\"type\""));
         let decoded: Observable = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, obs);
+    }
+
+    #[test]
+    fn observable_name_omitted_when_empty() {
+        let obs = Observable {
+            obs_type: "ip".to_string(),
+            value: "1.2.3.4".to_string(),
+            name: String::new(),
+        };
+        let json = serde_json::to_string(&obs).unwrap();
+        assert!(!json.contains("\"name\""), "empty name should be omitted");
+    }
+
+    #[test]
+    fn observable_named_export_roundtrip() {
+        let obs = Observable {
+            obs_type: "ip_range".to_string(),
+            value: "173.245.48.0/20".to_string(),
+            name: "egress_ip".to_string(),
+        };
+        let json = serde_json::to_string(&obs).unwrap();
+        assert!(json.contains("\"name\""));
+        let decoded: Observable = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.name, "egress_ip");
     }
 
     #[test]

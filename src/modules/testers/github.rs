@@ -334,10 +334,12 @@ impl Tester for SecretPushTester {
                 Observable {
                     obs_type: "resource".to_string(),
                     value: format!("{}/{}:{}", owner, repo, TEST_FILE_PATH),
+                    name: String::new(),
                 },
                 Observable {
                     obs_type: "domain".to_string(),
                     value: "github.com".to_string(),
+                    name: String::new(),
                 },
             ],
             status_id,

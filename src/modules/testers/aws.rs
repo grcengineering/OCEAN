@@ -267,6 +267,7 @@ impl Tester for S3PublicAccessTester {
                     observables: vec![Observable {
                         obs_type: "resource".to_string(),
                         value: bucket_url.clone(),
+                        name: String::new(),
                     }],
                     status_id: StatusId::Unknown,
                     status: format!("Could not reach bucket: {}", e),
@@ -316,6 +317,7 @@ impl Tester for S3PublicAccessTester {
             observables: vec![Observable {
                 obs_type: "resource".to_string(),
                 value: bucket_url.clone(),
+                name: String::new(),
             }],
             status_id,
             status: status_text,

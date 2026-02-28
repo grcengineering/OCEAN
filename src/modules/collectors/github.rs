@@ -157,10 +157,12 @@ impl Collector for BranchProtectionCollector {
                     Observable {
                         obs_type: "resource".to_string(),
                         value: format!("{}/{}:{}:branch_protection", owner, repo, branch),
+                        name: String::new(),
                     },
                     Observable {
                         obs_type: "domain".to_string(),
                         value: "github.com".to_string(),
+                        name: String::new(),
                     },
                 ],
                 status_id: StatusId::Ineffective,
@@ -356,10 +358,12 @@ impl Collector for BranchProtectionCollector {
                 Observable {
                     obs_type: "resource".to_string(),
                     value: format!("{}/{}:{}:branch_protection", owner, repo, branch),
+                    name: String::new(),
                 },
                 Observable {
                     obs_type: "domain".to_string(),
                     value: "github.com".to_string(),
+                    name: String::new(),
                 },
             ],
             status_id,

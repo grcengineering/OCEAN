@@ -111,6 +111,7 @@ mod tests {
             },
             framework_mappings: vec![],
             component_controls: vec![],
+            components: vec![],
             evaluation_expression_hash: String::new(),
         }
     }

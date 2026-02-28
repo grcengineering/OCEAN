@@ -111,10 +111,12 @@ impl Tester for MockTester {
                 Observable {
                     obs_type: "resource".to_string(),
                     value: "mfa_policy_global".to_string(),
+                    name: String::new(),
                 },
                 Observable {
                     obs_type: "user".to_string(),
                     value: "test-user@example.com".to_string(),
+                    name: String::new(),
                 },
             ],
             status_id: StatusId::Effective,

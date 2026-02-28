@@ -72,6 +72,7 @@ The single highest-signal domain. Almost every compliance framework's first chap
 | Firewall & Segmentation | Are security groups / ACLs properly scoped? Are management ports unexposed? |
 | WAF Protection | Is a WAF deployed? Is it blocking OWASP Top 10 attack classes? |
 | Certificate Health | Are TLS certificates valid, not self-signed, not expired, using strong ciphers? |
+| Traffic Routing Policy | Does all traffic flow through protective infrastructure (WAF, CDN) before reaching origin? Is the DNS/CNAME chain enforced? |
 | DDoS Protection | Is DDoS mitigation enabled on public-facing services? |
 | Exposed Services | Are any unexpected services reachable from the public internet? |
 
@@ -474,6 +475,40 @@ net_cert.tls_version           — string
 net_cert.key_type              — rsa_2048 | rsa_4096 | ecdsa_256 | ecdsa_384 | etc.
 net_cert.chain_valid           — boolean: full chain validates to trusted root
 ```
+
+---
+
+#### Class 3004: Traffic Routing Policy
+
+**Description**: Evidence that application traffic is routed through protective infrastructure
+(WAF, CDN, DDoS mitigation) before reaching the origin server. Validates that DNS/CNAME chains
+enforce the correct path and that the origin is not directly reachable, bypassing protection.
+
+**Typical sources**: DNS provider API (CNAME resolution), CDN/WAF routing config API, active
+probe to origin IP, Cloudflare/Fastly routing API
+
+**Applicable activities**: `config_inspection` (1), `probe` (6)
+
+**Class-specific attributes**:
+```
+net_routing.protected_hostname        — string: the public hostname that should be WAF/CDN-protected
+net_routing.origin_hostname           — string: origin server hostname or IP
+net_routing.cdn_vendor                — cloudflare | fastly | cloudfront | akamai | imperva | other
+net_routing.cname_chain               — array: [{hostname, cname_target}] — each hop in DNS chain
+net_routing.waf_in_chain              — boolean: WAF/CDN is present in the CNAME chain
+net_routing.origin_directly_reachable — boolean: true = protection bypassed (bad)
+net_routing.egress_ip_ranges          — array: CIDR blocks published by CDN/WAF vendor
+net_routing.origin_allows_non_cdn     — boolean: origin accepts traffic not from CDN egress ranges
+```
+
+**Effective condition**: WAF/CDN is present in the DNS CNAME chain (`waf_in_chain = true`),
+origin is not directly reachable (`origin_directly_reachable = false`), and origin firewall
+rules restrict ingress to CDN egress IP ranges only (`origin_allows_non_cdn = false`).
+
+**Cross-check role**: Evidence of this class typically **exports** `net_routing.egress_ip_ranges`
+as `obs_type: ip_range` observables. Downstream firewall evidence (class 3001) can validate
+those IPs via a `subset_of` cross-check assertion, ensuring the firewall allows only WAF/CDN
+egress — not arbitrary internet traffic.
 
 ---
 
@@ -1026,7 +1061,7 @@ implementation and schema, and is the first artifact to be kept in sync as modul
 
 ## Part 12 — Class Registry Quick Reference
 
-Full class registry for at-a-glance lookup. All 26 classes across 8 domains.
+Full class registry for at-a-glance lookup. All 27 classes across 8 domains.
 
 ```
 class_uid   class_name                  domain      activity_ids
@@ -1044,6 +1079,7 @@ class_uid   class_name                  domain      activity_ids
 3001        Firewall & Segmentation     Network     2
 3002        WAF Protection              Network     1, 5
 3003        Certificate Health          Network     6
+3004        Traffic Routing Policy      Network     1, 6
 
 4001        Repository Policy           Code/SDLC   1, 2
 4002        Secret Exposure             Code/SDLC   2, 4
@@ -1062,3 +1098,177 @@ class_uid   class_name                  domain      activity_ids
 8002        Supply Chain Integrity      Third-Party 1, 2
 8003        Vendor SLA Monitoring       Third-Party 1, 3
 ```
+
+
+---
+
+## Part 13 — Named Observable Exports & Cross-Check Assertions
+
+Some controls span multiple systems whose evidence must be **cross-validated against each
+other** — not just evaluated in isolation. The canonical example is a WAF control:
+
+1. The WAF publishes its egress IP ranges.
+2. The origin firewall must allow *only* those IP ranges — not arbitrary internet traffic.
+3. These two facts are in separate evidence records (class 3002 and class 3001), and the
+   correctness of the second depends on specific values from the first.
+
+OCEAN addresses this with two complementary mechanisms:
+
+---
+
+### Named Observable Exports
+
+A module can tag observables with a `name` field — a semantic label for a specific set of
+values it produces:
+
+```json
+{
+  "type": "ip_range",
+  "value": "173.245.48.0/20",
+  "name": "egress_ip"
+}
+```
+
+An observable with `name` set is a **named export**: the module is explicitly signaling
+"this value is significant enough to be referenced by other controls". Auto-extracted
+observables (via `extract_observables`) leave `name` empty.
+
+---
+
+### ComponentSpec in Control YAML
+
+Composite controls can use the rich `components:` syntax (instead of the simple
+`component_controls: [...]` list) to:
+
+- Match evidence by `evidence_class` and optionally `activity_id`
+- Declare which observable types to export by name
+- Declare cross-check assertions against earlier components' exports
+
+```yaml
+components:
+  - id: waf_config
+    evidence_class: 3002
+    activity_id: 1
+    required: true
+    exports:
+      - name: waf_egress_ips
+        obs_type: ip_range
+
+  - id: origin_firewall
+    evidence_class: 3001
+    activity_id: 1
+    required: true
+    cross_checks:
+      - uses: waf_egress_ips
+        obs_type: ip_range
+        assertion: subset_of
+        label: "Firewall allows only WAF egress IPs"
+
+  - id: dns_routing
+    evidence_class: 3004
+    activity_id: 6
+    required: true
+    exports: []
+    cross_checks: []
+```
+
+---
+
+### CrossCheck Assertions
+
+| assertion | Semantics | Pass condition |
+|---|---|---|
+| `subset_of` | Local ⊆ Export | Every local observable value appears in the referenced export set |
+| `superset_of` | Export ⊆ Local | Every value in the referenced export appears locally |
+| `contains_any` | Local ∩ Export ≠ ∅ | At least one local value appears in the referenced export |
+| `nonempty` | Export ≠ ∅ | The referenced export set is non-empty (existence check) |
+
+---
+
+### Evaluation Semantics
+
+The evaluator processes components in declaration order:
+
+1. For each component, look up evidence by `(evidence_class, activity_id)`.
+2. If a required component has no effective evidence → overall status = `ineffective`.
+3. Collect exports: for each `ExportSpec`, filter evidence observables by `obs_type` and
+   accumulate values into the named export map.
+4. Evaluate cross-checks: for each `CrossCheck`, collect local observables by `obs_type`,
+   look up the referenced export set, and apply the assertion. A failed assertion →
+   overall status = `ineffective`, with a human-readable reason in the result.
+5. Return overall status and a `Vec<CrossCheckResult>` for surfacing in evaluation details.
+
+---
+
+### WAF Control Full Example
+
+A complete WAF control decomposed using this mechanism:
+
+```yaml
+id: net.waf_protection
+name: WAF Protection
+description: Verifies WAF is deployed, configured, and the only ingress path to origin.
+evaluation:
+  preset: composite_with_components
+
+components:
+  # 1. WAF policy configuration (passive)
+  - id: waf_config
+    evidence_class: 3002
+    activity_id: 1          # config_inspection
+    required: true
+    exports:
+      - name: waf_egress_ips
+        obs_type: ip_range  # WAF vendor's egress CIDRs
+
+  # 2. Origin firewall rules (passive)
+  - id: origin_firewall
+    evidence_class: 3001
+    activity_id: 1          # config_inspection
+    required: true
+    cross_checks:
+      - uses: waf_egress_ips
+        obs_type: ip_range
+        assertion: subset_of
+        label: "Firewall allows only WAF egress IPs"
+
+  # 3. DNS routing verification (probe)
+  - id: dns_routing
+    evidence_class: 3004
+    activity_id: 6          # probe
+    required: true
+
+  # 4. TLS configuration (probe)
+  - id: tls_config
+    evidence_class: 3003
+    activity_id: 6          # probe
+    required: false         # advisory: warn but don't fail
+
+  # 5. WAF bypass active test
+  - id: waf_bypass_test
+    evidence_class: 3002
+    activity_id: 5          # bypass_attempt
+    required: false         # optional active test
+
+  # 6. Direct origin access test (should fail → effective)
+  - id: direct_origin_test
+    evidence_class: 3001
+    activity_id: 5          # bypass_attempt
+    required: false
+
+  # 7. WAF fleet coverage (population analysis)
+  - id: waf_coverage
+    evidence_class: 3002
+    activity_id: 7          # population_analysis
+    required: false
+
+framework_mappings:
+  - framework: soc2
+    control: CC6.6
+  - framework: pci_dss
+    control: "6.4"
+```
+
+This YAML fully specifies the cross-evidence data dependency between the WAF module
+(class 3002, exporting egress IPs) and the firewall evidence (class 3001, validating
+those IPs as the only allowed ingress source) — in a declarative, auditable format.

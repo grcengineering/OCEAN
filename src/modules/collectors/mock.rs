@@ -66,6 +66,7 @@ impl Collector for MockCollector {
             observables: vec![Observable {
                 obs_type: "resource".to_string(),
                 value: "mfa_policy_global".to_string(),
+                name: String::new(),
             }],
             status_id: StatusId::Effective,
             status: "MFA enforcement is required for all users".to_string(),
@@ -148,10 +149,12 @@ impl Collector for MockNetworkCollector {
                 Observable {
                     obs_type: "resource".to_string(),
                     value: "waf_global_config".to_string(),
+                    name: String::new(),
                 },
                 Observable {
                     obs_type: "resource".to_string(),
                     value: "waf_rule_sets".to_string(),
+                    name: String::new(),
                 },
             ],
             status_id: StatusId::Effective,

@@ -50,6 +50,7 @@ pub fn make_evidence() -> Evidence {
         observables: vec![Observable {
             obs_type: "resource".to_string(),
             value: "arn:aws:s3:::my-bucket".to_string(),
+            name: String::new(),
         }],
         status_id: StatusId::Effective,
         status: "effective".to_string(),

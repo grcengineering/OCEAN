@@ -269,10 +269,12 @@ impl Tester for MfaBypassTester {
                 Observable {
                     obs_type: "resource".to_string(),
                     value: "mfa_policy".to_string(),
+                    name: String::new(),
                 },
                 Observable {
                     obs_type: "user".to_string(),
                     value: test_user.clone(),
+                    name: String::new(),
                 },
             ],
             status_id,

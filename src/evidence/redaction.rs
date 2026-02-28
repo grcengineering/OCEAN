@@ -103,10 +103,12 @@ mod tests {
             Observable {
                 obs_type: "user".to_string(),
                 value: "alice".to_string(),
+                name: String::new(),
             },
             Observable {
                 obs_type: "ip".to_string(),
                 value: "1.2.3.4".to_string(),
+                name: String::new(),
             },
         ];
         let config = RedactionConfig {
@@ -124,6 +126,7 @@ mod tests {
         ev.observables = vec![Observable {
             obs_type: "ip".to_string(),
             value: "10.0.0.1".to_string(),
+            name: String::new(),
         }];
         let config = RedactionConfig {
             hash_observable_types: vec!["ip".to_string()],

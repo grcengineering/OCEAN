@@ -143,6 +143,7 @@ impl Collector for MfaPolicyCollector {
             observables.push(Observable {
                 obs_type: "resource".to_string(),
                 value: format!("policy:{}", policy_id),
+                name: String::new(),
             });
 
             if status_str != "ACTIVE" {

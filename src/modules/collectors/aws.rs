@@ -378,10 +378,12 @@ impl Collector for IamCollector {
             observables.push(Observable {
                 obs_type: "user".to_string(),
                 value: s.user_name.clone(),
+                name: String::new(),
             });
             observables.push(Observable {
                 obs_type: "resource".to_string(),
                 value: s.arn.clone(),
+                name: String::new(),
             });
 
             if !s.mfa_enabled {

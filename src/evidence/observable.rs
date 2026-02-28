@@ -26,6 +26,7 @@ pub fn extract_observables(raw_data: &Value) -> Vec<Observable> {
                     result.push(Observable {
                         obs_type: obs_type.to_string(),
                         value: value.to_string(),
+                        name: String::new(), // auto-extracted: no named export
                     });
                 }
                 return; // first match wins
