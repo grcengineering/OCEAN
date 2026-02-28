@@ -110,6 +110,8 @@ mod tests {
                 cel_expression: String::new(),
             },
             framework_mappings: vec![],
+            collectors: vec![],
+            testers: vec![],
             component_controls: vec![],
             components: vec![],
             evaluation_expression_hash: String::new(),

@@ -2,6 +2,86 @@ use anyhow::Result;
 use serde::Serialize;
 use std::io::Write;
 
+// ---------------------------------------------------------------------------
+// Pipeline evaluation output types
+// ---------------------------------------------------------------------------
+
+/// Result of running a single module during an evaluate/test pipeline.
+pub struct ModuleRunResult {
+    pub module_id: String,
+    /// "collect" or "test"
+    pub module_type: &'static str,
+    /// "OK", "PASS", "FAIL", "ERROR"
+    pub status: String,
+    pub error: Option<String>,
+}
+
+/// Aggregated result of an evaluate-path pipeline for one control.
+pub struct EvaluationResult {
+    pub control_id: String,
+    pub control_name: String,
+    pub target: String,
+    pub status: String,
+    pub confidence: String,
+    /// First framework mapping, e.g. "soc2 CC6.1"
+    pub framework: String,
+    pub module_runs: Vec<ModuleRunResult>,
+    /// Non-empty when status is not "effective"
+    pub findings: Vec<String>,
+}
+
+/// Print a human-readable evaluation table to the writer.
+pub fn print_evaluation_table<W: Write>(w: &mut W, results: &[EvaluationResult]) -> Result<()> {
+    // Header
+    writeln!(
+        w,
+        "{:<44} {:<8} {:<12} {:<10} Framework",
+        "Control", "Target", "Status", "Confidence"
+    )?;
+    writeln!(w, "{}", "─".repeat(88))?;
+
+    for result in results {
+        let status_upper = result.status.to_uppercase();
+        let label = if result.control_name.is_empty() {
+            result.control_id.clone()
+        } else {
+            format!("{} ({})", result.control_id, result.control_name)
+        };
+        writeln!(
+            w,
+            "{:<44} {:<8} {:<12} {:<10} {}",
+            label,
+            result.target,
+            status_upper,
+            result.confidence.to_uppercase(),
+            result.framework,
+        )?;
+        for run in &result.module_runs {
+            let status_col = match run.status.as_str() {
+                "OK" | "PASS" => run.status.as_str(),
+                _ => &run.status,
+            };
+            writeln!(
+                w,
+                "  ↳ [{:<7}] {:<38} {}",
+                run.module_type, run.module_id, status_col,
+            )?;
+            if let Some(err) = &run.error {
+                writeln!(w, "             error: {err}")?;
+            }
+        }
+        if !result.findings.is_empty() {
+            writeln!(w)?;
+            writeln!(w, "  FINDINGS for {}:", result.control_id)?;
+            for f in &result.findings {
+                writeln!(w, "    • {f}")?;
+            }
+        }
+        writeln!(w)?;
+    }
+    Ok(())
+}
+
 /// Output format for CLI commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {

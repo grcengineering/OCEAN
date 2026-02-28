@@ -216,6 +216,8 @@ mod tests {
             description: String::new(),
             evaluation_logic: EvaluationLogic::default(),
             framework_mappings: vec![],
+            collectors: vec![],
+            testers: vec![],
             component_controls: components.into_iter().map(String::from).collect(),
             components: vec![],
             evaluation_expression_hash: String::new(),

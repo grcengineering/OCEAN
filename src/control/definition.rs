@@ -113,6 +113,15 @@ fn default_true() -> bool {
     true
 }
 
+/// Reference to a collector or tester module used by a control.
+/// Parsed from the `collectors:` and `testers:` arrays in control YAML.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ModuleRef {
+    pub module_id: String,
+    #[serde(default = "default_true")]
+    pub required: bool,
+}
+
 /// A YAML-defined control that specifies what to monitor and how to evaluate it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Control {
@@ -122,6 +131,12 @@ pub struct Control {
     pub evaluation_logic: EvaluationLogic,
     #[serde(default)]
     pub framework_mappings: Vec<FrameworkMapping>,
+    /// Collector modules that gather passive evidence for this control.
+    #[serde(default)]
+    pub collectors: Vec<ModuleRef>,
+    /// Tester modules that perform active verification for this control.
+    #[serde(default)]
+    pub testers: Vec<ModuleRef>,
     /// Legacy: list of component control IDs for simple all-effective composites.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub component_controls: Vec<String>,
@@ -198,6 +213,10 @@ struct ControlYaml {
     #[serde(default)]
     evaluation: EvaluationYaml,
     #[serde(default)]
+    collectors: Vec<ModuleRef>,
+    #[serde(default)]
+    testers: Vec<ModuleRef>,
+    #[serde(default)]
     component_controls: Vec<String>,
     #[serde(default)]
     components: Vec<ComponentSpec>,
@@ -243,6 +262,8 @@ impl Control {
                     description: m.description,
                 })
                 .collect(),
+            collectors: raw.collectors,
+            testers: raw.testers,
             component_controls: raw.component_controls,
             components: raw.components,
             evaluation_expression_hash: String::new(),
@@ -312,6 +333,8 @@ mod tests {
                 requirement_id: "CC6.1".to_string(),
                 description: "Logical access controls".to_string(),
             }],
+            collectors: vec![],
+            testers: vec![],
             component_controls: vec![],
             components: vec![],
             evaluation_expression_hash: String::new(),

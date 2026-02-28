@@ -9,14 +9,14 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use ocean::{
-    control::{calculate_uptime, evaluate_control, Control},
+    control::{calculate_uptime, evaluate_control, Control, ModuleRef},
     module::{AutoAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
     modules::{register_all_collectors, register_all_testers},
     scheduler::Schedule,
     storage::{EvidenceQuery, SqliteStore, Store},
 };
 
-use output::{print_output, OutputFormat};
+use output::{print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat};
 
 // ---------------------------------------------------------------------------
 // CLI structure
@@ -64,12 +64,25 @@ pub enum Commands {
     /// Run an active control test using a tester module.
     #[command(name = "test")]
     Test {
-        /// Module ID (e.g., aws.s3_public_access, github.secret_push).
-        module: String,
+        /// Module ID for legacy mode (e.g., aws.s3_public_access, github.secret_push).
+        /// Omit when using --target/-t and --control-path/-c.
+        module: Option<String>,
 
-        /// Target environment: production (default), staging, or isolated.
-        #[arg(long, default_value = "production")]
-        target: String,
+        /// Target integration name (okta, aws, github, or * for all). Pipeline mode.
+        #[arg(short = 't', long = "target")]
+        target: Option<String>,
+
+        /// Control path prefix (iam, iam.mfa, iam.mfa.phishing_resistant). Pipeline mode.
+        #[arg(short = 'c', long = "control-path")]
+        control_path: Option<String>,
+
+        /// Environment scope for active testing: production (default), staging, or isolated.
+        #[arg(long = "env", default_value = "production")]
+        env: String,
+
+        /// Directory containing control YAML files (pipeline mode).
+        #[arg(long, default_value = "controls")]
+        controls_dir: String,
 
         /// Skip storing evidence to the database.
         #[arg(long)]
@@ -84,10 +97,19 @@ pub enum Commands {
 
     /// Evaluate a control against collected evidence.
     Evaluate {
-        /// Control ID (e.g., cc6.1).
-        control: String,
+        /// Control ID for legacy mode (e.g., iam.mfa_enforcement).
+        /// Omit when using --target/-t and --control-path/-c.
+        control: Option<String>,
 
-        /// Custom CEL expression (overrides control YAML).
+        /// Target integration name (okta, aws, github, or * for all). Pipeline mode.
+        #[arg(short = 't', long = "target")]
+        target: Option<String>,
+
+        /// Control path prefix (iam, iam.mfa, iam.mfa.phishing_resistant). Pipeline mode.
+        #[arg(short = 'c', long = "control-path")]
+        control_path: Option<String>,
+
+        /// Custom CEL expression (overrides control YAML, legacy mode only).
         #[arg(long)]
         cel: Option<String>,
 
@@ -231,8 +253,25 @@ pub fn run() -> Result<()> {
         Commands::Test {
             module,
             target,
+            control_path,
+            env,
+            controls_dir,
             no_store,
-        } => cmd_test(&mut out, format, &cli.db, &module, &target, !no_store),
+        } => {
+            if target.is_some() || control_path.is_some() {
+                let t = target.as_deref().unwrap_or("*");
+                let p = control_path.as_deref().ok_or_else(|| {
+                    anyhow!("--control-path/-c is required when using --target/-t")
+                })?;
+                cmd_test_path(&mut out, format, &cli.db, t, p, &env, &controls_dir, !no_store)
+            } else if let Some(m) = module.as_deref() {
+                cmd_test(&mut out, format, &cli.db, m, &env, !no_store)
+            } else {
+                Err(anyhow!(
+                    "Specify a module ID or use --target/-t and --control-path/-c"
+                ))
+            }
+        }
         Commands::Modules { cmd } => match cmd {
             ModulesCmd::List { module_type } => {
                 cmd_modules_list(&mut out, format, module_type.as_deref())
@@ -241,16 +280,25 @@ pub fn run() -> Result<()> {
         },
         Commands::Evaluate {
             control,
+            target,
+            control_path,
             cel,
             controls_dir,
-        } => cmd_evaluate(
-            &mut out,
-            format,
-            &cli.db,
-            &control,
-            cel.as_deref(),
-            &controls_dir,
-        ),
+        } => {
+            if target.is_some() || control_path.is_some() {
+                let t = target.as_deref().unwrap_or("*");
+                let p = control_path.as_deref().ok_or_else(|| {
+                    anyhow!("--control-path/-c is required when using --target/-t")
+                })?;
+                cmd_evaluate_path(&mut out, format, &cli.db, t, p, &controls_dir)
+            } else if let Some(ctrl) = control.as_deref() {
+                cmd_evaluate(&mut out, format, &cli.db, ctrl, cel.as_deref(), &controls_dir)
+            } else {
+                Err(anyhow!(
+                    "Specify a control ID or use --target/-t and --control-path/-c"
+                ))
+            }
+        }
         Commands::History {
             control,
             days,
@@ -531,6 +579,317 @@ fn cmd_evaluate<W: Write>(
     db_store.store_control_status(&status)?;
 
     print_output(out, &status, format)
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline evaluation helpers (new UX)
+// ---------------------------------------------------------------------------
+
+/// Returns true if `module_id` belongs to the given target integration.
+/// Target "okta" matches module IDs with prefix "okta." (e.g. "okta.mfa_policy").
+/// Target "*" matches all modules.
+fn target_matches_module(target: &str, module_id: &str) -> bool {
+    if target == "*" {
+        return true;
+    }
+    module_id.split('.').next() == Some(target)
+}
+
+/// Glob `controls_dir` recursively and return all controls whose ID matches
+/// the given path (exact match or prefix — "iam" matches "iam.mfa_enforcement").
+fn resolve_controls(controls_dir: &str, path: &str) -> Result<Vec<Control>> {
+    let dir = std::path::Path::new(controls_dir);
+    if !dir.exists() {
+        return Err(anyhow!(
+            "controls directory not found: '{controls_dir}'"
+        ));
+    }
+
+    let mut all: Vec<Control> = Vec::new();
+    fn walk(dir: &std::path::Path, out: &mut Vec<Control>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|e| e == "yaml" || e == "yml") {
+                if let Ok(content) = std::fs::read_to_string(&p) {
+                    if let Ok(ctrl) = Control::load_yaml(&content) {
+                        out.push(ctrl);
+                    }
+                }
+            }
+        }
+    }
+    walk(dir, &mut all);
+
+    let prefix_dot = format!("{path}.");
+    let matched: Vec<Control> = all
+        .into_iter()
+        .filter(|c| c.id == path || c.id.starts_with(&prefix_dot))
+        .collect();
+
+    if matched.is_empty() {
+        return Err(anyhow!(
+            "no controls found for path '{path}' in '{controls_dir}'"
+        ));
+    }
+    Ok(matched)
+}
+
+/// Run the unified collect → test → evaluate pipeline for every control matching
+/// `control_path` that has modules for the given `target`.
+fn cmd_evaluate_path<W: Write>(
+    out: &mut W,
+    format: OutputFormat,
+    db: &str,
+    target: &str,
+    control_path: &str,
+    controls_dir: &str,
+) -> Result<()> {
+    let controls = resolve_controls(controls_dir, control_path)?;
+    let registry = build_registry();
+    let executor = Executor::new(registry);
+    let config = env_as_config();
+    let db_store = open_store(db)?;
+
+    let mut results: Vec<EvaluationResult> = Vec::new();
+
+    for control in &controls {
+        let mut module_runs: Vec<ModuleRunResult> = Vec::new();
+
+        // ── Collectors ────────────────────────────────────────────────────────
+        let collectors: Vec<&ModuleRef> = control
+            .collectors
+            .iter()
+            .filter(|m| target_matches_module(target, &m.module_id))
+            .collect();
+
+        for mref in collectors {
+            match executor.execute_collector(&mref.module_id, &config) {
+                Ok(evidence) => {
+                    for ev in &evidence {
+                        let _ = db_store.store_evidence(ev);
+                    }
+                    module_runs.push(ModuleRunResult {
+                        module_id: mref.module_id.clone(),
+                        module_type: "collect",
+                        status: "OK".to_string(),
+                        error: None,
+                    });
+                }
+                Err(e) => {
+                    module_runs.push(ModuleRunResult {
+                        module_id: mref.module_id.clone(),
+                        module_type: "collect",
+                        status: "ERROR".to_string(),
+                        error: Some(e.to_string()),
+                    });
+                }
+            }
+        }
+
+        // ── Testers ───────────────────────────────────────────────────────────
+        let testers: Vec<&ModuleRef> = control
+            .testers
+            .iter()
+            .filter(|m| target_matches_module(target, &m.module_id))
+            .collect();
+
+        for mref in testers {
+            let cfg = TestConfig {
+                module_config: config.clone(),
+                target_environment: EnvironmentScope::Production,
+                authorizer: Box::new(AutoAuthorizer),
+            };
+            match executor.execute_tester(&mref.module_id, &cfg) {
+                Ok(evidence) => {
+                    for ev in &evidence {
+                        let _ = db_store.store_evidence(ev);
+                    }
+                    module_runs.push(ModuleRunResult {
+                        module_id: mref.module_id.clone(),
+                        module_type: "test",
+                        status: "PASS".to_string(),
+                        error: None,
+                    });
+                }
+                Err(e) => {
+                    module_runs.push(ModuleRunResult {
+                        module_id: mref.module_id.clone(),
+                        module_type: "test",
+                        status: "FAIL".to_string(),
+                        error: Some(e.to_string()),
+                    });
+                }
+            }
+        }
+
+        // ── CEL Evaluation ────────────────────────────────────────────────────
+        let evidence = db_store.query_evidence(&EvidenceQuery {
+            control_id: Some(control.id.clone()),
+            ..Default::default()
+        })?;
+        let status = evaluate_control(control, &evidence);
+        let _ = db_store.store_control_status(&status);
+
+        let framework = control
+            .framework_mappings
+            .first()
+            .map(|m| format!("{} {}", m.framework, m.requirement_id))
+            .unwrap_or_default();
+
+        let findings = if status.status != "effective" {
+            vec![status.evaluation_details.clone()]
+        } else {
+            vec![]
+        };
+
+        results.push(EvaluationResult {
+            control_id: control.id.clone(),
+            control_name: control.name.clone(),
+            target: target.to_string(),
+            status: status.status,
+            confidence: status.confidence,
+            framework,
+            module_runs,
+            findings,
+        });
+    }
+
+    // ── Output ────────────────────────────────────────────────────────────────
+    // Pipeline mode defaults to human-readable table. Pass --format yaml for
+    // structured YAML output (useful for scripting).
+    if format == OutputFormat::Yaml {
+        let json_results: Vec<serde_json::Value> = results
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "control_id": r.control_id,
+                    "target": r.target,
+                    "status": r.status,
+                    "confidence": r.confidence,
+                    "framework": r.framework,
+                    "findings": r.findings,
+                    "module_runs": r.module_runs.iter().map(|m| serde_json::json!({
+                        "module_id": m.module_id,
+                        "type": m.module_type,
+                        "status": m.status,
+                        "error": m.error,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        print_output(out, &json_results, format)?;
+    } else {
+        print_evaluation_table(out, &results)?;
+    }
+    Ok(())
+}
+
+/// Run active testers only (no collectors, no CEL) for controls matching `control_path`.
+#[allow(clippy::too_many_arguments)]
+fn cmd_test_path<W: Write>(
+    out: &mut W,
+    format: OutputFormat,
+    db: &str,
+    target: &str,
+    control_path: &str,
+    env: &str,
+    controls_dir: &str,
+    store: bool,
+) -> Result<()> {
+    parse_env_scope(env)?; // validate early before any work
+    let controls = resolve_controls(controls_dir, control_path)?;
+
+    let registry = build_registry();
+    let executor = Executor::new(registry);
+    let config = env_as_config();
+    let db_store = open_store(db)?;
+
+    let mut results: Vec<EvaluationResult> = Vec::new();
+
+    for control in &controls {
+        let mut module_runs: Vec<ModuleRunResult> = Vec::new();
+
+        let testers: Vec<&ModuleRef> = control
+            .testers
+            .iter()
+            .filter(|m| target_matches_module(target, &m.module_id))
+            .collect();
+
+        for mref in testers {
+            let cfg = TestConfig {
+                module_config: config.clone(),
+                target_environment: parse_env_scope(env).unwrap_or(EnvironmentScope::Production),
+                authorizer: Box::new(AutoAuthorizer),
+            };
+            match executor.execute_tester(&mref.module_id, &cfg) {
+                Ok(evidence) => {
+                    if store {
+                        for ev in &evidence {
+                            let _ = db_store.store_evidence(ev);
+                        }
+                    }
+                    module_runs.push(ModuleRunResult {
+                        module_id: mref.module_id.clone(),
+                        module_type: "test",
+                        status: "PASS".to_string(),
+                        error: None,
+                    });
+                }
+                Err(e) => {
+                    module_runs.push(ModuleRunResult {
+                        module_id: mref.module_id.clone(),
+                        module_type: "test",
+                        status: "FAIL".to_string(),
+                        error: Some(e.to_string()),
+                    });
+                }
+            }
+        }
+
+        let framework = control
+            .framework_mappings
+            .first()
+            .map(|m| format!("{} {}", m.framework, m.requirement_id))
+            .unwrap_or_default();
+
+        results.push(EvaluationResult {
+            control_id: control.id.clone(),
+            control_name: control.name.clone(),
+            target: target.to_string(),
+            status: "unknown".to_string(),
+            confidence: "low".to_string(),
+            framework,
+            module_runs,
+            findings: vec![],
+        });
+    }
+
+    if format == OutputFormat::Yaml {
+        let json_results: Vec<serde_json::Value> = results
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "control_id": r.control_id,
+                    "target": r.target,
+                    "module_runs": r.module_runs.iter().map(|m| serde_json::json!({
+                        "module_id": m.module_id,
+                        "type": m.module_type,
+                        "status": m.status,
+                        "error": m.error,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        print_output(out, &json_results, format)?;
+    } else {
+        print_evaluation_table(out, &results)?;
+    }
+    Ok(())
 }
 
 fn cmd_history<W: Write>(
@@ -912,7 +1271,6 @@ mod tests {
 
     #[test]
     fn load_control_cel_override() {
-        use std::io::Write;
         let dir = std::env::temp_dir();
         let ctrl_path = dir.join("test_ctrl.yaml");
         let yaml = r#"
@@ -1081,8 +1439,6 @@ evaluation_logic:
 
     #[test]
     fn cmd_collect_and_evaluate_roundtrip() {
-        use std::io::Write as _;
-
         let dir = std::env::temp_dir();
         let db_path = dir
             .join(format!("ocean_test_eval_{}.db", uuid::Uuid::new_v4()))
