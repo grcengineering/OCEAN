@@ -2,6 +2,7 @@ pub mod aws;
 pub mod github;
 pub mod mock;
 pub mod okta;
+pub mod okta_population;
 
 use std::sync::Arc;
 
@@ -14,4 +15,5 @@ pub fn register_all(registry: &Registry) {
     registry.register_collector(Arc::new(aws::IamCollector));
     registry.register_collector(Arc::new(github::BranchProtectionCollector));
     registry.register_collector(Arc::new(okta::MfaPolicyCollector));
+    registry.register_collector(Arc::new(okta_population::MfaEnrollmentPopulationCollector));
 }

@@ -10,6 +10,11 @@ use crate::evidence::{
 };
 use crate::module::{collector::Collector, CredentialReq, Module};
 
+// ─── Factor taxonomy ─────────────────────────────────────────────────────────
+
+/// Phishing-resistant factor IDs (FIDO2/WebAuthn, SmartCard).
+const PR_FACTORS: [&str; 2] = ["fido_webauthn", "smart_card_idp"];
+
 // ─── Okta HTTP client ─────────────────────────────────────────────────────────
 
 /// Performs an authenticated GET to the Okta API.
@@ -188,6 +193,69 @@ impl Collector for MfaPolicyCollector {
             }
         }
 
+        // ── iam_auth: factor classification from first active policy ─────────
+        let mut required_factors: Vec<String> = Vec::new();
+        let mut optional_factors: Vec<String> = Vec::new();
+        let mut not_allowed_factors: Vec<String> = Vec::new();
+        let mut first_active_policy_name = String::new();
+
+        let first_active = policies
+            .iter()
+            .find(|p| {
+                p.get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    == "ACTIVE"
+            });
+
+        if let Some(active_policy) = first_active {
+            first_active_policy_name = active_policy
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            if let Some(factors_obj) = active_policy
+                .get("settings")
+                .and_then(|s| s.get("factors"))
+                .and_then(|f| f.as_object())
+            {
+                for (factor_id, factor_val) in factors_obj {
+                    let enroll_state = factor_val
+                        .get("enroll")
+                        .and_then(|e| e.get("self"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("NOT_ALLOWED");
+
+                    match enroll_state {
+                        "REQUIRED" => required_factors.push(factor_id.clone()),
+                        "OPTIONAL" => optional_factors.push(factor_id.clone()),
+                        _ => not_allowed_factors.push(factor_id.clone()),
+                    }
+                }
+            }
+        }
+
+        let pr_required = required_factors
+            .iter()
+            .any(|f| PR_FACTORS.contains(&f.as_str()));
+
+        let phishable_in_required_or_optional = required_factors
+            .iter()
+            .chain(optional_factors.iter())
+            .any(|f| !PR_FACTORS.contains(&f.as_str()));
+
+        let pr_exclusive = !phishable_in_required_or_optional;
+        let phishable_allowed = phishable_in_required_or_optional;
+
+        let policy_type = if pr_exclusive && pr_required {
+            "phishing_resistant"
+        } else {
+            "mfa"
+        };
+
+        // ── existing findings / status logic (unchanged) ─────────────────────
+
         if findings.is_empty() {
             findings.push(Finding {
                 title: "MFA Policies Compliant".to_string(),
@@ -225,6 +293,21 @@ impl Collector for MfaPolicyCollector {
             "inactive_policies": inactive_count,
             "policies_without_required_factors": policies_without_required_factors,
             "policies": body,
+            "iam_auth": {
+                "policy_layer": "enrollment",
+                "policy_type": policy_type,
+                "provider": "okta",
+                "policy_name": first_active_policy_name,
+                "policy_scope": "all",
+                "factor_policy": {
+                    "required": required_factors,
+                    "optional": optional_factors,
+                    "not_allowed": not_allowed_factors,
+                },
+                "phishing_resistant_required": pr_required,
+                "phishing_resistant_exclusive": pr_exclusive,
+                "phishable_factors_allowed": phishable_allowed,
+            },
         });
 
         Ok(vec![Evidence {
@@ -464,5 +547,103 @@ mod tests {
         let srv = mock_server(200, EMPTY_POLICIES);
         let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
         assert!(ev.test_transcript.is_none());
+    }
+
+    // ── iam_auth schema attribute fixtures ───────────────────────────────
+
+    const PR_EXCLUSIVE_POLICY: &str = r#"[{
+      "id": "pol_pr", "name": "PR Only Policy", "status": "ACTIVE",
+      "settings": { "factors": {
+        "fido_webauthn": { "enroll": { "self": "REQUIRED" } },
+        "okta_otp": { "enroll": { "self": "NOT_ALLOWED" } },
+        "okta_push": { "enroll": { "self": "NOT_ALLOWED" } }
+      }}
+    }]"#;
+
+    const PR_WITH_FALLBACK_POLICY: &str = r#"[{
+      "id": "pol_mixed", "name": "PR With Fallback", "status": "ACTIVE",
+      "settings": { "factors": {
+        "fido_webauthn": { "enroll": { "self": "REQUIRED" } },
+        "okta_otp": { "enroll": { "self": "OPTIONAL" } }
+      }}
+    }]"#;
+
+    const TOTP_ONLY_POLICY: &str = r#"[{
+      "id": "pol_totp", "name": "TOTP Policy", "status": "ACTIVE",
+      "settings": { "factors": {
+        "okta_otp": { "enroll": { "self": "REQUIRED" } },
+        "okta_push": { "enroll": { "self": "OPTIONAL" } }
+      }}
+    }]"#;
+
+    // ── iam_auth tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn pr_exclusive_policy_sets_booleans() {
+        let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let iam = &ev.raw_data["iam_auth"];
+        assert_eq!(iam["phishing_resistant_exclusive"], true);
+        assert_eq!(iam["phishable_factors_allowed"], false);
+    }
+
+    #[test]
+    fn pr_with_fallback_sets_phishable_allowed() {
+        let srv = mock_server(200, PR_WITH_FALLBACK_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let iam = &ev.raw_data["iam_auth"];
+        assert_eq!(iam["phishable_factors_allowed"], true);
+    }
+
+    #[test]
+    fn totp_only_sets_pr_required_false() {
+        let srv = mock_server(200, TOTP_ONLY_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let iam = &ev.raw_data["iam_auth"];
+        assert_eq!(iam["phishing_resistant_required"], false);
+    }
+
+    #[test]
+    fn raw_data_has_iam_auth_object() {
+        let srv = mock_server(200, ACTIVE_REQUIRED_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        assert!(ev.raw_data.get("iam_auth").is_some());
+        assert!(ev.raw_data["iam_auth"].get("factor_policy").is_some());
+    }
+
+    #[test]
+    fn policy_type_phishing_resistant_when_exclusive() {
+        let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.raw_data["iam_auth"]["policy_type"], "phishing_resistant");
+    }
+
+    #[test]
+    fn policy_type_mfa_when_phishable_allowed() {
+        let srv = mock_server(200, PR_WITH_FALLBACK_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.raw_data["iam_auth"]["policy_type"], "mfa");
+    }
+
+    #[test]
+    fn factor_policy_required_populated() {
+        let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let required = ev.raw_data["iam_auth"]["factor_policy"]["required"]
+            .as_array()
+            .unwrap();
+        let values: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(values.contains(&"fido_webauthn"));
+    }
+
+    #[test]
+    fn factor_policy_not_allowed_populated() {
+        let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
+        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let not_allowed = ev.raw_data["iam_auth"]["factor_policy"]["not_allowed"]
+            .as_array()
+            .unwrap();
+        let values: Vec<&str> = not_allowed.iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(values.contains(&"okta_otp"));
     }
 }
