@@ -39,6 +39,7 @@ The single highest-signal domain. Almost every compliance framework's first chap
 | Privileged Access | Are admin/root/break-glass accounts governed, monitored, reviewed? |
 | Session Management | Do sessions expire? Are concurrent sessions limited? Is re-auth required for sensitive ops? |
 | Service Accounts | Are non-human identities (service accounts, API keys, tokens) inventoried and rotated? |
+| Access Review | Were user access rights reviewed on schedule, with inappropriate access certified or revoked? |
 
 **What makes IAM evidence distinctive**:
 - Population semantics: controls apply to ALL users (or ALL admins), so evidence must
@@ -182,6 +183,7 @@ secrets.vault                  hashicorp_vault, aws.secrets_manager, azure.key_v
 container.registry             ecr, gcr, dockerhub, artifactory, ghcr
 compliance.platform            drata, vanta, vanta, secureframe, tugboat_logic
 hris                           workday, bamboohr, rippling, adp, gusto, scim_log
+iga                            sailpoint, saviynt, omada, one_identity
 ```
 
 ### Source System Attributes (common fields on every evidence record)
@@ -460,6 +462,81 @@ iam_svc.unused                 — integer: service accounts with no activity in
 iam_svc.stale_days             — integer: inactivity threshold for "unused"
 iam_svc.over_permissioned      — integer: service accounts with admin-equivalent permissions
 ```
+
+---
+
+#### Class 1006: Access Review
+
+**Description**: Evidence of periodic user access certification — whether reviews ran on schedule,
+reviewers acted on all in-scope users, outcomes (certified / modified / revoked) are documented,
+and revocations were executed within the remediation SLA. Distinct from Class 1002 (which captures
+the current authorization state); Class 1006 captures the *periodic process* that validates
+that state.
+
+**Typical sources**: IGA platforms (SailPoint, Saviynt, Omada), compliance platforms (Vanta,
+Drata, Secureframe), IdP-native review tools (Google Workspace admin reports, Okta access
+reviews), manual (spreadsheets — lowest evidence quality)
+
+**Applicable activities**: `resource_enumeration` (2), `log_query` (3)
+
+**Class-specific attributes**:
+```
+# Review scheduling — did the review happen on time?
+iam_review.cadence                — annual | semi_annual | quarterly | monthly | ad_hoc
+iam_review.cadence_source         — policy | regulation | customer_contract | manual
+iam_review.review_period_start    — date: start of the period this review covers
+iam_review.review_period_end      — date: end of the period this review covers
+iam_review.due_date               — date: when this review was required to be completed
+iam_review.completed_date         — date: when the review was actually completed
+iam_review.days_overdue           — integer: 0 = on-time or early; >0 = late (negative = early)
+
+# Review execution — did every user get reviewed?
+iam_review.total_users_in_scope   — integer: total user-permission pairs up for review
+iam_review.users_reviewed         — integer: pairs where a reviewer took action
+iam_review.users_pending          — integer: pairs with no reviewer action (open or abandoned)
+iam_review.completion_rate        — float: users_reviewed / total_users_in_scope × 100
+iam_review.review_status          — open | completed | overdue | cancelled
+
+# Reviewer identity and attribution
+iam_review.reviewer_id            — string: opaque ID of primary reviewer
+iam_review.reviewer_role          — manager | system_owner | security_team | delegated | self
+iam_review.review_tool            — sailpoint | saviynt | omada | vanta | drata | secureframe |
+                                    google_workspace | manual | other
+iam_review.self_review_count      — integer: users who certified their own access (MUST be 0)
+
+# Per-outcome breakdown — what decisions were made?
+iam_review.outcomes.certified     — integer: access confirmed appropriate (no change)
+iam_review.outcomes.modified      — integer: access changed (scope reduced or role adjusted)
+iam_review.outcomes.revoked       — integer: access removed entirely
+iam_review.outcomes.escalated     — integer: flagged for manager or security team decision
+
+# Remediation tracking — were revocations actually executed?
+iam_review.revocations_identified   — integer: total access rights marked for removal
+iam_review.revocations_completed    — integer: actually revoked after review
+iam_review.revocations_pending      — integer: identified but not yet executed
+iam_review.remediation_sla_days     — integer: max days from review completion to revocation
+iam_review.remediation_lag_days     — float: mean days from revocation decision to execution
+iam_review.sla_breaches             — integer: revocations executed past remediation_sla_days
+iam_review.oldest_open_revocation_days — integer: age of oldest unexecuted revocation decision
+
+# Evidence linkage — access state that was reviewed (evidence-to-evidence reference)
+iam_review.snapshot_evidence_id   — string: evidence.id of the Class 1002 record that captured
+                                    the authorization state at time of review (optional but
+                                    strongly recommended — creates auditable evidence chain)
+iam_review.snapshot_date          — date: when the access snapshot was taken for this review
+
+# System scope
+iam_review.system                 — string: which system this review covers
+                                    (e.g., "okta", "github", "aws.iam", "google_workspace")
+iam_review.resource_type          — user_access | service_account | privileged_role | all
+```
+
+**Self-review anti-criterion**: `self_review_count = 0` is mandatory. A reviewer certifying
+their own access is a control failure regardless of the outcome of all other reviews.
+
+**Effective condition**: `review_status = completed`, `days_overdue <= 0`, `completion_rate = 100`,
+`revocations_completed = revocations_identified`, `sla_breaches = 0`,
+`self_review_count = 0`, `oldest_open_revocation_days = 0`.
 
 ---
 
@@ -1176,7 +1253,7 @@ implementation and schema, and is the first artifact to be kept in sync as modul
 
 ## Part 12 — Class Registry Quick Reference
 
-Full class registry for at-a-glance lookup. All 27 classes across 8 domains.
+Full class registry for at-a-glance lookup. All 28 classes across 8 domains.
 
 ```
 class_uid   class_name                  domain      activity_ids
@@ -1186,6 +1263,7 @@ class_uid   class_name                  domain      activity_ids
 1003        Identity Lifecycle           IAM         2, 3, 4
 1004        Privileged Access            IAM         1, 2, 3
 1005        Service Account Mgmt        IAM         2
+1006        Access Review               IAM         2, 3
 
 2001        Encryption at Rest          Data Prot.  2
 2002        Encryption in Transit       Data Prot.  1, 6
