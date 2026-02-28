@@ -687,6 +687,21 @@
       .cta-box { padding: 36px 24px; }
       .footer-inner { flex-direction: column; align-items: flex-start; }
     }
+    .hero-cursor {
+      display: inline-block;
+      width: 0.55em;
+      background: #f97316;
+      color: transparent;
+      border-radius: 1px;
+      animation: blink-cursor 1s step-end infinite;
+      vertical-align: baseline;
+      margin-left: 2px;
+      user-select: none;
+    }
+    @keyframes blink-cursor {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -722,8 +737,8 @@
     </div>
 
     <h1 class="hero-title">
-      The <span class="grad-orange">Metasploit</span><br>
-      for <span class="grad-blue">GRC</span>
+      The <span class="grad-orange" id="hero-cycling-tool"></span><span class="hero-cursor">▋</span><br>
+      of <span class="grad-blue">GRC</span>
     </h1>
 
     <p class="hero-subtitle">
@@ -1629,6 +1644,49 @@ function copyInstall() {
     }, 2200);
   });
 }
+</script>
+
+<script>
+(function () {
+  var words   = ['Metasploit', 'Atomic Red Team', 'osquery'];
+  var el      = document.getElementById('hero-cycling-tool');
+  if (!el) return;
+  var idx     = 0;
+  var typing  = true;
+  var charPos = 0;
+
+  var PAUSE_FULL   = 2200;   // ms to hold the full word before deleting
+  var PAUSE_EMPTY  = 400;    // ms to hold empty before typing next word
+  var TYPE_SPEED   = 80;     // ms per character typed
+  var DELETE_SPEED = 45;     // ms per character deleted
+
+  function tick() {
+    var word = words[idx];
+    if (typing) {
+      el.textContent = word.slice(0, charPos + 1);
+      charPos++;
+      if (charPos === word.length) {
+        typing = false;
+        setTimeout(tick, PAUSE_FULL);
+      } else {
+        setTimeout(tick, TYPE_SPEED);
+      }
+    } else {
+      el.textContent = word.slice(0, charPos - 1);
+      charPos--;
+      if (charPos === 0) {
+        typing = true;
+        idx = (idx + 1) % words.length;
+        setTimeout(tick, PAUSE_EMPTY);
+      } else {
+        setTimeout(tick, DELETE_SPEED);
+      }
+    }
+  }
+
+  // Kick off after a short pause so the page paint is stable
+  setTimeout(tick, 600);
+}());
 </script>
 
 </body>
