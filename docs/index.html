@@ -839,7 +839,7 @@
         <div class="pillar-num">PILLAR 01</div>
         <div class="pillar-title">Passive Control Monitoring</div>
         <p class="pillar-desc">Query system APIs to observe configuration state without modifying anything. Evidence is normalized, immutable, and stored with full provenance metadata. Confidence level: <code style="color:var(--cyan);font-family:var(--mono);font-size:0.8rem">passive_observation</code>.</p>
-        <span class="pillar-tag">ocean observe okta.mfa_policy</span>
+        <span class="pillar-tag">ocean observe --target okta --control iam.mfa</span>
       </div>
 
       <div class="pillar-card">
@@ -863,7 +863,7 @@
         <div class="pillar-num" style="color:var(--orange)">PILLAR 04</div>
         <div class="pillar-title">Cryptographic Provenance</div>
         <p class="pillar-desc">OCEAN pipes evidence to <a href="https://grcorsair.com" target="_blank" rel="noopener" style="color:var(--orange);text-decoration:none">Corsair</a> — an open-source signing tool that produces W3C JWT-VC Certificates of Proof of Operational Effectiveness (CPOEs). Any auditor can verify independently.</p>
-        <span class="pillar-tag">ocean observe okta.mfa_policy | corsair sign</span>
+        <span class="pillar-tag">ocean observe --target okta --control iam.mfa | corsair sign</span>
       </div>
     </div>
   </div>
@@ -1096,12 +1096,10 @@
         </div>
         <div class="demo-commands">
           <div class="demo-commands-label">CLI commands</div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe okta.mfa_policy</span></div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe okta.mfa_enrollment_population</span></div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-test">test</span><span class="demo-cmd-text">ocean test okta.pr_mfa_downgrade --env staging</span></div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-eval">eval</span><span class="demo-cmd-text">ocean evaluate okta.mfa_enforcement</span></div>
-          <div class="demo-cmd-row" style="margin-top:8px;opacity:0.65;font-size:0.72rem;padding:0 2px;border:none;background:none">— or run the full pipeline in one command —</div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-pipeline">pipeline</span><span class="demo-cmd-text">ocean evaluate -t okta -c iam.mfa_enforcement</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe --target okta --control iam.mfa</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe --target okta --control iam.mfa</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-test">test</span><span class="demo-cmd-text">ocean test --target okta --control iam.mfa --env staging</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-eval">eval</span><span class="demo-cmd-text">ocean evaluate --target okta --control iam.mfa_enforcement</span></div>
         </div>
         <div class="demo-cel-block">
           <div class="demo-cel-label">CEL expression</div>
@@ -1116,10 +1114,10 @@
       <div class="terminal demo-terminal">
         <div class="terminal-header">
           <span class="terminal-dot td-red"></span><span class="terminal-dot td-amber"></span><span class="terminal-dot td-green"></span>
-          <span class="terminal-title">ocean evaluate okta.mfa_enforcement --output json</span>
+          <span class="terminal-title">ocean evaluate --target okta --control iam.mfa_enforcement --output json</span>
         </div>
         <div class="terminal-body">
-          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate okta.mfa_enforcement</span></div>
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate --target okta --control iam.mfa_enforcement</span></div>
           <div class="terminal-line" style="height:10px"></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Observing passive evidence...</span></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Running active test (safe classification)...</span></div>
@@ -1158,11 +1156,9 @@
         </div>
         <div class="demo-commands">
           <div class="demo-commands-label">CLI commands</div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe hris.termination_events --days 90</span></div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-test">test</span><span class="demo-cmd-text">ocean test okta.mfa_bypass --context offboarded_user</span></div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-eval">eval</span><span class="demo-cmd-text">ocean evaluate identity.timely_termination</span></div>
-          <div class="demo-cmd-row" style="margin-top:8px;opacity:0.65;font-size:0.72rem;padding:0 2px;border:none;background:none">— or run the full pipeline in one command —</div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-pipeline">pipeline</span><span class="demo-cmd-text">ocean evaluate -t okta -c identity.timely_termination</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe --target okta --control identity.timely_termination</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-test">test</span><span class="demo-cmd-text">ocean test --target okta --control identity.timely_termination</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-eval">eval</span><span class="demo-cmd-text">ocean evaluate --target okta --control identity.timely_termination</span></div>
         </div>
         <div class="demo-cel-block">
           <div class="demo-cel-label">CEL expression</div>
@@ -1177,10 +1173,10 @@
       <div class="terminal demo-terminal">
         <div class="terminal-header">
           <span class="terminal-dot td-red"></span><span class="terminal-dot td-amber"></span><span class="terminal-dot td-green"></span>
-          <span class="terminal-title">ocean evaluate identity.timely_termination --output json</span>
+          <span class="terminal-title">ocean evaluate --target okta --control identity.timely_termination --output json</span>
         </div>
         <div class="terminal-body">
-          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate identity.timely_termination</span></div>
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate --target okta --control identity.timely_termination</span></div>
           <div class="terminal-line" style="height:10px"></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Pulling HRIS termination events (90d)...</span></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Cross-checking Okta deactivation timestamps...</span></div>
@@ -1218,10 +1214,8 @@
         </div>
         <div class="demo-commands">
           <div class="demo-commands-label">CLI commands</div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe iga.access_review --period Q4-2024</span></div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-eval">eval</span><span class="demo-cmd-text">ocean evaluate iam.access_review</span></div>
-          <div class="demo-cmd-row" style="margin-top:8px;opacity:0.65;font-size:0.72rem;padding:0 2px;border:none;background:none">— or run the full pipeline in one command —</div>
-          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-pipeline">pipeline</span><span class="demo-cmd-text">ocean evaluate -t * -c iam.access_review</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-observe">observe</span><span class="demo-cmd-text">ocean observe --target * --control iam.access_review</span></div>
+          <div class="demo-cmd-row"><span class="demo-cmd-type cmd-type-eval">eval</span><span class="demo-cmd-text">ocean evaluate --target * --control iam.access_review</span></div>
         </div>
         <div class="demo-cel-block">
           <div class="demo-cel-label">CEL expression</div>
@@ -1236,10 +1230,10 @@
       <div class="terminal demo-terminal">
         <div class="terminal-header">
           <span class="terminal-dot td-red"></span><span class="terminal-dot td-amber"></span><span class="terminal-dot td-green"></span>
-          <span class="terminal-title">ocean evaluate iam.access_review --output json</span>
+          <span class="terminal-title">ocean evaluate --target * --control iam.access_review --output json</span>
         </div>
         <div class="terminal-body">
-          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate iam.access_review</span></div>
+          <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate --target * --control iam.access_review</span></div>
           <div class="terminal-line" style="height:10px"></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Pulling Q4-2024 review data from SailPoint...</span></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Evaluating CEL expression...</span></div>
@@ -1634,23 +1628,23 @@
     { type: 'prompt', text: 'ocean modules list' },
     { type: 'out', text: '11 modules registered across 4 systems (observers: 6, testers: 5)' },
     { type: 'blank' },
-    { type: 'prompt', text: 'ocean observe okta.mfa_policy' },
+    { type: 'prompt', text: 'ocean observe --target okta --control iam.mfa' },
     { type: 'ok',  text: '✓  Querying Okta API...' },
     { type: 'ok',  text: '✓  Normalizing to OCEAN Evidence Schema...' },
     { type: 'ok',  text: '✓  Stored — confidence: passive_observation' },
     { type: 'blank' },
-    { type: 'prompt', text: 'ocean test okta.mfa_bypass --env staging' },
+    { type: 'prompt', text: 'ocean test --target okta --control iam.mfa --env staging' },
     { type: 'ok',  text: '✓  Pre-flight: safe | scope: staging | auth: auto' },
     { type: 'ok',  text: '✓  Attempting authentication without MFA...' },
     { type: 'ok',  text: '✓  MFA bypass blocked — control is EFFECTIVE' },
     { type: 'ok',  text: '✓  Transcript saved — confidence: active_verification' },
     { type: 'blank' },
-    { type: 'prompt', text: 'ocean verify control.mfa_enforcement' },
+    { type: 'prompt', text: 'ocean evaluate --target okta --control iam.mfa_enforcement' },
     { type: 'ok',  text: '✓  Passive evidence: PASS (policy configured correctly)' },
     { type: 'ok',  text: '✓  Active test:     PASS (bypass blocked)' },
     { type: 'ok',  text: '✓  Status: EFFECTIVE | Confidence: HIGH | Uptime: 99.94%' },
     { type: 'blank' },
-    { type: 'prompt', text: 'ocean verify control.mfa_enforcement --output json | corsair sign' },
+    { type: 'prompt', text: 'ocean evaluate --target okta --control iam.mfa_enforcement --output json | corsair sign' },
     { type: 'ok',  text: '✓  CPOE issued — cpoe.jwt (Ed25519, W3C JWT-VC)' },
     { type: 'ok',  text: '✓  Share with any auditor — no OCEAN required to verify' },
     { type: 'blank' },

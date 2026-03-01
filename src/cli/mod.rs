@@ -53,8 +53,21 @@ pub enum Commands {
 
     /// Observe system state using an observer module.
     Observe {
-        /// Module ID (e.g., aws.iam, github.branch_protection).
-        module: String,
+        /// Module ID for legacy mode (e.g., aws.iam, github.branch_protection).
+        /// Omit when using --target/-t and --control/-c.
+        module: Option<String>,
+
+        /// Target integration name (okta, aws, github, or * for all). Pipeline mode.
+        #[arg(short = 't', long = "target")]
+        target: Option<String>,
+
+        /// Control path prefix (iam, iam.mfa). Pipeline mode: runs all observers for matched controls.
+        #[arg(short = 'c', long = "control")]
+        control: Option<String>,
+
+        /// Directory containing control YAML files (pipeline mode).
+        #[arg(long, default_value = "controls")]
+        controls_dir: String,
 
         /// Skip storing evidence to the database.
         #[arg(long)]
@@ -65,7 +78,7 @@ pub enum Commands {
     #[command(name = "test")]
     Test {
         /// Module ID for legacy mode (e.g., aws.s3_public_access, github.secret_push).
-        /// Omit when using --target/-t and --control-path/-c.
+        /// Omit when using --target/-t and --control/-c.
         module: Option<String>,
 
         /// Target integration name (okta, aws, github, or * for all). Pipeline mode.
@@ -73,8 +86,8 @@ pub enum Commands {
         target: Option<String>,
 
         /// Control path prefix (iam, iam.mfa, iam.mfa.phishing_resistant). Pipeline mode.
-        #[arg(short = 'c', long = "control-path")]
-        control_path: Option<String>,
+        #[arg(short = 'c', long = "control")]
+        control: Option<String>,
 
         /// Environment scope for active testing: production (default), staging, or isolated.
         #[arg(long = "env", default_value = "production")]
@@ -98,7 +111,7 @@ pub enum Commands {
     /// Evaluate a control against observed evidence.
     Evaluate {
         /// Control ID for legacy mode (e.g., iam.mfa_enforcement).
-        /// Omit when using --target/-t and --control-path/-c.
+        /// Omit when using --target/-t and --control/-c.
         control: Option<String>,
 
         /// Target integration name (okta, aws, github, or * for all). Pipeline mode.
@@ -106,7 +119,7 @@ pub enum Commands {
         target: Option<String>,
 
         /// Control path prefix (iam, iam.mfa, iam.mfa.phishing_resistant). Pipeline mode.
-        #[arg(short = 'c', long = "control-path")]
+        #[arg(short = 'c', long = "control")]
         control_path: Option<String>,
 
         /// Custom CEL expression (overrides control YAML, legacy mode only).
@@ -247,28 +260,46 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Commands::Version => cmd_version(&mut out, format),
-        Commands::Observe { module, no_store } => {
-            cmd_observe(&mut out, format, &cli.db, &module, !no_store)
+        Commands::Observe {
+            module,
+            target,
+            control,
+            controls_dir,
+            no_store,
+        } => {
+            if target.is_some() || control.is_some() {
+                let t = target.as_deref().unwrap_or("*");
+                let p = control.as_deref().ok_or_else(|| {
+                    anyhow!("--control/-c is required when using --target/-t")
+                })?;
+                cmd_observe_path(&mut out, format, &cli.db, t, p, &controls_dir, !no_store)
+            } else if let Some(m) = module.as_deref() {
+                cmd_observe(&mut out, format, &cli.db, m, !no_store)
+            } else {
+                Err(anyhow!(
+                    "Specify a module ID or use --target/-t and --control/-c"
+                ))
+            }
         }
         Commands::Test {
             module,
             target,
-            control_path,
+            control,
             env,
             controls_dir,
             no_store,
         } => {
-            if target.is_some() || control_path.is_some() {
+            if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control_path.as_deref().ok_or_else(|| {
-                    anyhow!("--control-path/-c is required when using --target/-t")
+                let p = control.as_deref().ok_or_else(|| {
+                    anyhow!("--control/-c is required when using --target/-t")
                 })?;
                 cmd_test_path(&mut out, format, &cli.db, t, p, &env, &controls_dir, !no_store)
             } else if let Some(m) = module.as_deref() {
                 cmd_test(&mut out, format, &cli.db, m, &env, !no_store)
             } else {
                 Err(anyhow!(
-                    "Specify a module ID or use --target/-t and --control-path/-c"
+                    "Specify a module ID or use --target/-t and --control/-c"
                 ))
             }
         }
@@ -288,14 +319,14 @@ pub fn run() -> Result<()> {
             if target.is_some() || control_path.is_some() {
                 let t = target.as_deref().unwrap_or("*");
                 let p = control_path.as_deref().ok_or_else(|| {
-                    anyhow!("--control-path/-c is required when using --target/-t")
+                    anyhow!("--control/-c is required when using --target/-t")
                 })?;
                 cmd_evaluate_path(&mut out, format, &cli.db, t, p, &controls_dir)
             } else if let Some(ctrl) = control.as_deref() {
                 cmd_evaluate(&mut out, format, &cli.db, ctrl, cel.as_deref(), &controls_dir)
             } else {
                 Err(anyhow!(
-                    "Specify a control ID or use --target/-t and --control-path/-c"
+                    "Specify a control ID or use --target/-t and --control/-c"
                 ))
             }
         }
@@ -485,6 +516,53 @@ fn cmd_observe<W: Write>(
     }
 
     print_output(out, &evidence, format)
+}
+
+/// Observers-only pipeline: runs all observers for controls matching target+control path.
+fn cmd_observe_path<W: Write>(
+    out: &mut W,
+    format: OutputFormat,
+    db: &str,
+    target: &str,
+    control_path: &str,
+    controls_dir: &str,
+    store: bool,
+) -> Result<()> {
+    let controls = resolve_controls(controls_dir, control_path)?;
+    let registry = build_registry();
+    let executor = Executor::new(registry);
+    let config = env_as_config();
+    let db_store = open_store(db)?;
+
+    let mut all_evidence: Vec<serde_json::Value> = Vec::new();
+
+    for control in &controls {
+        let observers: Vec<&ModuleRef> = control
+            .observers
+            .iter()
+            .filter(|m| target_matches_module(target, &m.module_id))
+            .collect();
+
+        for mref in observers {
+            match executor.execute_observer(&mref.module_id, &config) {
+                Ok(evidence) => {
+                    if store {
+                        for ev in &evidence {
+                            let _ = db_store.store_evidence(ev);
+                        }
+                    }
+                    for ev in evidence {
+                        all_evidence.push(serde_json::to_value(&ev)?);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("WARN: observer '{}' failed: {e}", mref.module_id);
+                }
+            }
+        }
+    }
+
+    print_output(out, &all_evidence, format)
 }
 
 fn cmd_test<W: Write>(
