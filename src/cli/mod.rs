@@ -51,8 +51,8 @@ pub enum Commands {
     /// Print OCEAN version information.
     Version,
 
-    /// Collect evidence using a observer module.
-    Collect {
+    /// Observe system state using an observer module.
+    Observe {
         /// Module ID (e.g., aws.iam, github.branch_protection).
         module: String,
 
@@ -247,8 +247,8 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Commands::Version => cmd_version(&mut out, format),
-        Commands::Collect { module, no_store } => {
-            cmd_collect(&mut out, format, &cli.db, &module, !no_store)
+        Commands::Observe { module, no_store } => {
+            cmd_observe(&mut out, format, &cli.db, &module, !no_store)
         }
         Commands::Test {
             module,
@@ -460,7 +460,7 @@ fn cmd_version<W: Write>(out: &mut W, format: OutputFormat) -> Result<()> {
     print_output(out, &info, format)
 }
 
-fn cmd_collect<W: Write>(
+fn cmd_observe<W: Write>(
     out: &mut W,
     format: OutputFormat,
     db: &str,
@@ -1293,13 +1293,13 @@ evaluation_logic:
         let _ = std::fs::remove_file(ctrl_path);
     }
 
-    // --- cmd_collect + cmd_test with in-memory store ---
+    // --- cmd_observe + cmd_test with in-memory store ---
 
     #[test]
-    fn cmd_collect_mock_no_store() {
+    fn cmd_observe_mock_no_store() {
         let mut buf = Vec::new();
         // mock.test observer exists, no store so no DB needed
-        let result = cmd_collect(&mut buf, OutputFormat::Json, "", "mock.test", false);
+        let result = cmd_observe(&mut buf, OutputFormat::Json, "", "mock.test", false);
         assert!(result.is_ok(), "observe failed: {:?}", result);
         let s = String::from_utf8(buf).unwrap();
         let ev: serde_json::Value = serde_json::from_str(&s).unwrap();
@@ -1307,9 +1307,9 @@ evaluation_logic:
     }
 
     #[test]
-    fn cmd_collect_unknown_module() {
+    fn cmd_observe_unknown_module() {
         let mut buf = Vec::new();
-        let err = cmd_collect(&mut buf, OutputFormat::Json, "", "nope.unknown", false).unwrap_err();
+        let err = cmd_observe(&mut buf, OutputFormat::Json, "", "nope.unknown", false).unwrap_err();
         assert!(err.to_string().contains("nope.unknown"));
     }
 
@@ -1438,7 +1438,7 @@ evaluation_logic:
     }
 
     #[test]
-    fn cmd_collect_and_evaluate_roundtrip() {
+    fn cmd_observe_and_evaluate_roundtrip() {
         let dir = std::env::temp_dir();
         let db_path = dir
             .join(format!("ocean_test_eval_{}.db", uuid::Uuid::new_v4()))
@@ -1459,9 +1459,9 @@ evaluation_logic:
         std::fs::write(ctrl_dir.join("mock.ctrl.yaml"), ctrl_yaml).unwrap();
         let ctrl_dir_str = ctrl_dir.to_str().unwrap();
 
-        // Collect
+        // Observe
         let mut buf = Vec::new();
-        cmd_collect(&mut buf, OutputFormat::Json, &db_path, "mock.test", true).unwrap();
+        cmd_observe(&mut buf, OutputFormat::Json, &db_path, "mock.test", true).unwrap();
 
         // Evaluate
         let mut buf2 = Vec::new();

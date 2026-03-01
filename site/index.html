@@ -633,9 +633,10 @@
     .demo-cmd-type {
       font-size: 0.64rem; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; font-weight: 600;
     }
-    .cmd-type-collect { background: var(--blue-glow);              color: var(--blue);   border: 1px solid rgba(27,149,193,0.3); }
+    .cmd-type-observe { background: var(--blue-glow);              color: var(--blue);   border: 1px solid rgba(27,149,193,0.3); }
     .cmd-type-test    { background: var(--orange-glow);            color: var(--orange); border: 1px solid var(--border-orange); }
     .cmd-type-eval    { background: rgba(34,211,238,0.08);         color: var(--cyan);   border: 1px solid rgba(34,211,238,0.25); }
+    .cmd-type-pipeline { background: rgba(168,85,247,0.08);       color: #a855f7;       border: 1px solid rgba(168,85,247,0.25); }
     .demo-cmd-text { color: var(--text); flex: 1; }
 
     .demo-cel-block {
@@ -838,7 +839,7 @@
         <div class="pillar-num">PILLAR 01</div>
         <div class="pillar-title">Passive Control Monitoring</div>
         <p class="pillar-desc">Query system APIs to observe configuration state without modifying anything. Evidence is normalized, immutable, and stored with full provenance metadata. Confidence level: <code style="color:var(--cyan);font-family:var(--mono);font-size:0.8rem">passive_observation</code>.</p>
-        <span class="pillar-tag">ocean collect okta.mfa_policy</span>
+        <span class="pillar-tag">ocean observe okta.mfa_policy</span>
       </div>
 
       <div class="pillar-card">
@@ -862,7 +863,7 @@
         <div class="pillar-num" style="color:var(--orange)">+ CORSAIR</div>
         <div class="pillar-title">Cryptographic Provenance</div>
         <p class="pillar-desc">OCEAN pipes evidence to <a href="https://grcorsair.com" target="_blank" rel="noopener" style="color:var(--orange);text-decoration:none">Corsair</a> — an open-source signing tool that produces W3C JWT-VC Certificates of Proof of Operational Effectiveness (CPOEs). Any auditor can verify independently.</p>
-        <span class="pillar-tag">ocean collect okta.mfa_policy | corsair sign</span>
+        <span class="pillar-tag">ocean observe okta.mfa_policy | corsair sign</span>
       </div>
     </div>
   </div>
@@ -881,9 +882,9 @@
     <div class="flow-steps">
       <div class="flow-step">
         <div class="flow-step-num">01</div>
-        <div class="flow-step-title">Collect</div>
-        <p class="flow-step-desc">Query source APIs passively. Normalize to OCEAN Evidence Schema.</p>
-        <span class="flow-step-cmd">ocean collect</span>
+        <div class="flow-step-title">Observe</div>
+        <p class="flow-step-desc">Observe source system state via API. Normalize to OCEAN Evidence Schema.</p>
+        <span class="flow-step-cmd">ocean observe</span>
       </div>
       <div class="flow-step">
         <div class="flow-step-num">02</div>
@@ -1098,20 +1099,25 @@
         <div class="demo-commands">
           <div class="demo-commands-label">CLI commands</div>
           <div class="demo-cmd-row">
-            <span class="demo-cmd-type cmd-type-collect">collect</span>
-            <span class="demo-cmd-text">ocean collect okta.mfa_policy</span>
+            <span class="demo-cmd-type cmd-type-observe">observe</span>
+            <span class="demo-cmd-text">ocean observe okta.mfa_policy</span>
           </div>
           <div class="demo-cmd-row">
-            <span class="demo-cmd-type cmd-type-collect">collect</span>
-            <span class="demo-cmd-text">ocean collect okta.mfa_enrollment_population</span>
+            <span class="demo-cmd-type cmd-type-observe">observe</span>
+            <span class="demo-cmd-text">ocean observe okta.mfa_enrollment_population</span>
           </div>
           <div class="demo-cmd-row">
             <span class="demo-cmd-type cmd-type-test">test</span>
-            <span class="demo-cmd-text">ocean test okta.pr_mfa_downgrade --target staging</span>
+            <span class="demo-cmd-text">ocean test okta.pr_mfa_downgrade --env staging</span>
           </div>
           <div class="demo-cmd-row">
             <span class="demo-cmd-type cmd-type-eval">eval</span>
             <span class="demo-cmd-text">ocean evaluate okta.mfa_enforcement</span>
+          </div>
+          <div class="demo-cmd-row" style="margin-top:8px;opacity:0.65;font-size:0.72rem;padding:0 2px;border:none;background:none">— or run the full pipeline in one command —</div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-pipeline">pipeline</span>
+            <span class="demo-cmd-text">ocean evaluate -t okta -c iam.mfa_enforcement</span>
           </div>
         </div>
         <div class="demo-cel-block">
@@ -1187,8 +1193,8 @@
         <div class="demo-commands">
           <div class="demo-commands-label">CLI commands</div>
           <div class="demo-cmd-row">
-            <span class="demo-cmd-type cmd-type-collect">collect</span>
-            <span class="demo-cmd-text">ocean collect hris.termination_events --days 90</span>
+            <span class="demo-cmd-type cmd-type-observe">observe</span>
+            <span class="demo-cmd-text">ocean observe hris.termination_events --days 90</span>
           </div>
           <div class="demo-cmd-row">
             <span class="demo-cmd-type cmd-type-test">test</span>
@@ -1197,6 +1203,11 @@
           <div class="demo-cmd-row">
             <span class="demo-cmd-type cmd-type-eval">eval</span>
             <span class="demo-cmd-text">ocean evaluate identity.timely_termination</span>
+          </div>
+          <div class="demo-cmd-row" style="margin-top:8px;opacity:0.65;font-size:0.72rem;padding:0 2px;border:none;background:none">— or run the full pipeline in one command —</div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-pipeline">pipeline</span>
+            <span class="demo-cmd-text">ocean evaluate -t okta -c identity.timely_termination</span>
           </div>
         </div>
         <div class="demo-cel-block">
@@ -1268,12 +1279,17 @@
         <div class="demo-commands">
           <div class="demo-commands-label">CLI commands</div>
           <div class="demo-cmd-row">
-            <span class="demo-cmd-type cmd-type-collect">collect</span>
-            <span class="demo-cmd-text">ocean collect iga.access_review --period Q4-2024</span>
+            <span class="demo-cmd-type cmd-type-observe">observe</span>
+            <span class="demo-cmd-text">ocean observe iga.access_review --period Q4-2024</span>
           </div>
           <div class="demo-cmd-row">
             <span class="demo-cmd-type cmd-type-eval">eval</span>
             <span class="demo-cmd-text">ocean evaluate iam.access_review</span>
+          </div>
+          <div class="demo-cmd-row" style="margin-top:8px;opacity:0.65;font-size:0.72rem;padding:0 2px;border:none;background:none">— or run the full pipeline in one command —</div>
+          <div class="demo-cmd-row">
+            <span class="demo-cmd-type cmd-type-pipeline">pipeline</span>
+            <span class="demo-cmd-text">ocean evaluate -t * -c iam.access_review</span>
           </div>
         </div>
         <div class="demo-cel-block">
@@ -1532,12 +1548,12 @@
     { type: 'prompt', text: 'ocean modules list' },
     { type: 'out', text: '11 modules registered across 4 systems (observers: 6, testers: 5)' },
     { type: 'blank' },
-    { type: 'prompt', text: 'ocean collect okta.mfa_policy' },
+    { type: 'prompt', text: 'ocean observe okta.mfa_policy' },
     { type: 'ok',  text: '✓  Querying Okta API...' },
     { type: 'ok',  text: '✓  Normalizing to OCEAN Evidence Schema...' },
     { type: 'ok',  text: '✓  Stored — confidence: passive_observation' },
     { type: 'blank' },
-    { type: 'prompt', text: 'ocean test okta.mfa_bypass --target staging' },
+    { type: 'prompt', text: 'ocean test okta.mfa_bypass --env staging' },
     { type: 'ok',  text: '✓  Pre-flight: safe | scope: staging | auth: auto' },
     { type: 'ok',  text: '✓  Attempting authentication without MFA...' },
     { type: 'ok',  text: '✓  MFA bypass blocked — control is EFFECTIVE' },
