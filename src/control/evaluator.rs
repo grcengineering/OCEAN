@@ -110,7 +110,7 @@ mod tests {
                 cel_expression: String::new(),
             },
             framework_mappings: vec![],
-            collectors: vec![],
+            observers: vec![],
             testers: vec![],
             component_controls: vec![],
             components: vec![],

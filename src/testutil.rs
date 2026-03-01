@@ -1,7 +1,7 @@
 // Shared test utilities for OCEAN unit tests.
 // Only compiled during `cargo test` via #[cfg(test)] in lib.rs.
 //
-// Provides: make_evidence(), MockCollector, MockTester, DenyAuthorizer.
+// Provides: make_evidence(), MockObserver, MockTester, DenyAuthorizer.
 
 use std::collections::HashMap;
 
@@ -14,7 +14,7 @@ use crate::evidence::{
     SourceInfo, StatusId,
 };
 use crate::module::{
-    AuthorizationLevel, Authorizer, Collector, CredentialReq, EnvironmentScope, Module,
+    AuthorizationLevel, Authorizer, Observer, CredentialReq, EnvironmentScope, Module,
     SafetyClassification, Tester,
 };
 
@@ -36,7 +36,7 @@ pub fn make_evidence() -> Evidence {
             module: EvidenceModuleInfo {
                 name: "test.module".to_string(),
                 version: "0.1.0".to_string(),
-                module_type: "collector".to_string(),
+                module_type: "observer".to_string(),
             },
             source: SourceInfo {
                 system: "mock".to_string(),
@@ -66,23 +66,23 @@ pub fn make_evidence() -> Evidence {
 }
 
 // ---------------------------------------------------------------------------
-// MockCollector
+// MockObserver
 // ---------------------------------------------------------------------------
 
-/// A minimal Collector implementation for unit testing.
-pub struct MockCollector {
+/// A minimal Observer implementation for unit testing.
+pub struct MockObserver {
     pub id: &'static str,
     pub name: &'static str,
     pub source: &'static str,
-    /// If true, `collect()` returns an error instead of evidence.
+    /// If true, `observe()` returns an error instead of evidence.
     pub fail: bool,
 }
 
-impl MockCollector {
+impl MockObserver {
     pub fn new(id: &'static str) -> Self {
         Self {
             id,
-            name: "Mock Collector",
+            name: "Mock Observer",
             source: "mock",
             fail: false,
         }
@@ -91,23 +91,23 @@ impl MockCollector {
     pub fn failing(id: &'static str) -> Self {
         Self {
             id,
-            name: "Mock Collector",
+            name: "Mock Observer",
             source: "mock",
             fail: true,
         }
     }
 
-    /// Collector with empty id — used to test validation.
+    /// Observer with empty id — used to test validation.
     pub fn empty_id() -> Self {
         Self {
             id: "",
-            name: "Bad Collector",
+            name: "Bad Observer",
             source: "mock",
             fail: false,
         }
     }
 
-    /// Collector with empty name — used to test validation.
+    /// Observer with empty name — used to test validation.
     pub fn empty_name(id: &'static str) -> Self {
         Self {
             id,
@@ -117,18 +117,18 @@ impl MockCollector {
         }
     }
 
-    /// Collector with empty source_system — used to test validation.
+    /// Observer with empty source_system — used to test validation.
     pub fn empty_source(id: &'static str) -> Self {
         Self {
             id,
-            name: "Bad Collector",
+            name: "Bad Observer",
             source: "",
             fail: false,
         }
     }
 }
 
-impl Module for MockCollector {
+impl Module for MockObserver {
     fn id(&self) -> &str {
         self.id
     }
@@ -149,10 +149,10 @@ impl Module for MockCollector {
     }
 }
 
-impl Collector for MockCollector {
-    fn collect(&self, _: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+impl Observer for MockObserver {
+    fn observe(&self, _: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         if self.fail {
-            anyhow::bail!("mock collector failure");
+            anyhow::bail!("mock observer failure");
         }
         Ok(vec![make_evidence()])
     }

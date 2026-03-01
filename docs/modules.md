@@ -1,23 +1,23 @@
 # Module Development Guide
 
-This guide explains how to create custom collectors and testers for OCEAN. Modules are the pluggable integration points that gather evidence from external systems (collectors) and actively verify control effectiveness (testers).
+This guide explains how to create custom observers and testers for OCEAN. Modules are the pluggable integration points that gather evidence from external systems (observers) and actively verify control effectiveness (testers).
 
 ## Architecture Overview
 
 OCEAN uses a Metasploit-style module system. Each module:
 
-1. Implements a Go interface (`Collector` or `Tester`)
+1. Implements a Go interface (`Observer` or `Tester`)
 2. Registers itself with the module registry at startup
 3. Produces structured `evidence.Evidence` records
 4. Declares its credential requirements and source system
 
 ```
 modules/
-  collectors/
-    aws/             AWS IAM collector
-    github/          GitHub branch protection collector
-    mock/            Reference collector implementation
-    okta/            Okta MFA policy collector
+  observers/
+    aws/             AWS IAM observer
+    github/          GitHub branch protection observer
+    mock/            Reference observer implementation
+    okta/            Okta MFA policy observer
   testers/
     aws/             S3 public access tester
     github/          Secret push protection tester
@@ -41,21 +41,21 @@ type Module interface {
 }
 ```
 
-## Collector Interface
+## Observer Interface
 
-Collectors perform **passive observation** -- they read system state without modifying it. They produce evidence at the `passive_observation` confidence level.
+Observers perform **passive observation** -- they read system state without modifying it. They produce evidence at the `passive_observation` confidence level.
 
 ```go
-// From internal/module/collector.go
-type Collector interface {
+// From internal/module/observer.go
+type Observer interface {
     Module
     Collect(ctx context.Context, config map[string]string) ([]evidence.Evidence, error)
 }
 ```
 
-### Creating a Collector
+### Creating a Observer
 
-Here is a walkthrough based on the real Okta MFA policy collector:
+Here is a walkthrough based on the real Okta MFA policy observer:
 
 **Step 1: Define the struct and implement the Module interface.**
 
@@ -64,18 +64,18 @@ package okta
 
 import "github.com/grcengineering/ocean/internal/module"
 
-type MFAPolicyCollector struct{}
+type MFAPolicyObserver struct{}
 
 // Compile-time interface check.
-var _ module.Collector = (*MFAPolicyCollector)(nil)
+var _ module.Observer = (*MFAPolicyObserver)(nil)
 
-func (c *MFAPolicyCollector) ID() string            { return "okta.mfa_policy" }
-func (c *MFAPolicyCollector) Name() string          { return "Okta MFA Policy Collector" }
-func (c *MFAPolicyCollector) Version() string       { return "0.1.0" }
-func (c *MFAPolicyCollector) SourceSystem() string  { return "okta" }
-func (c *MFAPolicyCollector) EvidenceTypes() []int  { return []int{1001} }
+func (c *MFAPolicyObserver) ID() string            { return "okta.mfa_policy" }
+func (c *MFAPolicyObserver) Name() string          { return "Okta MFA Policy Observer" }
+func (c *MFAPolicyObserver) Version() string       { return "0.1.0" }
+func (c *MFAPolicyObserver) SourceSystem() string  { return "okta" }
+func (c *MFAPolicyObserver) EvidenceTypes() []int  { return []int{1001} }
 
-func (c *MFAPolicyCollector) CredentialRequirements() []module.CredentialReq {
+func (c *MFAPolicyObserver) CredentialRequirements() []module.CredentialReq {
     return []module.CredentialReq{
         {
             Name:        "OKTA_API_TOKEN",
@@ -98,7 +98,7 @@ func (c *MFAPolicyCollector) CredentialRequirements() []module.CredentialReq {
 The `config` map contains resolved credentials and configuration. Return one or more `evidence.Evidence` records.
 
 ```go
-func (c *MFAPolicyCollector) Collect(ctx context.Context, config map[string]string) ([]evidence.Evidence, error) {
+func (c *MFAPolicyObserver) Collect(ctx context.Context, config map[string]string) ([]evidence.Evidence, error) {
     domain := config["OKTA_DOMAIN"]
     token := config["OKTA_API_TOKEN"]
 
@@ -118,7 +118,7 @@ func (c *MFAPolicyCollector) Collect(ctx context.Context, config map[string]stri
             Module: evidence.ModuleInfo{
                 Name:    c.ID(),
                 Version: c.Version(),
-                Type:    "collector",
+                Type:    "observer",
             },
             Source: evidence.SourceInfo{
                 System:     c.SourceSystem(),
@@ -146,7 +146,7 @@ package okta
 import "github.com/grcengineering/ocean/internal/module"
 
 func RegisterAll(reg *module.Registry) {
-    reg.RegisterCollector(&MFAPolicyCollector{})
+    reg.RegisterObserver(&MFAPolicyObserver{})
 }
 ```
 
@@ -156,12 +156,12 @@ Add the import and registration call in the CLI files (`internal/cli/collect.go`
 
 ```go
 import (
-    oktacollector "github.com/grcengineering/ocean/modules/collectors/okta"
+    oktaobserver "github.com/grcengineering/ocean/modules/observers/okta"
 )
 
 // In the command's RunE function:
 reg := module.NewRegistry()
-oktacollector.RegisterAll(reg)
+oktaobserver.RegisterAll(reg)
 ```
 
 ## Tester Interface
@@ -300,7 +300,7 @@ func (t *MFABypassTester) Test(ctx context.Context, config map[string]string) ([
 
 ### Registering Testers
 
-Same pattern as collectors:
+Same pattern as observers:
 
 ```go
 package okta
@@ -334,7 +334,7 @@ Every evidence record must populate these core fields:
 | `ClassUID` | `int` | OCSF class UID for the evidence type |
 | `CategoryUID` | `int` | OCSF category UID |
 | `ActivityID` | `int` | Activity type (1=config check, 2=active test) |
-| `Time` | `time.Time` | When the evidence was collected (UTC) |
+| `Time` | `time.Time` | When the evidence was observed (UTC) |
 | `ConfidenceLevel` | `ConfidenceLevel` | `passive_observation` or `active_verification` |
 | `StatusID` | `StatusID` | 0=unknown, 1=effective, 2=ineffective, 99=other |
 | `Status` | `string` | Human-readable status description |
@@ -370,7 +370,7 @@ Write tests that verify:
 Use `net/http/httptest` to mock external APIs:
 
 ```go
-func TestMFAPolicyCollector_Collect(t *testing.T) {
+func TestMFAPolicyObserver_Collect(t *testing.T) {
     // Create a mock Okta API server.
     srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         w.Header().Set("Content-Type", "application/json")
@@ -380,7 +380,7 @@ func TestMFAPolicyCollector_Collect(t *testing.T) {
     }))
     defer srv.Close()
 
-    c := &MFAPolicyCollector{}
+    c := &MFAPolicyObserver{}
     evs, err := c.Collect(context.Background(), map[string]string{
         "OKTA_DOMAIN":    strings.TrimPrefix(srv.URL, "http://"),
         "OKTA_API_TOKEN": "test-token",
@@ -401,12 +401,12 @@ Follow this convention for new modules:
 
 ```
 modules/
-  collectors/
+  observers/
     <source_system>/
-      collector.go         # Base HTTP client and RegisterAll function
-      <feature>.go         # Feature-specific collector (e.g., mfa.go, iam.go)
-      collector_test.go    # Tests for base client
-      <feature>_test.go    # Tests for feature collector
+      observer.go         # Base HTTP client and RegisterAll function
+      <feature>.go         # Feature-specific observer (e.g., mfa.go, iam.go)
+      observer_test.go    # Tests for base client
+      <feature>_test.go    # Tests for feature observer
   testers/
     <source_system>/
       <feature>.go         # Feature-specific tester (e.g., mfa_bypass.go)
@@ -420,8 +420,8 @@ Study these existing modules before creating your own:
 
 | Module | Files | Good Example Of |
 |--------|-------|-----------------|
-| `modules/collectors/mock/` | Simple, self-contained | Basic collector pattern |
+| `modules/observers/mock/` | Simple, self-contained | Basic observer pattern |
 | `modules/testers/mock/` | Simple, self-contained | Basic tester with transcript |
-| `modules/collectors/okta/` | HTTP client + rate limiting | Real API integration |
-| `modules/collectors/aws/` | SigV4 signing, pagination | Complex auth, XML parsing |
+| `modules/observers/okta/` | HTTP client + rate limiting | Real API integration |
+| `modules/observers/aws/` | SigV4 signing, pagination | Complex auth, XML parsing |
 | `modules/testers/github/` | Observable safety class | Non-safe tester pattern |

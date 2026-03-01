@@ -92,7 +92,7 @@ curl -H "Authorization: Bearer $TOKEN" \
       "status_id": 1,
       "status": "MFA enforcement is required for all users",
       "metadata": {
-        "module": { "name": "mock.test", "version": "0.1.0", "type": "collector" },
+        "module": { "name": "mock.test", "version": "0.1.0", "type": "observer" },
         "source": { "system": "mock", "api_version": "v1", "endpoint": "/api/v1/policies" }
       },
       "attestation": {
@@ -153,7 +153,7 @@ curl -H "Authorization: Bearer $TOKEN" \
   "data": {
     "evidence_id": "550e8400-e29b-41d4-a716-446655440000",
     "control_id": "iam.mfa_enforcement",
-    "collected_at": "2026-01-15T10:30:00Z",
+    "observed_at": "2026-01-15T10:30:00Z",
     "attestation": {
       "type": "collection",
       "dsse_envelope_ref": "sha256:abc123",
@@ -195,7 +195,7 @@ curl -H "Authorization: Bearer $TOKEN" \
         { "framework_id": "soc2", "control_ref": "CC6.1" },
         { "framework_id": "iso27001", "control_ref": "A.9.4.2" }
       ],
-      "collectors": [{ "module_id": "okta.mfa_policy" }],
+      "observers": [{ "module_id": "okta.mfa_policy" }],
       "testers": [{ "module_id": "okta.mfa_bypass" }],
       "evaluation_logic": {
         "cel_expression": "effective_count > 0 && ineffective_count == 0 && has_active"
@@ -315,7 +315,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 **`GET /api/v1/modules`**
 
-Returns all registered collector and tester modules with metadata.
+Returns all registered observer and tester modules with metadata.
 
 **Example:**
 
@@ -331,9 +331,9 @@ curl -H "Authorization: Bearer $TOKEN" \
   "data": [
     {
       "ID": "mock.test",
-      "Name": "Mock Test Collector",
+      "Name": "Mock Test Observer",
       "Version": "0.1.0",
-      "Type": "collector",
+      "Type": "observer",
       "SourceSystem": "mock"
     },
     {

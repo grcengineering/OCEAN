@@ -35,14 +35,14 @@ impl Executor {
         Self { registry }
     }
 
-    /// Runs a collector by module ID and returns the collected evidence.
-    pub fn execute_collector(
+    /// Runs a observer by module ID and returns the observed evidence.
+    pub fn execute_observer(
         &self,
         module_id: &str,
         config: &HashMap<String, String>,
     ) -> Result<Vec<Evidence>> {
-        let collector = self.registry.get_collector(module_id)?;
-        collector.collect(config)
+        let observer = self.registry.get_observer(module_id)?;
+        observer.observe(config)
     }
 
     /// Runs a tester through the full safety pipeline:
@@ -117,7 +117,7 @@ mod tests {
     use super::*;
     use crate::evidence::ConfidenceLevel;
     use crate::module::EnvironmentScope;
-    use crate::testutil::{DenyAuthorizer, MockCollector, MockTester};
+    use crate::testutil::{DenyAuthorizer, MockObserver, MockTester};
     use std::sync::Arc;
 
     fn make_executor() -> (Arc<Registry>, Executor) {
@@ -126,32 +126,32 @@ mod tests {
         (reg, exec)
     }
 
-    // --- execute_collector ---
+    // --- execute_observer ---
 
     #[test]
-    fn execute_collector_success() {
+    fn execute_observer_success() {
         let (reg, exec) = make_executor();
-        reg.register_collector(Arc::new(MockCollector::new("col.mock")));
-        let ev = exec.execute_collector("col.mock", &HashMap::new()).unwrap();
+        reg.register_observer(Arc::new(MockObserver::new("col.mock")));
+        let ev = exec.execute_observer("col.mock", &HashMap::new()).unwrap();
         assert_eq!(ev.len(), 1);
     }
 
     #[test]
-    fn execute_collector_not_found() {
+    fn execute_observer_not_found() {
         let (_, exec) = make_executor();
         assert!(exec
-            .execute_collector("col.missing", &HashMap::new())
+            .execute_observer("col.missing", &HashMap::new())
             .is_err());
     }
 
     #[test]
-    fn execute_collector_module_error_propagated() {
+    fn execute_observer_module_error_propagated() {
         let (reg, exec) = make_executor();
-        reg.register_collector(Arc::new(MockCollector::failing("col.fail")));
+        reg.register_observer(Arc::new(MockObserver::failing("col.fail")));
         let err = exec
-            .execute_collector("col.fail", &HashMap::new())
+            .execute_observer("col.fail", &HashMap::new())
             .unwrap_err();
-        assert!(err.to_string().contains("mock collector failure"));
+        assert!(err.to_string().contains("mock observer failure"));
     }
 
     // --- execute_tester ---

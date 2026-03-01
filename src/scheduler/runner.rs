@@ -100,23 +100,23 @@ fn run_one_module(
     executor: &Executor,
     registry: &Arc<Registry>,
 ) -> ModuleRunResult {
-    // Determine if this is a tester or collector by checking the registry.
+    // Determine if this is a tester or observer by checking the registry.
     let is_tester = registry.get_tester(mod_id).is_ok();
 
     if is_tester {
         run_tester(mod_id, schedule, module_config, store, executor, registry)
     } else {
-        run_collector(mod_id, module_config, store, executor)
+        run_observer(mod_id, module_config, store, executor)
     }
 }
 
-fn run_collector(
+fn run_observer(
     mod_id: &str,
     module_config: &HashMap<String, String>,
     store: &dyn Store,
     executor: &Executor,
 ) -> ModuleRunResult {
-    match executor.execute_collector(mod_id, module_config) {
+    match executor.execute_observer(mod_id, module_config) {
         Err(e) => ModuleRunResult {
             module_id: mod_id.to_string(),
             status: MODULE_STATUS_FAILURE.to_string(),
@@ -239,7 +239,7 @@ fn run_tester(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::modules::{register_all_collectors, register_all_testers};
+    use crate::modules::{register_all_observers, register_all_testers};
     use crate::storage::SqliteStore;
     use chrono::Utc;
 
@@ -255,7 +255,7 @@ mod tests {
 
     fn make_registry() -> Arc<Registry> {
         let r = Arc::new(Registry::new());
-        register_all_collectors(&r);
+        register_all_observers(&r);
         register_all_testers(&r);
         r
     }
@@ -305,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_schedule_mock_collector_success() {
+    fn execute_schedule_mock_observer_success() {
         let store = make_store();
         let registry = make_registry();
         let schedule = make_schedule(vec!["mock.test"]);

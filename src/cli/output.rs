@@ -9,7 +9,7 @@ use std::io::Write;
 /// Result of running a single module during an evaluate/test pipeline.
 pub struct ModuleRunResult {
     pub module_id: String,
-    /// "collect" or "test"
+    /// "observe" or "test"
     pub module_type: &'static str,
     /// "OK", "PASS", "FAIL", "ERROR"
     pub status: String,

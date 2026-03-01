@@ -5,7 +5,7 @@ threat_mitigated: Unauthorized access via credential theft
 framework_mappings:
   - framework: SOC2
     control: CC6.1
-collectors:
+observers:
   - module_id: mock.test
 testers:
   - module_id: mock.safety_test

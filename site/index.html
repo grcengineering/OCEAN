@@ -141,7 +141,7 @@
       font-size: 0.72rem; font-weight: 600; font-family: var(--mono);
       letter-spacing: 0.05em; text-transform: uppercase;
     }
-    .badge-collector { background: var(--blue-glow); color: var(--blue); border: 1px solid rgba(27,149,193,0.3); }
+    .badge-observer { background: var(--blue-glow); color: var(--blue); border: 1px solid rgba(27,149,193,0.3); }
     .badge-tester    { background: var(--orange-glow); color: var(--orange); border: 1px solid var(--border-orange); }
     .badge-safe      { background: rgba(16,185,129,0.1); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
 
@@ -915,7 +915,7 @@
     <div class="section-header">
       <div class="section-label">// modules</div>
       <h2 class="section-title">11 Modules. <span class="grad-blue">4 Systems.</span><br>Dual-Mode.</h2>
-      <p class="section-desc">Collectors observe state passively. Testers actively verify controls work. Use both for maximum confidence.</p>
+      <p class="section-desc">Observers observe state passively. Testers actively verify controls work. Use both for maximum confidence.</p>
     </div>
 
     <div class="modules-grid">
@@ -926,9 +926,9 @@
             <div class="module-name">mock.test</div>
             <div class="module-source">mock system</div>
           </div>
-          <span class="badge badge-collector">Collector</span>
+          <span class="badge badge-observer">Observer</span>
         </div>
-        <p class="module-desc">Simulated test collector for development and integration testing workflows.</p>
+        <p class="module-desc">Simulated test observer for development and integration testing workflows.</p>
       </div>
 
       <div class="module-card">
@@ -937,9 +937,9 @@
             <div class="module-name">mock.network</div>
             <div class="module-source">mock system</div>
           </div>
-          <span class="badge badge-collector">Collector</span>
+          <span class="badge badge-observer">Observer</span>
         </div>
-        <p class="module-desc">Simulated network evidence collector for testing pipeline and schema validation.</p>
+        <p class="module-desc">Simulated network evidence observer for testing pipeline and schema validation.</p>
       </div>
 
       <div class="module-card">
@@ -960,7 +960,7 @@
             <div class="module-name">okta.mfa_policy</div>
             <div class="module-source">okta</div>
           </div>
-          <span class="badge badge-collector">Collector</span>
+          <span class="badge badge-observer">Observer</span>
         </div>
         <p class="module-desc">Collects MFA enrollment and policy configuration for all users and groups in an Okta tenant.</p>
       </div>
@@ -983,7 +983,7 @@
             <div class="module-name">okta.mfa_enrollment_population</div>
             <div class="module-source">okta</div>
           </div>
-          <span class="badge badge-collector">Collector</span>
+          <span class="badge badge-observer">Observer</span>
         </div>
         <p class="module-desc">Analyzes per-user WebAuthn/FIDO2 enrollment coverage across all active accounts. Computes population-level compliance rate.</p>
       </div>
@@ -1006,7 +1006,7 @@
             <div class="module-name">aws.iam</div>
             <div class="module-source">aws</div>
           </div>
-          <span class="badge badge-collector">Collector</span>
+          <span class="badge badge-observer">Observer</span>
         </div>
         <p class="module-desc">Collects IAM policies, roles, users, and permission boundaries across an AWS account.</p>
       </div>
@@ -1029,7 +1029,7 @@
             <div class="module-name">github.branch_protection</div>
             <div class="module-source">github</div>
           </div>
-          <span class="badge badge-collector">Collector</span>
+          <span class="badge badge-observer">Observer</span>
         </div>
         <p class="module-desc">Collects branch protection rules, required reviewers, and merge restrictions across repositories.</p>
       </div>
@@ -1141,7 +1141,7 @@
         <div class="terminal-body">
           <div class="terminal-line"><span class="terminal-prompt">$</span><span class="terminal-cmd"> ocean evaluate okta.mfa_enforcement</span></div>
           <div class="terminal-line" style="height:10px"></div>
-          <div class="terminal-line"><span class="terminal-ok">✓  Collecting passive evidence...</span></div>
+          <div class="terminal-line"><span class="terminal-ok">✓  Observing passive evidence...</span></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Running active test (safe classification)...</span></div>
           <div class="terminal-line"><span class="terminal-ok">✓  Evaluating CEL expression...</span></div>
           <div class="terminal-line" style="height:10px"></div>
@@ -1530,7 +1530,7 @@
 (function() {
   const lines = [
     { type: 'prompt', text: 'ocean modules list' },
-    { type: 'out', text: '11 modules registered across 4 systems (collectors: 6, testers: 5)' },
+    { type: 'out', text: '11 modules registered across 4 systems (observers: 6, testers: 5)' },
     { type: 'blank' },
     { type: 'prompt', text: 'ocean collect okta.mfa_policy' },
     { type: 'ok',  text: '✓  Querying Okta API...' },

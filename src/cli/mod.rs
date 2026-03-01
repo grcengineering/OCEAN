@@ -11,7 +11,7 @@ use uuid::Uuid;
 use ocean::{
     control::{calculate_uptime, evaluate_control, Control, ModuleRef},
     module::{AutoAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
-    modules::{register_all_collectors, register_all_testers},
+    modules::{register_all_observers, register_all_testers},
     scheduler::Schedule,
     storage::{EvidenceQuery, SqliteStore, Store},
 };
@@ -51,7 +51,7 @@ pub enum Commands {
     /// Print OCEAN version information.
     Version,
 
-    /// Collect evidence using a collector module.
+    /// Collect evidence using a observer module.
     Collect {
         /// Module ID (e.g., aws.iam, github.branch_protection).
         module: String,
@@ -95,7 +95,7 @@ pub enum Commands {
         cmd: ModulesCmd,
     },
 
-    /// Evaluate a control against collected evidence.
+    /// Evaluate a control against observed evidence.
     Evaluate {
         /// Control ID for legacy mode (e.g., iam.mfa_enforcement).
         /// Omit when using --target/-t and --control-path/-c.
@@ -152,7 +152,7 @@ pub enum Commands {
         control: Option<String>,
     },
 
-    /// Manage recurring collection schedules.
+    /// Manage recurring observation schedules.
     Schedule {
         #[command(subcommand)]
         cmd: ScheduleCmd,
@@ -174,7 +174,7 @@ pub enum Commands {
 pub enum ModulesCmd {
     /// List all registered modules.
     List {
-        /// Filter by type: collector or tester.
+        /// Filter by type: observer or tester.
         #[arg(long = "type")]
         module_type: Option<String>,
     },
@@ -376,7 +376,7 @@ fn open_store(db: &str) -> Result<SqliteStore> {
 
 fn build_registry() -> Arc<Registry> {
     let registry = Arc::new(Registry::new());
-    register_all_collectors(&registry);
+    register_all_observers(&registry);
     register_all_testers(&registry);
     registry
 }
@@ -472,8 +472,8 @@ fn cmd_collect<W: Write>(
     let config = env_as_config();
 
     let evidence = executor
-        .execute_collector(module_id, &config)
-        .with_context(|| format!("execute collector '{module_id}'"))?;
+        .execute_observer(module_id, &config)
+        .with_context(|| format!("execute observer '{module_id}'"))?;
 
     if store {
         let db_store = open_store(db)?;
@@ -543,8 +543,8 @@ fn cmd_modules_validate<W: Write>(out: &mut W, format: OutputFormat, id: &str) -
         .find(|m| m.id == id)
         .ok_or_else(|| anyhow!("module not found: '{id}'"))?;
 
-    let creds = if info.module_type == "collector" {
-        let c = registry.get_collector(id)?;
+    let creds = if info.module_type == "observer" {
+        let c = registry.get_observer(id)?;
         c.credential_requirements()
     } else {
         let t = registry.get_tester(id)?;
@@ -639,7 +639,7 @@ fn resolve_controls(controls_dir: &str, path: &str) -> Result<Vec<Control>> {
     Ok(matched)
 }
 
-/// Run the unified collect → test → evaluate pipeline for every control matching
+/// Run the unified observe → test → evaluate pipeline for every control matching
 /// `control_path` that has modules for the given `target`.
 fn cmd_evaluate_path<W: Write>(
     out: &mut W,
@@ -660,22 +660,22 @@ fn cmd_evaluate_path<W: Write>(
     for control in &controls {
         let mut module_runs: Vec<ModuleRunResult> = Vec::new();
 
-        // ── Collectors ────────────────────────────────────────────────────────
-        let collectors: Vec<&ModuleRef> = control
-            .collectors
+        // ── Observers ────────────────────────────────────────────────────────
+        let observers: Vec<&ModuleRef> = control
+            .observers
             .iter()
             .filter(|m| target_matches_module(target, &m.module_id))
             .collect();
 
-        for mref in collectors {
-            match executor.execute_collector(&mref.module_id, &config) {
+        for mref in observers {
+            match executor.execute_observer(&mref.module_id, &config) {
                 Ok(evidence) => {
                     for ev in &evidence {
                         let _ = db_store.store_evidence(ev);
                     }
                     module_runs.push(ModuleRunResult {
                         module_id: mref.module_id.clone(),
-                        module_type: "collect",
+                        module_type: "observe",
                         status: "OK".to_string(),
                         error: None,
                     });
@@ -683,7 +683,7 @@ fn cmd_evaluate_path<W: Write>(
                 Err(e) => {
                     module_runs.push(ModuleRunResult {
                         module_id: mref.module_id.clone(),
-                        module_type: "collect",
+                        module_type: "observe",
                         status: "ERROR".to_string(),
                         error: Some(e.to_string()),
                     });
@@ -789,7 +789,7 @@ fn cmd_evaluate_path<W: Write>(
     Ok(())
 }
 
-/// Run active testers only (no collectors, no CEL) for controls matching `control_path`.
+/// Run active testers only (no observers, no CEL) for controls matching `control_path`.
 #[allow(clippy::too_many_arguments)]
 fn cmd_test_path<W: Write>(
     out: &mut W,
@@ -1201,20 +1201,20 @@ mod tests {
         cmd_modules_list(&mut buf, OutputFormat::Json, None).unwrap();
         let s = String::from_utf8(buf).unwrap();
         let modules: serde_json::Value = serde_json::from_str(&s).unwrap();
-        // 9 modules registered: 5 collectors + 4 testers (mock.test is tester, mock.network is collector)
+        // 9 modules registered: 5 observers + 4 testers (mock.test is tester, mock.network is observer)
         assert!(modules.as_array().unwrap().len() >= 9);
     }
 
     #[test]
-    fn cmd_modules_list_collectors_only() {
+    fn cmd_modules_list_observers_only() {
         let mut buf = Vec::new();
-        cmd_modules_list(&mut buf, OutputFormat::Json, Some("collector")).unwrap();
+        cmd_modules_list(&mut buf, OutputFormat::Json, Some("observer")).unwrap();
         let s = String::from_utf8(buf).unwrap();
         let modules: serde_json::Value = serde_json::from_str(&s).unwrap();
         let arr = modules.as_array().unwrap();
         assert!(!arr.is_empty());
         for m in arr {
-            assert_eq!(m["module_type"].as_str().unwrap(), "collector");
+            assert_eq!(m["module_type"].as_str().unwrap(), "observer");
         }
     }
 
@@ -1251,7 +1251,7 @@ mod tests {
         assert!(err.to_string().contains("module not found"));
     }
 
-    // --- cmd_modules_validate collector vs tester ---
+    // --- cmd_modules_validate observer vs tester ---
 
     #[test]
     fn cmd_modules_validate_tester() {
@@ -1298,9 +1298,9 @@ evaluation_logic:
     #[test]
     fn cmd_collect_mock_no_store() {
         let mut buf = Vec::new();
-        // mock.test collector exists, no store so no DB needed
+        // mock.test observer exists, no store so no DB needed
         let result = cmd_collect(&mut buf, OutputFormat::Json, "", "mock.test", false);
-        assert!(result.is_ok(), "collect failed: {:?}", result);
+        assert!(result.is_ok(), "observe failed: {:?}", result);
         let s = String::from_utf8(buf).unwrap();
         let ev: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert!(ev.as_array().unwrap().len() >= 1);

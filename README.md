@@ -10,7 +10,7 @@ The conversation that started it all: [LinkedIn post](https://www.linkedin.com/p
 
 ## What OCEAN Does
 
-1. **Collect** evidence from diverse systems (Okta, AWS, GitHub, etc.) via pluggable collector modules
+1. **Observe** evidence from diverse systems (Okta, AWS, GitHub, etc.) via pluggable observer modules
 2. **Test** control effectiveness through active verification with safety-classified tester modules
 3. **Normalize** evidence to a consistent OCSF-inspired schema with full provenance
 4. **Evaluate** control effectiveness using flexible CEL expressions or built-in presets
@@ -29,13 +29,13 @@ make build
 # List available modules
 ./target/debug/ocean modules list
 
-# Collect evidence using the mock collector
-./target/debug/ocean collect mock.test
+# Observe evidence using the mock observer
+./target/debug/ocean observe mock.test
 
 # Run an active control test
 ./target/debug/ocean test mock.safety_test --target staging
 
-# Evaluate a control against collected evidence
+# Evaluate a control against observed evidence
 ./target/debug/ocean evaluate mock.mfa_enforcement
 
 # Query control history and uptime
@@ -53,15 +53,15 @@ OCEAN ships with 11 modules across 4 source systems:
 
 | Module | Type | Source | Safety Class | Description |
 |--------|------|--------|-------------|-------------|
-| `aws.iam` | collector | AWS | — | IAM user enumeration, MFA status, access key age |
+| `aws.iam` | observer | AWS | — | IAM user enumeration, MFA status, access key age |
 | `aws.s3_public_access` | tester | AWS | safe | Probes S3 buckets for public access |
-| `github.branch_protection` | collector | GitHub | — | Branch protection rule collection |
+| `github.branch_protection` | observer | GitHub | — | Branch protection rule collection |
 | `github.secret_push` | tester | GitHub | observable | Tests secret push protection |
-| `mock.test` | collector | mock | — | Simulated MFA policy collection |
-| `mock.network` | collector | mock | — | Simulated network/WAF evidence |
+| `mock.test` | observer | mock | — | Simulated MFA policy collection |
+| `mock.network` | observer | mock | — | Simulated network/WAF evidence |
 | `mock.safety_test` | tester | mock | safe | Simulated MFA bypass attempt |
-| `okta.mfa_policy` | collector | Okta | — | MFA enrollment policy + phishing-resistance attributes |
-| `okta.mfa_enrollment_population` | collector | Okta | — | Per-user WebAuthn enrollment coverage analysis |
+| `okta.mfa_policy` | observer | Okta | — | MFA enrollment policy + phishing-resistance attributes |
+| `okta.mfa_enrollment_population` | observer | Okta | — | Per-user WebAuthn enrollment coverage analysis |
 | `okta.mfa_bypass` | tester | Okta | safe | Attempts authentication without MFA |
 | `okta.pr_mfa_downgrade` | tester | Okta | safe | Tests whether phishable factor downgrade is possible |
 
@@ -69,9 +69,9 @@ OCEAN ships with 11 modules across 4 source systems:
 
 ```
 ocean version                         Print version information
-ocean collect <module>                Collect evidence via a collector module
+ocean observe <module>                Observe evidence via a observer module
 ocean test <module>                   Run an active tester module
-ocean modules list [--type collector|tester]
+ocean modules list [--type observer|tester]
 ocean modules validate <id>           Validate module metadata
 ocean evaluate <control>              Evaluate a control against evidence
 ocean history --control <id>          Query control evaluation history
@@ -101,7 +101,7 @@ ocean/
 │   ├── api/                axum REST API (9 endpoints)
 │   ├── config/             Config loading (YAML + env vars)
 │   └── modules/            Built-in modules
-│       ├── collectors/     aws, github, okta, mock
+│       ├── observers/     aws, github, okta, mock
 │       └── testers/        aws, github, okta, mock
 ├── controls/               YAML control definitions
 ├── schemas/                JSON Schema definitions
@@ -118,7 +118,7 @@ Every piece of data in OCEAN is an **evidence record** with structured provenanc
 
 | Level | Source | Meaning |
 |---|---|---|
-| `passive_observation` | Collectors | Read-only API observation |
+| `passive_observation` | Observers | Read-only API observation |
 | `active_verification` | Testers | Proved via active test |
 
 When both types agree, confidence is **high**. Active evidence always takes precedence over passive in case of disagreement.

@@ -56,7 +56,7 @@ pub enum CrossCheckAssertion {
 pub struct CrossCheck {
     /// Name of an export declared by an earlier component in `components`.
     pub uses: String,
-    /// Observable type to collect from *this* component's evidence for comparison.
+    /// Observable type to observe from *this* component's evidence for comparison.
     pub obs_type: String,
     /// The assertion to evaluate.
     pub assertion: CrossCheckAssertion,
@@ -113,8 +113,8 @@ fn default_true() -> bool {
     true
 }
 
-/// Reference to a collector or tester module used by a control.
-/// Parsed from the `collectors:` and `testers:` arrays in control YAML.
+/// Reference to a observer or tester module used by a control.
+/// Parsed from the `observers:` and `testers:` arrays in control YAML.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModuleRef {
     pub module_id: String,
@@ -131,9 +131,9 @@ pub struct Control {
     pub evaluation_logic: EvaluationLogic,
     #[serde(default)]
     pub framework_mappings: Vec<FrameworkMapping>,
-    /// Collector modules that gather passive evidence for this control.
+    /// Observer modules that gather passive evidence for this control.
     #[serde(default)]
-    pub collectors: Vec<ModuleRef>,
+    pub observers: Vec<ModuleRef>,
     /// Tester modules that perform active verification for this control.
     #[serde(default)]
     pub testers: Vec<ModuleRef>,
@@ -213,7 +213,7 @@ struct ControlYaml {
     #[serde(default)]
     evaluation: EvaluationYaml,
     #[serde(default)]
-    collectors: Vec<ModuleRef>,
+    observers: Vec<ModuleRef>,
     #[serde(default)]
     testers: Vec<ModuleRef>,
     #[serde(default)]
@@ -262,7 +262,7 @@ impl Control {
                     description: m.description,
                 })
                 .collect(),
-            collectors: raw.collectors,
+            observers: raw.observers,
             testers: raw.testers,
             component_controls: raw.component_controls,
             components: raw.components,
@@ -333,7 +333,7 @@ mod tests {
                 requirement_id: "CC6.1".to_string(),
                 description: "Logical access controls".to_string(),
             }],
-            collectors: vec![],
+            observers: vec![],
             testers: vec![],
             component_controls: vec![],
             components: vec![],

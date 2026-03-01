@@ -2,7 +2,7 @@ id: mock.waf_protection
 name: WAF Protection Composite
 description: Composite control verifying WAF protection through multiple sources
 threat_mitigated: Unfiltered web traffic reaching application servers
-collectors:
+observers:
   - module_id: mock.test
   - module_id: mock.network
 testers:

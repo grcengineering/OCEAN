@@ -12,7 +12,7 @@ pub fn any_effective(evidence: &[Evidence]) -> bool {
 }
 
 /// Returns true when at least one evidence record is both Effective
-/// and collected via active verification (a tester, not a collector).
+/// and observed via active verification (a tester, not a observer).
 pub fn active_verified(evidence: &[Evidence]) -> bool {
     evidence.iter().any(|e| {
         e.status_id == StatusId::Effective

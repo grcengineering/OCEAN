@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::{anyhow, Result};
 
-use super::{Collector, Module, Tester};
+use super::{Observer, Module, Tester};
 
 /// Metadata about a registered module, suitable for CLI listings and API responses.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -11,19 +11,19 @@ pub struct ModuleInfo {
     pub id: String,
     pub name: String,
     pub version: String,
-    /// "collector" or "tester"
+    /// "observer" or "tester"
     pub module_type: String,
     pub source_system: String,
-    /// Empty for collectors.
+    /// Empty for observers.
     pub safety_classification: String,
-    /// Empty for collectors.
+    /// Empty for observers.
     pub environment_scope: String,
 }
 
-/// Thread-safe registry of all registered collectors and testers.
+/// Thread-safe registry of all registered observers and testers.
 #[derive(Default)]
 pub struct Registry {
-    collectors: RwLock<HashMap<String, Arc<dyn Collector>>>,
+    observers: RwLock<HashMap<String, Arc<dyn Observer>>>,
     testers: RwLock<HashMap<String, Arc<dyn Tester>>>,
 }
 
@@ -32,8 +32,8 @@ impl Registry {
         Self::default()
     }
 
-    pub fn register_collector(&self, c: Arc<dyn Collector>) {
-        self.collectors
+    pub fn register_observer(&self, c: Arc<dyn Observer>) {
+        self.observers
             .write()
             .unwrap()
             .insert(c.id().to_string(), c);
@@ -43,13 +43,13 @@ impl Registry {
         self.testers.write().unwrap().insert(t.id().to_string(), t);
     }
 
-    pub fn get_collector(&self, id: &str) -> Result<Arc<dyn Collector>> {
-        self.collectors
+    pub fn get_observer(&self, id: &str) -> Result<Arc<dyn Observer>> {
+        self.observers
             .read()
             .unwrap()
             .get(id)
             .cloned()
-            .ok_or_else(|| anyhow!("collector {id:?} not found"))
+            .ok_or_else(|| anyhow!("observer {id:?} not found"))
     }
 
     pub fn get_tester(&self, id: &str) -> Result<Arc<dyn Tester>> {
@@ -62,7 +62,7 @@ impl Registry {
     }
 
     pub fn get_module(&self, id: &str) -> Result<Arc<dyn Module>> {
-        if let Ok(c) = self.get_collector(id) {
+        if let Ok(c) = self.get_observer(id) {
             return Ok(c as Arc<dyn Module>);
         }
         if let Ok(t) = self.get_tester(id) {
@@ -71,8 +71,8 @@ impl Registry {
         Err(anyhow!("module {id:?} not found"))
     }
 
-    pub fn list_collectors(&self) -> Vec<Arc<dyn Collector>> {
-        self.collectors.read().unwrap().values().cloned().collect()
+    pub fn list_observers(&self) -> Vec<Arc<dyn Observer>> {
+        self.observers.read().unwrap().values().cloned().collect()
     }
 
     pub fn list_testers(&self) -> Vec<Arc<dyn Tester>> {
@@ -82,12 +82,12 @@ impl Registry {
     pub fn list_modules(&self) -> Vec<ModuleInfo> {
         let mut infos = Vec::new();
 
-        for c in self.collectors.read().unwrap().values() {
+        for c in self.observers.read().unwrap().values() {
             infos.push(ModuleInfo {
                 id: c.id().to_string(),
                 name: c.name().to_string(),
                 version: c.version().to_string(),
-                module_type: "collector".to_string(),
+                module_type: "observer".to_string(),
                 source_system: c.source_system().to_string(),
                 safety_classification: String::new(),
                 environment_scope: String::new(),
@@ -128,27 +128,27 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::{MockCollector, MockTester};
+    use crate::testutil::{MockObserver, MockTester};
 
     fn make_registry() -> Registry {
         let reg = Registry::new();
-        reg.register_collector(Arc::new(MockCollector::new("col.a")));
-        reg.register_collector(Arc::new(MockCollector::new("col.b")));
+        reg.register_observer(Arc::new(MockObserver::new("col.a")));
+        reg.register_observer(Arc::new(MockObserver::new("col.b")));
         reg.register_tester(Arc::new(MockTester::safe("test.a")));
         reg
     }
 
     #[test]
-    fn get_collector_found() {
+    fn get_observer_found() {
         let reg = make_registry();
-        let c = reg.get_collector("col.a").unwrap();
+        let c = reg.get_observer("col.a").unwrap();
         assert_eq!(c.id(), "col.a");
     }
 
     #[test]
-    fn get_collector_not_found() {
+    fn get_observer_not_found() {
         let reg = make_registry();
-        let err = reg.get_collector("nonexistent").err().expect("should fail");
+        let err = reg.get_observer("nonexistent").err().expect("should fail");
         assert!(err.to_string().contains("not found"));
     }
 
@@ -166,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn get_module_finds_collector() {
+    fn get_module_finds_observer() {
         let reg = make_registry();
         let m = reg.get_module("col.a").unwrap();
         assert_eq!(m.id(), "col.a");
@@ -186,9 +186,9 @@ mod tests {
     }
 
     #[test]
-    fn list_collectors_returns_all() {
+    fn list_observers_returns_all() {
         let reg = make_registry();
-        assert_eq!(reg.list_collectors().len(), 2);
+        assert_eq!(reg.list_observers().len(), 2);
     }
 
     #[test]
@@ -215,7 +215,7 @@ mod tests {
         let modules = reg.list_modules();
         let col_count = modules
             .iter()
-            .filter(|m| m.module_type == "collector")
+            .filter(|m| m.module_type == "observer")
             .count();
         let test_count = modules.iter().filter(|m| m.module_type == "tester").count();
         assert_eq!(col_count, 2);
@@ -223,11 +223,11 @@ mod tests {
     }
 
     #[test]
-    fn list_by_type_collector() {
+    fn list_by_type_observer() {
         let reg = make_registry();
-        let cols = reg.list_by_type("collector");
+        let cols = reg.list_by_type("observer");
         assert_eq!(cols.len(), 2);
-        assert!(cols.iter().all(|m| m.module_type == "collector"));
+        assert!(cols.iter().all(|m| m.module_type == "observer"));
     }
 
     #[test]

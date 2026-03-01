@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
 };
-use crate::module::{collector::Collector, CredentialReq, Module};
+use crate::module::{observer::Observer, CredentialReq, Module};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -233,20 +233,20 @@ fn parse_access_keys(xml: &str, now: DateTime<Utc>) -> Vec<AccessKeyInfo> {
     keys
 }
 
-// ─── IAMCollector ─────────────────────────────────────────────────────────────
+// ─── IAMObserver ─────────────────────────────────────────────────────────────
 
-/// Queries AWS IAM to collect MFA enrollment and access key age evidence.
+/// Queries AWS IAM to observe MFA enrollment and access key age evidence.
 ///
 /// Required config keys: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
 /// Optional: `AWS_SESSION_TOKEN`, `AWS_REGION`, `AWS_BASE_URL` (test override).
-pub struct IamCollector;
+pub struct IamObserver;
 
-impl Module for IamCollector {
+impl Module for IamObserver {
     fn id(&self) -> &str {
         "aws.iam"
     }
     fn name(&self) -> &str {
-        "AWS IAM Collector"
+        "AWS IAM Observer"
     }
     fn version(&self) -> &str {
         "0.1.0"
@@ -288,8 +288,8 @@ impl Module for IamCollector {
     }
 }
 
-impl Collector for IamCollector {
-    fn collect(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+impl Observer for IamObserver {
+    fn observe(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         let access_key = config
             .get("AWS_ACCESS_KEY_ID")
             .ok_or_else(|| anyhow!("AWS_ACCESS_KEY_ID is required"))?;
@@ -483,7 +483,7 @@ impl Collector for IamCollector {
                 module: ModuleInfo {
                     name: "aws.iam".to_string(),
                     version: "0.1.0".to_string(),
-                    module_type: "collector".to_string(),
+                    module_type: "observer".to_string(),
                 },
                 source: SourceInfo {
                     system: "aws".to_string(),
@@ -724,39 +724,39 @@ mod tests {
         // age_days will be high but Status=Inactive
         let keys = parse_access_keys(KEYS_INACTIVE_STALE, Utc::now());
         assert_eq!(keys[0].status, "Inactive");
-        // The IamCollector only flags Active + stale keys
+        // The IamObserver only flags Active + stale keys
     }
 
-    // ── IamCollector metadata ────────────────────────────────────────────────
+    // ── IamObserver metadata ────────────────────────────────────────────────
 
     #[test]
-    fn iam_collector_id() {
-        assert_eq!(IamCollector.id(), "aws.iam");
-    }
-
-    #[test]
-    fn iam_collector_name() {
-        assert_eq!(IamCollector.name(), "AWS IAM Collector");
+    fn iam_observer_id() {
+        assert_eq!(IamObserver.id(), "aws.iam");
     }
 
     #[test]
-    fn iam_collector_version() {
-        assert_eq!(IamCollector.version(), "0.1.0");
+    fn iam_observer_name() {
+        assert_eq!(IamObserver.name(), "AWS IAM Observer");
     }
 
     #[test]
-    fn iam_collector_source_system() {
-        assert_eq!(IamCollector.source_system(), "aws");
+    fn iam_observer_version() {
+        assert_eq!(IamObserver.version(), "0.1.0");
     }
 
     #[test]
-    fn iam_collector_evidence_types() {
-        assert_eq!(IamCollector.evidence_types(), &[1002]);
+    fn iam_observer_source_system() {
+        assert_eq!(IamObserver.source_system(), "aws");
     }
 
     #[test]
-    fn iam_collector_credential_requirements() {
-        let reqs = IamCollector.credential_requirements();
+    fn iam_observer_evidence_types() {
+        assert_eq!(IamObserver.evidence_types(), &[1002]);
+    }
+
+    #[test]
+    fn iam_observer_credential_requirements() {
+        let reqs = IamObserver.credential_requirements();
         assert_eq!(reqs.len(), 4);
         assert!(reqs
             .iter()
@@ -771,9 +771,9 @@ mod tests {
     }
 
     #[test]
-    fn iam_collector_missing_access_key_errors() {
-        let err = IamCollector
-            .collect(&HashMap::from([(
+    fn iam_observer_missing_access_key_errors() {
+        let err = IamObserver
+            .observe(&HashMap::from([(
                 "AWS_SECRET_ACCESS_KEY".to_string(),
                 "secret".to_string(),
             )]))
@@ -782,9 +782,9 @@ mod tests {
     }
 
     #[test]
-    fn iam_collector_missing_secret_key_errors() {
-        let err = IamCollector
-            .collect(&HashMap::from([(
+    fn iam_observer_missing_secret_key_errors() {
+        let err = IamObserver
+            .observe(&HashMap::from([(
                 "AWS_ACCESS_KEY_ID".to_string(),
                 "key".to_string(),
             )]))
@@ -792,7 +792,7 @@ mod tests {
         assert!(err.to_string().contains("AWS_SECRET_ACCESS_KEY"));
     }
 
-    // ── IamCollector HTTP integration (mock server) ──────────────────────────
+    // ── IamObserver HTTP integration (mock server) ──────────────────────────
 
     /// Starts a mock HTTP server that serves `responses` in order, one per connection.
     fn mock_server(responses: Vec<String>) -> String {
@@ -830,9 +830,9 @@ mod tests {
     }
 
     #[test]
-    fn iam_collector_no_users_is_compliant() {
+    fn iam_observer_no_users_is_compliant() {
         let srv = mock_server(vec![EMPTY_USERS.to_string()]);
-        let results = IamCollector.collect(&base_config(&srv)).unwrap();
+        let results = IamObserver.observe(&base_config(&srv)).unwrap();
         assert_eq!(results.len(), 1);
         let ev = &results[0];
         assert_eq!(ev.status_id, StatusId::Effective);
@@ -842,56 +842,56 @@ mod tests {
     }
 
     #[test]
-    fn iam_collector_user_with_mfa_fresh_key_compliant() {
+    fn iam_observer_user_with_mfa_fresh_key_compliant() {
         let srv = mock_server(vec![
             ONE_USER.to_string(),
             MFA_ONE.to_string(),
             KEYS_FRESH.to_string(),
         ]);
-        let ev = &IamCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.class_uid, 1002);
         assert!(!ev.observables.is_empty());
     }
 
     #[test]
-    fn iam_collector_user_no_mfa_is_ineffective() {
+    fn iam_observer_user_no_mfa_is_ineffective() {
         let srv = mock_server(vec![
             ONE_USER.to_string(),
             MFA_NONE.to_string(),
             KEYS_EMPTY.to_string(),
         ]);
-        let ev = &IamCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev.findings.iter().any(|f| f.title == "User Without MFA"));
     }
 
     #[test]
-    fn iam_collector_stale_key_is_ineffective() {
+    fn iam_observer_stale_key_is_ineffective() {
         let srv = mock_server(vec![
             ONE_USER.to_string(),
             MFA_ONE.to_string(),
             KEYS_STALE.to_string(),
         ]);
-        let ev = &IamCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev.findings.iter().any(|f| f.title == "Stale Access Key"));
     }
 
     #[test]
-    fn iam_collector_inactive_stale_key_is_compliant() {
+    fn iam_observer_inactive_stale_key_is_compliant() {
         // Inactive keys don't count as stale.
         let srv = mock_server(vec![
             ONE_USER.to_string(),
             MFA_ONE.to_string(),
             KEYS_INACTIVE_STALE.to_string(),
         ]);
-        let ev = &IamCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
     }
 
     #[test]
-    fn iam_collector_two_users_one_bad() {
+    fn iam_observer_two_users_one_bad() {
         // alice: MFA + fresh key → ok; bob: no MFA + stale key → bad
         let srv = mock_server(vec![
             TWO_USERS.to_string(),
@@ -900,7 +900,7 @@ mod tests {
             MFA_NONE.to_string(),   // bob mfa (none)
             KEYS_STALE.to_string(), // bob keys (stale)
         ]);
-        let ev = &IamCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev.findings.iter().any(|f| f.title == "User Without MFA"));
         assert!(ev.findings.iter().any(|f| f.title == "Stale Access Key"));
@@ -909,9 +909,9 @@ mod tests {
     }
 
     #[test]
-    fn iam_collector_raw_data_has_expected_keys() {
+    fn iam_observer_raw_data_has_expected_keys() {
         let srv = mock_server(vec![EMPTY_USERS.to_string()]);
-        let ev = &IamCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert!(ev.raw_data.get("total_users").is_some());
         assert!(ev.raw_data.get("users_without_mfa").is_some());
         assert!(ev.raw_data.get("stale_access_keys").is_some());

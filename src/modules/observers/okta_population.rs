@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
 };
-use crate::module::{collector::Collector, CredentialReq, Module};
+use crate::module::{observer::Observer, CredentialReq, Module};
 
 // ─── Factor taxonomy (user-enrolled factor types) ────────────────────────────
 
@@ -77,19 +77,19 @@ fn extract_next_link(link_header: &str) -> Option<String> {
     None
 }
 
-// ─── MfaEnrollmentPopulationCollector ────────────────────────────────────────
+// ─── MfaEnrollmentPopulationObserver ────────────────────────────────────────
 
 /// Queries Okta user enrollment data to measure phishing-resistant MFA coverage
 /// across the user population. Classifies each user as compliant (PR-only),
 /// partially compliant (PR + phishable fallback), or non-compliant.
-pub struct MfaEnrollmentPopulationCollector;
+pub struct MfaEnrollmentPopulationObserver;
 
-impl Module for MfaEnrollmentPopulationCollector {
+impl Module for MfaEnrollmentPopulationObserver {
     fn id(&self) -> &str {
         "okta.mfa_enrollment_population"
     }
     fn name(&self) -> &str {
-        "Okta MFA Enrollment Population Collector"
+        "Okta MFA Enrollment Population Observer"
     }
     fn version(&self) -> &str {
         "0.1.0"
@@ -164,8 +164,8 @@ fn classify_user_factors(factors: &[Value]) -> UserCompliance {
     }
 }
 
-impl Collector for MfaEnrollmentPopulationCollector {
-    fn collect(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+impl Observer for MfaEnrollmentPopulationObserver {
+    fn observe(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         let token = config
             .get("OKTA_API_TOKEN")
             .ok_or_else(|| anyhow!("OKTA_API_TOKEN is required"))?;
@@ -372,7 +372,7 @@ impl Collector for MfaEnrollmentPopulationCollector {
                 module: ModuleInfo {
                     name: "okta.mfa_enrollment_population".to_string(),
                     version: "0.1.0".to_string(),
-                    module_type: "collector".to_string(),
+                    module_type: "observer".to_string(),
                 },
                 source: SourceInfo {
                     system: "okta".to_string(),
@@ -498,14 +498,14 @@ mod tests {
 
     #[test]
     fn metadata_correct() {
-        let collector = MfaEnrollmentPopulationCollector;
-        assert_eq!(collector.id(), "okta.mfa_enrollment_population");
-        assert_eq!(collector.evidence_types(), &[1001]);
+        let observer = MfaEnrollmentPopulationObserver;
+        assert_eq!(observer.id(), "okta.mfa_enrollment_population");
+        assert_eq!(observer.evidence_types(), &[1001]);
 
         let srv = multi_mock_server(vec![
             ("/api/v1/users", 200, EMPTY_USERS.to_string()),
         ]);
-        let ev = &collector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &observer.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.class_uid, 1001);
         assert_eq!(ev.activity_id, 7);
         assert_eq!(ev.confidence_level, ConfidenceLevel::PassiveObservation);
@@ -515,8 +515,8 @@ mod tests {
 
     #[test]
     fn missing_api_token_errors() {
-        let err = MfaEnrollmentPopulationCollector
-            .collect(&HashMap::from([(
+        let err = MfaEnrollmentPopulationObserver
+            .observe(&HashMap::from([(
                 "OKTA_DOMAIN".to_string(),
                 "example.okta.com".to_string(),
             )]))
@@ -526,8 +526,8 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let err = MfaEnrollmentPopulationCollector
-            .collect(&HashMap::from([(
+        let err = MfaEnrollmentPopulationObserver
+            .observe(&HashMap::from([(
                 "OKTA_API_TOKEN".to_string(),
                 "tok".to_string(),
             )]))
@@ -545,8 +545,8 @@ mod tests {
             ("u2/factors", 200, U_ALL_PR.to_string()),
             ("u3/factors", 200, U_ALL_PR.to_string()),
         ]);
-        let ev = &MfaEnrollmentPopulationCollector
-            .collect(&base_config(&srv))
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["total_users"], 3);
@@ -561,8 +561,8 @@ mod tests {
             ("u2/factors", 200, U2_FACTORS.to_string()),
             ("u3/factors", 200, U3_FACTORS.to_string()),
         ]);
-        let ev = &MfaEnrollmentPopulationCollector
-            .collect(&base_config(&srv))
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
     }
@@ -572,8 +572,8 @@ mod tests {
         let srv = multi_mock_server(vec![
             ("/api/v1/users", 200, EMPTY_USERS.to_string()),
         ]);
-        let ev = &MfaEnrollmentPopulationCollector
-            .collect(&base_config(&srv))
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["coverage_pct"], 100.0);
@@ -587,8 +587,8 @@ mod tests {
             ("u2/factors", 200, U2_FACTORS.to_string()),
             ("u3/factors", 200, U3_FACTORS.to_string()),
         ]);
-        let ev = &MfaEnrollmentPopulationCollector
-            .collect(&base_config(&srv))
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         let non_compliant = ev.raw_data["iam_auth"]["non_compliant"]
             .as_array()
@@ -605,8 +605,8 @@ mod tests {
             ("u2/factors", 200, U2_FACTORS.to_string()),
             ("u3/factors", 200, U3_FACTORS.to_string()),
         ]);
-        let ev = &MfaEnrollmentPopulationCollector
-            .collect(&base_config(&srv))
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         // 1 compliant out of 3 = 33.33...%
         let pct = ev.raw_data["coverage_pct"].as_f64().unwrap();

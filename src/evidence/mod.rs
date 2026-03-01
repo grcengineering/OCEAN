@@ -1,6 +1,6 @@
 // Evidence — the foundational entity in OCEAN.
 //
-// Every collector and tester produces Evidence records. Evidence is immutable
+// Every observer and tester produces Evidence records. Evidence is immutable
 // once created and carries enough context to prove what was observed, when,
 // and by which module.
 
@@ -22,7 +22,7 @@ pub use transcript::{TestTranscript, TranscriptRecorder};
 // StatusId
 // ---------------------------------------------------------------------------
 
-/// The outcome of an evidence collection or active test.
+/// The outcome of an evidence observation or active test.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "i32", into = "i32")]
 pub enum StatusId {
@@ -66,7 +66,7 @@ impl From<StatusId> for i32 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfidenceLevel {
-    /// Evidence gathered by reading state (collector).
+    /// Evidence gathered by reading state (observer).
     PassiveObservation,
     /// Evidence gathered by performing an active test (tester).
     ActiveVerification,
@@ -87,7 +87,7 @@ impl ConfidenceLevel {
 pub struct ModuleInfo {
     pub name: String,
     pub version: String,
-    /// "collector", "tester", or "dual"
+    /// "observer", "tester", or "dual"
     #[serde(rename = "type")]
     pub module_type: String,
 }
@@ -100,7 +100,7 @@ pub struct SourceInfo {
     pub endpoint: String,
 }
 
-/// Provenance information about how evidence was collected.
+/// Provenance information about how evidence was observed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     pub module: ModuleInfo,
@@ -136,7 +136,7 @@ pub struct Finding {
     pub severity_id: i32,
 }
 
-/// Additional context added to evidence after initial collection.
+/// Additional context added to evidence after initial observation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Enrichment {
     #[serde(rename = "type")]
@@ -183,7 +183,7 @@ mod tests {
             module: ModuleInfo {
                 name: "test.module".to_string(),
                 version: "0.1.0".to_string(),
-                module_type: "collector".to_string(),
+                module_type: "observer".to_string(),
             },
             source: SourceInfo {
                 system: "mock".to_string(),
@@ -255,12 +255,12 @@ mod tests {
         let info = ModuleInfo {
             name: "aws.iam".to_string(),
             version: "1.2.3".to_string(),
-            module_type: "collector".to_string(),
+            module_type: "observer".to_string(),
         };
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("\"type\""));
         let decoded: ModuleInfo = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.module_type, "collector");
+        assert_eq!(decoded.module_type, "observer");
     }
 
     #[test]

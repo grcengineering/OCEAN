@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
 };
-use crate::module::{collector::Collector, CredentialReq, Module};
+use crate::module::{observer::Observer, CredentialReq, Module};
 
 // ─── Factor taxonomy ─────────────────────────────────────────────────────────
 
@@ -45,21 +45,21 @@ fn okta_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16)> {
     }
 }
 
-// ─── MfaPolicyCollector ───────────────────────────────────────────────────────
+// ─── MfaPolicyObserver ───────────────────────────────────────────────────────
 
 /// Queries Okta MFA enrollment policies and normalizes them into OCEAN evidence.
 /// Generates findings for inactive policies or policies without required factors.
 ///
 /// Required config: `OKTA_API_TOKEN`, `OKTA_DOMAIN`.
 /// Optional: `OKTA_BASE_URL` (test override — defaults to `https://{OKTA_DOMAIN}`).
-pub struct MfaPolicyCollector;
+pub struct MfaPolicyObserver;
 
-impl Module for MfaPolicyCollector {
+impl Module for MfaPolicyObserver {
     fn id(&self) -> &str {
         "okta.mfa_policy"
     }
     fn name(&self) -> &str {
-        "Okta MFA Policy Collector"
+        "Okta MFA Policy Observer"
     }
     fn version(&self) -> &str {
         "0.1.0"
@@ -89,8 +89,8 @@ impl Module for MfaPolicyCollector {
     }
 }
 
-impl Collector for MfaPolicyCollector {
-    fn collect(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+impl Observer for MfaPolicyObserver {
+    fn observe(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         let token = config
             .get("OKTA_API_TOKEN")
             .ok_or_else(|| anyhow!("OKTA_API_TOKEN is required"))?;
@@ -322,7 +322,7 @@ impl Collector for MfaPolicyCollector {
                 module: ModuleInfo {
                     name: "okta.mfa_policy".to_string(),
                     version: "0.1.0".to_string(),
-                    module_type: "collector".to_string(),
+                    module_type: "observer".to_string(),
                 },
                 source: SourceInfo {
                     system: "okta".to_string(),
@@ -386,32 +386,32 @@ mod tests {
 
     #[test]
     fn mfa_policy_id() {
-        assert_eq!(MfaPolicyCollector.id(), "okta.mfa_policy");
+        assert_eq!(MfaPolicyObserver.id(), "okta.mfa_policy");
     }
 
     #[test]
     fn mfa_policy_name() {
-        assert_eq!(MfaPolicyCollector.name(), "Okta MFA Policy Collector");
+        assert_eq!(MfaPolicyObserver.name(), "Okta MFA Policy Observer");
     }
 
     #[test]
     fn mfa_policy_version() {
-        assert_eq!(MfaPolicyCollector.version(), "0.1.0");
+        assert_eq!(MfaPolicyObserver.version(), "0.1.0");
     }
 
     #[test]
     fn mfa_policy_source_system() {
-        assert_eq!(MfaPolicyCollector.source_system(), "okta");
+        assert_eq!(MfaPolicyObserver.source_system(), "okta");
     }
 
     #[test]
     fn mfa_policy_evidence_types() {
-        assert_eq!(MfaPolicyCollector.evidence_types(), &[1001]);
+        assert_eq!(MfaPolicyObserver.evidence_types(), &[1001]);
     }
 
     #[test]
     fn mfa_policy_credential_requirements() {
-        let reqs = MfaPolicyCollector.credential_requirements();
+        let reqs = MfaPolicyObserver.credential_requirements();
         assert_eq!(reqs.len(), 2);
         assert!(reqs
             .iter()
@@ -423,8 +423,8 @@ mod tests {
 
     #[test]
     fn missing_api_token_errors() {
-        let err = MfaPolicyCollector
-            .collect(&HashMap::from([(
+        let err = MfaPolicyObserver
+            .observe(&HashMap::from([(
                 "OKTA_DOMAIN".to_string(),
                 "example.okta.com".to_string(),
             )]))
@@ -434,8 +434,8 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let err = MfaPolicyCollector
-            .collect(&HashMap::from([(
+        let err = MfaPolicyObserver
+            .observe(&HashMap::from([(
                 "OKTA_API_TOKEN".to_string(),
                 "tok".to_string(),
             )]))
@@ -486,7 +486,7 @@ mod tests {
     #[test]
     fn empty_policies_is_effective() {
         let srv = mock_server(200, EMPTY_POLICIES);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.findings[0].title, "MFA Policies Compliant");
     }
@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn active_required_policy_is_effective() {
         let srv = mock_server(200, ACTIVE_REQUIRED_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.control_id, "mfa.enrollment_policy");
         assert_eq!(ev.class_uid, 1001);
@@ -504,7 +504,7 @@ mod tests {
     #[test]
     fn inactive_policy_is_ineffective() {
         let srv = mock_server(200, INACTIVE_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev.findings.iter().any(|f| f.title == "Inactive MFA Policy"));
     }
@@ -512,7 +512,7 @@ mod tests {
     #[test]
     fn active_no_required_factor_is_ineffective() {
         let srv = mock_server(200, ACTIVE_NO_REQUIRED_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev
             .findings
@@ -526,14 +526,14 @@ mod tests {
             403,
             r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
         );
-        let result = MfaPolicyCollector.collect(&base_config(&srv));
+        let result = MfaPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }
 
     #[test]
     fn raw_data_has_expected_keys() {
         let srv = mock_server(200, ACTIVE_REQUIRED_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert!(ev.raw_data.get("total_policies").is_some());
         assert!(ev.raw_data.get("inactive_policies").is_some());
         assert!(ev
@@ -543,9 +543,9 @@ mod tests {
     }
 
     #[test]
-    fn collector_does_not_set_test_transcript() {
+    fn observer_does_not_set_test_transcript() {
         let srv = mock_server(200, EMPTY_POLICIES);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert!(ev.test_transcript.is_none());
     }
 
@@ -581,7 +581,7 @@ mod tests {
     #[test]
     fn pr_exclusive_policy_sets_booleans() {
         let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         let iam = &ev.raw_data["iam_auth"];
         assert_eq!(iam["phishing_resistant_exclusive"], true);
         assert_eq!(iam["phishable_factors_allowed"], false);
@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn pr_with_fallback_sets_phishable_allowed() {
         let srv = mock_server(200, PR_WITH_FALLBACK_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         let iam = &ev.raw_data["iam_auth"];
         assert_eq!(iam["phishable_factors_allowed"], true);
     }
@@ -598,7 +598,7 @@ mod tests {
     #[test]
     fn totp_only_sets_pr_required_false() {
         let srv = mock_server(200, TOTP_ONLY_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         let iam = &ev.raw_data["iam_auth"];
         assert_eq!(iam["phishing_resistant_required"], false);
     }
@@ -606,7 +606,7 @@ mod tests {
     #[test]
     fn raw_data_has_iam_auth_object() {
         let srv = mock_server(200, ACTIVE_REQUIRED_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert!(ev.raw_data.get("iam_auth").is_some());
         assert!(ev.raw_data["iam_auth"].get("factor_policy").is_some());
     }
@@ -614,21 +614,21 @@ mod tests {
     #[test]
     fn policy_type_phishing_resistant_when_exclusive() {
         let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.raw_data["iam_auth"]["policy_type"], "phishing_resistant");
     }
 
     #[test]
     fn policy_type_mfa_when_phishable_allowed() {
         let srv = mock_server(200, PR_WITH_FALLBACK_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.raw_data["iam_auth"]["policy_type"], "mfa");
     }
 
     #[test]
     fn factor_policy_required_populated() {
         let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         let required = ev.raw_data["iam_auth"]["factor_policy"]["required"]
             .as_array()
             .unwrap();
@@ -639,7 +639,7 @@ mod tests {
     #[test]
     fn factor_policy_not_allowed_populated() {
         let srv = mock_server(200, PR_EXCLUSIVE_POLICY);
-        let ev = &MfaPolicyCollector.collect(&base_config(&srv)).unwrap()[0];
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         let not_allowed = ev.raw_data["iam_auth"]["factor_policy"]["not_allowed"]
             .as_array()
             .unwrap();

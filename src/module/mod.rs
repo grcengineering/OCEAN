@@ -1,13 +1,13 @@
-// Module system — pluggable collectors and testers.
+// Module system — pluggable observers and testers.
 
-pub mod collector;
+pub mod observer;
 pub mod executor;
 pub mod registry;
 pub mod safety;
 pub mod tester;
 pub mod validation;
 
-pub use collector::Collector;
+pub use observer::Observer;
 pub use executor::{Executor, TestConfig};
 pub use registry::{ModuleInfo, Registry};
 pub use safety::{
@@ -17,7 +17,7 @@ pub use tester::Tester;
 
 use serde::{Deserialize, Serialize};
 
-/// Base trait for all OCEAN modules (collectors and testers).
+/// Base trait for all OCEAN modules (observers and testers).
 pub trait Module: Send + Sync {
     /// Unique identifier (e.g., "aws.iam", "github.secret_push").
     fn id(&self) -> &str;

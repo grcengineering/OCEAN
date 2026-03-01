@@ -18,7 +18,7 @@ OCEAN is **NOT** a full GRC platform. It is the specialized evidence and verific
 
 1. **Evidence-First Architecture**: All data has provenance, is immutable, reproducible, with confidence levels
 2. **OCSF-Inspired Schema**: Hierarchical taxonomy (Domains → Classes → Attributes)
-3. **Metasploit-Style Extensibility**: Dual-mode modules — Collectors (passive) + Testers (active)
+3. **Metasploit-Style Extensibility**: Dual-mode modules — Observers (passive) + Testers (active)
 4. **Cross-Platform Portability**: Single Go binary, zero dependencies
 5. **Control-Centric Organization**: CEL evaluation logic, composite controls, framework mappings
 6. **Continuous Monitoring Native**: Scheduling, time-series, uptime calculations
@@ -89,10 +89,10 @@ The project uses GitHub Spec-Kit. Key commands:
 ## Modules
 
 9 modules registered (3 source systems + mock):
-- **Mock**: mock.test (collector), mock.network (collector), mock.safety_test (tester)
-- **Okta**: okta.mfa_policy (collector), okta.mfa_bypass (tester)
-- **AWS**: aws.iam (collector), aws.s3_public_access (tester)
-- **GitHub**: github.branch_protection (collector), github.secret_push (tester)
+- **Mock**: mock.test (observer), mock.network (observer), mock.safety_test (tester)
+- **Okta**: okta.mfa_policy (observer), okta.mfa_bypass (tester)
+- **AWS**: aws.iam (observer), aws.s3_public_access (tester)
+- **GitHub**: github.branch_protection (observer), github.secret_push (tester)
 
 ## Testing Rules
 
@@ -112,7 +112,7 @@ Never skip these steps. Never say "tests should be run" — actually run them an
 - **New feature/function:** Write unit tests in the same package (`foo_test.go` alongside `foo.go`). Test the happy path, at least one error path, and edge cases.
 - **Bug fix:** Write a regression test FIRST that reproduces the bug (red), then fix the bug (green). The regression test prevents the bug from returning. Name it `TestBugfix_<description>` or include a comment referencing the issue.
 - **Refactoring:** Existing tests must still pass. If you change a function signature or behavior, update the affected tests to match. Do not delete tests to make refactoring "pass."
-- **New module (collector or tester):** Use the contract test templates: call `testutil.RunCollectorTests(t, collector, config)` or `testutil.RunTesterTests(t, tester, config)` in addition to module-specific tests. Use `testutil.NewMockAPIServer(t)` for HTTP mocking — never call real external APIs in tests.
+- **New module (observer or tester):** Use the contract test templates: call `testutil.RunCollectorTests(t, observer, config)` or `testutil.RunTesterTests(t, tester, config)` in addition to module-specific tests. Use `testutil.NewMockAPIServer(t)` for HTTP mocking — never call real external APIs in tests.
 
 ### 3. Test Type Selection
 

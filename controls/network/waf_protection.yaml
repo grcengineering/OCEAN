@@ -22,7 +22,7 @@ evidence_requirements:
   - waf_configuration_status
   - waf_rule_coverage
   - waf_bypass_test_result
-collectors:
+observers:
   - module_id: cloudflare.waf_config
   - module_id: aws.waf_rules
 testers:

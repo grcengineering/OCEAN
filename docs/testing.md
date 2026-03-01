@@ -66,11 +66,11 @@ This produces `coverage.html` which you can open in a browser for a visual line-
 
 ## Writing Tests for New Modules
 
-When adding a new collector or tester module, use the standard contract test helpers in `internal/testutil/moduletest.go` to verify your module satisfies all interface contracts.
+When adding a new observer or tester module, use the standard contract test helpers in `internal/testutil/moduletest.go` to verify your module satisfies all interface contracts.
 
-### Collector Tests
+### Observer Tests
 
-Use `testutil.RunCollectorTests` to validate a new collector:
+Use `testutil.RunObserverTests` to validate a new observer:
 
 ```go
 package mymodule_test
@@ -79,25 +79,25 @@ import (
     "testing"
 
     "github.com/grcengineering/ocean/internal/testutil"
-    "github.com/grcengineering/ocean/modules/collectors/mymodule"
+    "github.com/grcengineering/ocean/modules/observers/mymodule"
 )
 
-func TestMyCollector(t *testing.T) {
+func TestMyObserver(t *testing.T) {
     // Set up a mock API server for the external service.
     srv := testutil.NewMockAPIServer(t)
     srv.Handle("GET", "/api/v1/data", 200, `{"result": "ok"}`)
 
-    collector := mymodule.NewCollector()
+    observer := mymodule.NewObserver()
     config := map[string]string{
         "API_URL": srv.URL,
         "API_KEY": "test-key",
     }
 
-    // RunCollectorTests validates:
+    // RunObserverTests validates:
     // - All metadata fields (ID, Name, Version, SourceSystem, EvidenceTypes) are non-empty
     // - Collect returns valid evidence with passive_observation confidence
     // - Each evidence record passes structural validation
-    testutil.RunCollectorTests(t, collector, config)
+    testutil.RunObserverTests(t, observer, config)
 }
 ```
 
@@ -125,7 +125,7 @@ func TestMyTester(t *testing.T) {
         "API_KEY": "test-key",
     }
 
-    // RunTesterTests validates everything RunCollectorTests does, plus:
+    // RunTesterTests validates everything RunObserverTests does, plus:
     // - SafetyClass() returns a valid classification
     // - EnvironmentScope() returns a valid scope
     // - PreFlightChecks() is non-nil
@@ -141,7 +141,7 @@ The `internal/testutil` package provides several helpers:
 
 | Helper | Purpose |
 |--------|---------|
-| `NewStubCollector(id)` | Configurable fake collector for registry/pipeline tests |
+| `NewStubObserver(id)` | Configurable fake observer for registry/pipeline tests |
 | `NewStubTester(id)` | Configurable fake tester for registry/pipeline tests |
 | `NewEvidence()` | Fluent builder for constructing evidence records |
 | `NewMockAPIServer(t)` | HTTP test server for mocking external APIs |

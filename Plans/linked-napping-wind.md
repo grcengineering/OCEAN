@@ -6,7 +6,7 @@ OCEAN v2.0.0 is fully implemented (193 tasks, 109 Go files) but the test infrast
 
 **Current coverage snapshot:**
 - 0%: config, storage interface, aws/github modules, pkg/ocean, pkg/schema
-- 26%: cli | 44%: sqlite | 58%: mock collectors
+- 26%: cli | 44%: sqlite | 58%: mock observers
 - 65-92%: core packages (control, eval, attestation, evidence, secrets, scheduler)
 
 ## Plan
@@ -31,7 +31,7 @@ srv.Handle("GET", "/api/v1/policies", 200, `[{"id":"pol001"}]`)
 // Auto-cleanup via t.Cleanup
 ```
 
-**`internal/testutil/module.go`** (~100 lines) — `StubCollector` and `StubTester` configurable fakes implementing module.Collector and module.Tester interfaces.
+**`internal/testutil/module.go`** (~100 lines) — `StubObserver` and `StubTester` configurable fakes implementing module.Observer and module.Tester interfaces.
 
 **`internal/testutil/store.go`** (~120 lines) — `MemoryStore` implementing all 16 methods of `storage.Store` interface (generalized from the mockStore in `internal/api/handlers_test.go`). Thread-safe with sync.RWMutex.
 
@@ -63,25 +63,25 @@ Convention: Integration test files start with `//go:build integration`. Default 
 |------|-----------|-------|
 | `internal/config/config_test.go` (~70 lines) | DefaultConfig returns proper defaults, SetupLogging parses levels | Uses raw testing.T |
 | `internal/config/loader_test.go` (~80 lines) | Load with no file, valid YAML, env overrides | t.TempDir, t.Setenv |
-| `modules/collectors/aws/collector_test.go` (~120 lines) | newAWSClient validation, sha256Hex, isThrottleError, IAMCollector metadata | Needs endpoint override (see note below) |
-| `modules/collectors/github/collector_test.go` (~100 lines) | Client creation, rate limit handling, BranchProtection collect with httptest | Uses GITHUB_API_URL config override |
+| `modules/observers/aws/observer_test.go` (~120 lines) | newAWSClient validation, sha256Hex, isThrottleError, IAMObserver metadata | Needs endpoint override (see note below) |
+| `modules/observers/github/observer_test.go` (~100 lines) | Client creation, rate limit handling, BranchProtection observe with httptest | Uses GITHUB_API_URL config override |
 | `modules/testers/aws/public_access_test.go` (~90 lines) | 403=effective, 200=ineffective, missing config, transcript present | httptest for bucket URL |
 | `modules/testers/github/secret_push_test.go` (~110 lines) | 409/422=blocked, 201=allowed+cleanup, missing config | httptest via GITHUB_API_URL |
 | `pkg/schema/evidence_test.go` (~40 lines) | JSON round-trip, constant values, field tags | Pure unit tests |
-| `pkg/ocean/client_test.go` (~80 lines) | NewClient, Collect/Test/Evaluate error paths, Close | t.TempDir for SQLite |
+| `pkg/ocean/client_test.go` (~80 lines) | NewClient, Observe/Test/Evaluate error paths, Close | t.TempDir for SQLite |
 
-**Critical note — AWS endpoint override:** The `iamEndpoint` is a package-level `const`. To test `IAMCollector.Collect` with httptest, we need a small production code change: add `AWS_IAM_ENDPOINT` config key support in `iam.go`, falling back to the constant when not set. Same pattern Okta already uses with `OKTA_INSECURE`/domain override. This is the only production code change in the plan.
+**Critical note — AWS endpoint override:** The `iamEndpoint` is a package-level `const`. To test `IAMObserver.Observe` with httptest, we need a small production code change: add `AWS_IAM_ENDPOINT` config key support in `iam.go`, falling back to the constant when not set. Same pattern Okta already uses with `OKTA_INSECURE`/domain override. This is the only production code change in the plan.
 
 ### Phase 4: Module Test Template
 
-**`internal/testutil/moduletest.go`** (~80 lines) — `RunCollectorTests(t, collector, config)` and `RunTesterTests(t, tester, config)` that verify the standard module contract: non-empty ID, valid version, evidence types, credential requirements, and that Collect/Test returns valid evidence.
+**`internal/testutil/moduletest.go`** (~80 lines) — `RunObserverTests(t, observer, config)` and `RunTesterTests(t, tester, config)` that verify the standard module contract: non-empty ID, valid version, evidence types, credential requirements, and that Observe/Test returns valid evidence.
 
 New module tests become:
 ```go
-func TestMyCollector_Contract(t *testing.T) {
+func TestMyObserver_Contract(t *testing.T) {
     srv := testutil.NewMockAPIServer(t)
     srv.Handle("GET", "/api/data", 200, `{"ok":true}`)
-    testutil.RunCollectorTests(t, &MyCollector{}, map[string]string{"URL": srv.URL()})
+    testutil.RunObserverTests(t, &MyObserver{}, map[string]string{"URL": srv.URL()})
 }
 ```
 
@@ -90,8 +90,8 @@ func TestMyCollector_Contract(t *testing.T) {
 ### Phase 5: Integration Tests
 
 **`tests/integration/pipeline_test.go`** (~120 lines, `//go:build integration`):
-- `TestCollectStoreEvaluate` — Full pipeline with mock collector + SQLite
-- `TestAttestationRoundTrip` — Collect → sign → store → retrieve → verify
+- `TestCollectStoreEvaluate` — Full pipeline with mock observer + SQLite
+- `TestAttestationRoundTrip` — Observe → sign → store → retrieve → verify
 
 **`internal/storage/sqlite/sqlite_integration_test.go`** (~60 lines, `//go:build integration`):
 - `TestSQLite_LargeDataset` — 10k evidence records, query correctness
@@ -152,7 +152,7 @@ Uses `actions/setup-go@v5` with `go-version-file: go.mod` and cache. gotestfmt i
 | 8 | 1 doc | 80 |
 | **Total** | **24 new + 1 modified + 1 prod change** | **~1,915** |
 
-**Production code change:** `modules/collectors/aws/iam.go` — Add `AWS_IAM_ENDPOINT` config override (5 lines).
+**Production code change:** `modules/observers/aws/iam.go` — Add `AWS_IAM_ENDPOINT` config override (5 lines).
 
 ## Execution Order
 

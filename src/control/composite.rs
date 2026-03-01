@@ -56,7 +56,7 @@ pub struct CrossCheckResult {
 /// Evaluate a composite control using rich [`ComponentSpec`] definitions.
 ///
 /// For each component, evidence is looked up by `(evidence_class, activity_id)` key.
-/// Observables marked as exports are collected into a named map and made available
+/// Observables marked as exports are observed into a named map and made available
 /// to subsequent components' cross-checks.
 ///
 /// Returns `("effective" | "ineffective", cross_check_results)`.
@@ -95,7 +95,7 @@ pub fn evaluate_composite_with_components(
         }
 
         // Evaluate cross-checks — compare this component's observables against a
-        // previously collected export set.
+        // previously observed export set.
         for cross_check in &component.cross_checks {
             let local_values: HashSet<String> = evidence_list
                 .iter()
@@ -216,7 +216,7 @@ mod tests {
             description: String::new(),
             evaluation_logic: EvaluationLogic::default(),
             framework_mappings: vec![],
-            collectors: vec![],
+            observers: vec![],
             testers: vec![],
             component_controls: components.into_iter().map(String::from).collect(),
             components: vec![],
@@ -246,7 +246,7 @@ mod tests {
                 module: ModuleInfo {
                     name: "test".to_string(),
                     version: "0.1.0".to_string(),
-                    module_type: "collector".to_string(),
+                    module_type: "observer".to_string(),
                 },
                 source: SourceInfo {
                     system: "mock".to_string(),

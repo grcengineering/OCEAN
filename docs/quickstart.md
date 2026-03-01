@@ -38,7 +38,7 @@ OCEAN uses Ed25519 keys for in-toto DSSE attestation signing. Generate a keypair
 #   Key ID:      <hex-key-id>
 ```
 
-Without a signing key, evidence is still collected and stored but will not have cryptographic attestation.
+Without a signing key, evidence is still observed and stored but will not have cryptographic attestation.
 
 ## Step 2: List Available Modules
 
@@ -51,27 +51,27 @@ Output:
 ```
 ID                        VERSION  TYPE       SOURCE SYSTEM  SAFETY CLASS
 --                        -------  ----       -------------  ------------
-aws.iam                   0.1.0    collector  aws            -
+aws.iam                   0.1.0    observer  aws            -
 aws.s3_public_access      0.1.0    tester     aws            safe
-github.branch_protection  0.1.0    collector  github         -
+github.branch_protection  0.1.0    observer  github         -
 github.secret_push        0.1.0    tester     github         observable
-mock.network              0.1.0    collector  mock           -
+mock.network              0.1.0    observer  mock           -
 mock.safety_test          0.1.0    tester     mock           safe
-mock.test                 0.1.0    collector  mock           -
+mock.test                 0.1.0    observer  mock           -
 okta.mfa_bypass           0.1.0    tester     okta           safe
-okta.mfa_policy           0.1.0    collector  okta           -
+okta.mfa_policy           0.1.0    observer  okta           -
 ```
 
 Filter by type:
 
 ```bash
 ./ocean modules list --type tester
-./ocean modules list --type collector
+./ocean modules list --type observer
 ```
 
 ## Step 3: Collect Evidence (Passive)
 
-Passive collection queries system APIs to observe configuration state without modifying anything. The mock collector works without any credentials:
+Passive collection queries system APIs to observe configuration state without modifying anything. The mock observer works without any credentials:
 
 ```bash
 ./ocean collect mock.test
@@ -88,7 +88,7 @@ Output (JSON):
   "time": "<timestamp>",
   "confidence_level": "passive_observation",
   "metadata": {
-    "module": { "name": "mock.test", "version": "0.1.0", "type": "collector" },
+    "module": { "name": "mock.test", "version": "0.1.0", "type": "observer" },
     "source": { "system": "mock", "api_version": "v1", "endpoint": "/api/v1/policies" }
   },
   "status_id": 1,
@@ -150,13 +150,13 @@ Check that a module's metadata and configuration are correct:
 
 ## Step 6: Dual-Mode Verification
 
-Run both collector + tester and evaluate control effectiveness in a single command:
+Run both observer + tester and evaluate control effectiveness in a single command:
 
 ```bash
 ./ocean verify mock.mfa_enforcement
 ```
 
-This runs the control's configured collectors and testers, then evaluates using CEL expressions to produce a unified status:
+This runs the control's configured observers and testers, then evaluates using CEL expressions to produce a unified status:
 
 ```json
 {
@@ -269,7 +269,7 @@ export GITHUB_REPO="your-repo"
 
 | Confidence Level | Description | Produced By |
 |---|---|---|
-| `passive_observation` | Read-only system state observation | Collectors |
+| `passive_observation` | Read-only system state observation | Observers |
 | `active_verification` | Active test proving control works | Testers |
 
 ### Control Status
@@ -290,7 +290,7 @@ export GITHUB_REPO="your-repo"
 
 ## Next Steps
 
-- Read the [Module Development Guide](modules.md) to create custom collectors and testers
+- Read the [Module Development Guide](modules.md) to create custom observers and testers
 - Review the [API Documentation](api.md) for integration options
 - Define custom controls in `controls/` directory
 - Write CEL expressions for organization-specific compliance conditions

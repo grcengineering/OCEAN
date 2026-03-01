@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(speckit-autopilot)",
+      "WebFetch(domain:blog.grc.engineering)",
+      "WebFetch(domain:schema.ocsf.io)",
+      "mcp__plugin_serena_serena__list_dir",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:intuitem.com)",
+      "WebFetch(domain:pages.nist.gov)",
+      "Bash(uvx:*)",
+      "Bash(chcp 65001)",
+      "Bash(set PYTHONIOENCODING=utf-8:*)",
+      "Bash(PYTHONIOENCODING=utf-8 uvx:*)"
+    ]
+  }
+}

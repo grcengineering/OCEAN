@@ -7,8 +7,8 @@ Create test files for 8 packages that currently have 0% test coverage. All tests
 ## Findings from Source Analysis
 
 1. **Test style**: The neighboring module tests (mock, okta) all use plain `testing` package -- no testify. We match that style.
-2. **GitHub collector/tester**: Both `newClient` and `newGHClient` accept `GITHUB_API_URL` in config, so we CAN point them at httptest servers.
-3. **AWS collector**: The `iamEndpoint` is a package-level constant. Cannot override for httptest. Test only utility functions and client creation.
+2. **GitHub observer/tester**: Both `newClient` and `newGHClient` accept `GITHUB_API_URL` in config, so we CAN point them at httptest servers.
+3. **AWS observer**: The `iamEndpoint` is a package-level constant. Cannot override for httptest. Test only utility functions and client creation.
 4. **AWS tester (PublicAccessTester)**: Uses `config["AWS_TEST_BUCKET"]` as the full URL for HTTP GET. We CAN point it at httptest.
 5. **pkg/schema**: Pure data types. Test JSON round-trip and constant values.
 6. **pkg/ocean/client**: Uses real SQLite via `sqlitestore.Open`. Use `t.TempDir()` for the DB path.
@@ -206,7 +206,7 @@ func TestLoad_EnvVarOverrides(t *testing.T) {
 
 ---
 
-## File 3: `/mnt/c/users/justi/code/ocean/modules/collectors/aws/collector_test.go`
+## File 3: `/mnt/c/users/justi/code/ocean/modules/observers/aws/observer_test.go`
 
 **Target: ~120 lines**
 
@@ -221,9 +221,9 @@ Tests (utility functions and client creation only -- iamEndpoint is constant):
 - `TestDeriveSigningKey_NotEmpty` -- verify non-nil result
 - `TestIsThrottleError_True` -- pass `*throttleError`, expect true
 - `TestIsThrottleError_False` -- pass `fmt.Errorf(...)`, expect false
-- `TestIAMCollector_ID`
-- `TestIAMCollector_Name`
-- `TestIAMCollector_CredentialRequirements`
+- `TestIAMObserver_ID`
+- `TestIAMObserver_Name`
+- `TestIAMObserver_CredentialRequirements`
 
 ```go
 package aws
@@ -339,26 +339,26 @@ func TestIsThrottleError_False(t *testing.T) {
 	}
 }
 
-func TestIAMCollector_ID(t *testing.T) {
-	c := &IAMCollector{}
+func TestIAMObserver_ID(t *testing.T) {
+	c := &IAMObserver{}
 	if got := c.ID(); got != "aws.iam" {
 		t.Errorf("ID() = %q, want %q", got, "aws.iam")
 	}
 }
 
-func TestIAMCollector_Name(t *testing.T) {
-	c := &IAMCollector{}
-	if got := c.Name(); got != "AWS IAM Collector" {
-		t.Errorf("Name() = %q, want %q", got, "AWS IAM Collector")
+func TestIAMObserver_Name(t *testing.T) {
+	c := &IAMObserver{}
+	if got := c.Name(); got != "AWS IAM Observer" {
+		t.Errorf("Name() = %q, want %q", got, "AWS IAM Observer")
 	}
 }
 
-func TestIAMCollector_ImplementsInterface(t *testing.T) {
-	var _ module.Collector = (*IAMCollector)(nil)
+func TestIAMObserver_ImplementsInterface(t *testing.T) {
+	var _ module.Observer = (*IAMObserver)(nil)
 }
 
-func TestIAMCollector_CredentialRequirements(t *testing.T) {
-	c := &IAMCollector{}
+func TestIAMObserver_CredentialRequirements(t *testing.T) {
+	c := &IAMObserver{}
 	reqs := c.CredentialRequirements()
 	if len(reqs) != 4 {
 		t.Fatalf("CredentialRequirements() returned %d reqs, want 4", len(reqs))
@@ -377,23 +377,23 @@ func TestIAMCollector_CredentialRequirements(t *testing.T) {
 
 ---
 
-## File 4: `/mnt/c/users/justi/code/ocean/modules/collectors/github/collector_test.go`
+## File 4: `/mnt/c/users/justi/code/ocean/modules/observers/github/observer_test.go`
 
 **Target: ~100 lines**
 
-The GitHub collector's `newClient` accepts `GITHUB_API_URL` in config. We CAN test Collect with httptest.
+The GitHub observer's `newClient` accepts `GITHUB_API_URL` in config. We CAN test Observe with httptest.
 
 Tests:
 - `TestNewClient_MissingToken`
 - `TestNewClient_DefaultBaseURL`
 - `TestNewClient_CustomBaseURL`
-- `TestBranchProtectionCollector_ID`
-- `TestBranchProtectionCollector_Name`
-- `TestBranchProtectionCollector_Version`
-- `TestBranchProtectionCollector_ImplementsInterface`
-- `TestBranchProtectionCollector_CredentialRequirements`
-- `TestBranchProtectionCollector_Collect_Protected` -- httptest returns 200 with full protection JSON
-- `TestBranchProtectionCollector_Collect_NoProtection` -- httptest returns 404
+- `TestBranchProtectionObserver_ID`
+- `TestBranchProtectionObserver_Name`
+- `TestBranchProtectionObserver_Version`
+- `TestBranchProtectionObserver_ImplementsInterface`
+- `TestBranchProtectionObserver_CredentialRequirements`
+- `TestBranchProtectionObserver_Collect_Protected` -- httptest returns 200 with full protection JSON
+- `TestBranchProtectionObserver_Collect_NoProtection` -- httptest returns 404
 
 ```go
 package github
@@ -438,33 +438,33 @@ func TestNewClient_CustomBaseURL(t *testing.T) {
 	}
 }
 
-func TestBranchProtectionCollector_ID(t *testing.T) {
-	c := &BranchProtectionCollector{}
+func TestBranchProtectionObserver_ID(t *testing.T) {
+	c := &BranchProtectionObserver{}
 	if got := c.ID(); got != "github.branch_protection" {
 		t.Errorf("ID() = %q, want %q", got, "github.branch_protection")
 	}
 }
 
-func TestBranchProtectionCollector_Name(t *testing.T) {
-	c := &BranchProtectionCollector{}
-	if got := c.Name(); got != "GitHub Branch Protection Collector" {
-		t.Errorf("Name() = %q, want %q", got, "GitHub Branch Protection Collector")
+func TestBranchProtectionObserver_Name(t *testing.T) {
+	c := &BranchProtectionObserver{}
+	if got := c.Name(); got != "GitHub Branch Protection Observer" {
+		t.Errorf("Name() = %q, want %q", got, "GitHub Branch Protection Observer")
 	}
 }
 
-func TestBranchProtectionCollector_Version(t *testing.T) {
-	c := &BranchProtectionCollector{}
+func TestBranchProtectionObserver_Version(t *testing.T) {
+	c := &BranchProtectionObserver{}
 	if got := c.Version(); got != "0.1.0" {
 		t.Errorf("Version() = %q, want %q", got, "0.1.0")
 	}
 }
 
-func TestBranchProtectionCollector_ImplementsInterface(t *testing.T) {
-	var _ module.Collector = (*BranchProtectionCollector)(nil)
+func TestBranchProtectionObserver_ImplementsInterface(t *testing.T) {
+	var _ module.Observer = (*BranchProtectionObserver)(nil)
 }
 
-func TestBranchProtectionCollector_CredentialRequirements(t *testing.T) {
-	c := &BranchProtectionCollector{}
+func TestBranchProtectionObserver_CredentialRequirements(t *testing.T) {
+	c := &BranchProtectionObserver{}
 	reqs := c.CredentialRequirements()
 	if len(reqs) != 4 {
 		t.Fatalf("CredentialRequirements() returned %d reqs, want 4", len(reqs))
@@ -480,7 +480,7 @@ func TestBranchProtectionCollector_CredentialRequirements(t *testing.T) {
 	}
 }
 
-func TestBranchProtectionCollector_Collect_Protected(t *testing.T) {
+func TestBranchProtectionObserver_Collect_Protected(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-RateLimit-Remaining", "100")
 		w.WriteHeader(http.StatusOK)
@@ -495,7 +495,7 @@ func TestBranchProtectionCollector_Collect_Protected(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := &BranchProtectionCollector{}
+	c := &BranchProtectionObserver{}
 	config := map[string]string{
 		"GITHUB_TOKEN":   "ghp_test",
 		"GITHUB_API_URL": server.URL,
@@ -503,19 +503,19 @@ func TestBranchProtectionCollector_Collect_Protected(t *testing.T) {
 		"GITHUB_REPO":    "repo",
 	}
 
-	results, err := c.Collect(context.Background(), config)
+	results, err := c.Observe(context.Background(), config)
 	if err != nil {
-		t.Fatalf("Collect() returned error: %v", err)
+		t.Fatalf("Observe() returned error: %v", err)
 	}
 	if len(results) != 1 {
-		t.Fatalf("Collect() returned %d results, want 1", len(results))
+		t.Fatalf("Observe() returned %d results, want 1", len(results))
 	}
 	if results[0].StatusID != evidence.StatusEffective {
 		t.Errorf("StatusID = %d, want %d (effective)", results[0].StatusID, evidence.StatusEffective)
 	}
 }
 
-func TestBranchProtectionCollector_Collect_NoProtection(t *testing.T) {
+func TestBranchProtectionObserver_Collect_NoProtection(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-RateLimit-Remaining", "100")
 		w.WriteHeader(http.StatusNotFound)
@@ -523,7 +523,7 @@ func TestBranchProtectionCollector_Collect_NoProtection(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := &BranchProtectionCollector{}
+	c := &BranchProtectionObserver{}
 	config := map[string]string{
 		"GITHUB_TOKEN":   "ghp_test",
 		"GITHUB_API_URL": server.URL,
@@ -531,12 +531,12 @@ func TestBranchProtectionCollector_Collect_NoProtection(t *testing.T) {
 		"GITHUB_REPO":    "repo",
 	}
 
-	results, err := c.Collect(context.Background(), config)
+	results, err := c.Observe(context.Background(), config)
 	if err != nil {
-		t.Fatalf("Collect() returned error: %v", err)
+		t.Fatalf("Observe() returned error: %v", err)
 	}
 	if len(results) != 1 {
-		t.Fatalf("Collect() returned %d results, want 1", len(results))
+		t.Fatalf("Observe() returned %d results, want 1", len(results))
 	}
 	if results[0].StatusID != evidence.StatusIneffective {
 		t.Errorf("StatusID = %d, want %d (ineffective)", results[0].StatusID, evidence.StatusIneffective)
@@ -1006,7 +1006,7 @@ Tests:
 - `TestNewClient_WithTempDir` -- create client with TempDir StoragePath, verify no error
 - `TestClient_Registry_NotNil` -- client.Registry() returns non-nil
 - `TestClient_Close` -- close works without error
-- `TestClient_Collect_UnknownModule` -- Collect with unknown module returns error
+- `TestClient_Collect_UnknownModule` -- Observe with unknown module returns error
 - `TestClient_Evaluate_UnknownControl` -- Evaluate with unknown control returns error
 
 ```go
@@ -1067,9 +1067,9 @@ func TestClient_Collect_UnknownModule(t *testing.T) {
 	}
 	defer client.Close()
 
-	_, err = client.Collect(context.Background(), "nonexistent.module", nil)
+	_, err = client.Observe(context.Background(), "nonexistent.module", nil)
 	if err == nil {
-		t.Fatal("Collect() should return error for unknown module")
+		t.Fatal("Observe() should return error for unknown module")
 	}
 }
 
@@ -1101,7 +1101,7 @@ func TestClient_Evaluate_UnknownControl(t *testing.T) {
 ## Key Design Decisions
 
 - **No testify**: Match the dominant pattern of neighboring test files (27 of 32 use stdlib only).
-- **httptest.NewServer for all HTTP**: GitHub collector, GitHub tester, AWS S3 tester all pointed at httptest. AWS IAM collector cannot be tested via httptest due to constant endpoint, so only utility functions are tested.
+- **httptest.NewServer for all HTTP**: GitHub observer, GitHub tester, AWS S3 tester all pointed at httptest. AWS IAM observer cannot be tested via httptest due to constant endpoint, so only utility functions are tested.
 - **t.TempDir() for all files/DB**: config loader and ocean client tests.
 - **t.Setenv() for environment variable tests**: config loader env override test.
 - **Approximately 690 lines total** across 8 files.

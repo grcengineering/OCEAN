@@ -340,7 +340,7 @@ mod tests {
     use tower::ServiceExt;
     use uuid::Uuid;
 
-    use crate::modules::{register_all_collectors, register_all_testers};
+    use crate::modules::{register_all_observers, register_all_testers};
     use crate::storage::SqliteStore;
 
     fn make_state() -> AppState {
@@ -352,7 +352,7 @@ mod tests {
             .to_string();
         let store = Arc::new(SqliteStore::open(&path).unwrap());
         let registry = Arc::new(Registry::new());
-        register_all_collectors(&registry);
+        register_all_observers(&registry);
         register_all_testers(&registry);
         AppState {
             store,

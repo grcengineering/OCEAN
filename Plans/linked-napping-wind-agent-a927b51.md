@@ -50,7 +50,7 @@ NewEvidence() *EvidenceBuilder — sets defaults:
   - ConfidenceLevel: evidence.PassiveObservation (string, not int)
   - StatusID: evidence.StatusEffective
   - Status: "effective"
-  - Metadata.Module: {Name: "test.module", Version: "0.1.0", Type: "collector"}
+  - Metadata.Module: {Name: "test.module", Version: "0.1.0", Type: "observer"}
   - Metadata.Source: {System: "test", APIVersion: "v1", Endpoint: "/test"}
   - Metadata.ProcessedTime: time.Now().UTC()
   - RawData: json.RawMessage(`{"test":true}`)
@@ -100,13 +100,13 @@ Host() string — returns server.Listener.Addr().String()
 URL() string — returns server.URL
 ```
 
-### 4. `module.go` (~100 lines) — StubCollector and StubTester
+### 4. `module.go` (~100 lines) — StubObserver and StubTester
 
 ```
 Package: testutil
 Imports: module, evidence, context
 
-StubCollector struct:
+StubObserver struct:
   - IDVal string
   - NameVal string
   - VersionVal string
@@ -115,16 +115,16 @@ StubCollector struct:
   - CredReqsVal []module.CredentialReq
   - CollectFunc func(ctx context.Context, config map[string]string) ([]evidence.Evidence, error)
 
-Methods implementing module.Collector:
+Methods implementing module.Observer:
   - ID() string -> IDVal
   - Name() string -> NameVal
   - Version() string -> VersionVal
   - SourceSystem() string -> SourceSystemVal
   - EvidenceTypes() []int -> EvidenceTypesVal
   - CredentialRequirements() []module.CredentialReq -> CredReqsVal
-  - Collect(ctx, config) -> calls CollectFunc if non-nil, else returns nil, nil
+  - Observe(ctx, config) -> calls CollectFunc if non-nil, else returns nil, nil
 
-NewStubCollector(id string) *StubCollector:
+NewStubObserver(id string) *StubObserver:
   - IDVal: id
   - NameVal: id (same)
   - VersionVal: "0.1.0"
@@ -132,7 +132,7 @@ NewStubCollector(id string) *StubCollector:
   - EvidenceTypesVal: []int{9999}
 
 StubTester struct:
-  - Embeds same base fields as StubCollector (IDVal, NameVal, etc.)
+  - Embeds same base fields as StubObserver (IDVal, NameVal, etc.)
   - SafetyVal module.SafetyClassification
   - ScopeVal module.EnvironmentScope
   - PreFlightVal []string
@@ -148,7 +148,7 @@ Methods implementing module.Tester:
   - Test(ctx, config) -> calls TestFunc if non-nil, else returns nil, nil
 
 NewStubTester(id string) *StubTester:
-  - Same base defaults as collector
+  - Same base defaults as observer
   - SafetyVal: module.SafetyClassSafe
   - ScopeVal: module.ScopeIsolated
 ```

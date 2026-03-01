@@ -8,20 +8,20 @@ use uuid::Uuid;
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
 };
-use crate::module::{collector::Collector, CredentialReq, Module};
+use crate::module::{observer::Observer, CredentialReq, Module};
 
-// ─── MockCollector ─────────────────────────────────────────────────────────────
+// ─── MockObserver ─────────────────────────────────────────────────────────────
 
-/// Mock collector — returns MFA-policy-style evidence with no external calls.
-/// Used to test the collection pipeline end-to-end without any credentials.
-pub struct MockCollector;
+/// Mock observer — returns MFA-policy-style evidence with no external calls.
+/// Used to test the observation pipeline end-to-end without any credentials.
+pub struct MockObserver;
 
-impl Module for MockCollector {
+impl Module for MockObserver {
     fn id(&self) -> &str {
         "mock.test"
     }
     fn name(&self) -> &str {
-        "Mock Test Collector"
+        "Mock Test Observer"
     }
     fn version(&self) -> &str {
         "0.1.0"
@@ -37,8 +37,8 @@ impl Module for MockCollector {
     }
 }
 
-impl Collector for MockCollector {
-    fn collect(&self, _config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+impl Observer for MockObserver {
+    fn observe(&self, _config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         let now = Utc::now();
         Ok(vec![Evidence {
             id: Uuid::new_v4(),
@@ -52,7 +52,7 @@ impl Collector for MockCollector {
                 module: ModuleInfo {
                     name: "mock.test".to_string(),
                     version: "0.1.0".to_string(),
-                    module_type: "collector".to_string(),
+                    module_type: "observer".to_string(),
                 },
                 source: SourceInfo {
                     system: "mock".to_string(),
@@ -92,18 +92,18 @@ impl Collector for MockCollector {
     }
 }
 
-// ─── MockNetworkCollector ──────────────────────────────────────────────────────
+// ─── MockNetworkObserver ──────────────────────────────────────────────────────
 
-/// Mock network collector — returns WAF-config evidence with no external calls.
-/// Used alongside MockCollector to test composite control evaluation.
-pub struct MockNetworkCollector;
+/// Mock network observer — returns WAF-config evidence with no external calls.
+/// Used alongside MockObserver to test composite control evaluation.
+pub struct MockNetworkObserver;
 
-impl Module for MockNetworkCollector {
+impl Module for MockNetworkObserver {
     fn id(&self) -> &str {
         "mock.network"
     }
     fn name(&self) -> &str {
-        "Mock Network Collector"
+        "Mock Network Observer"
     }
     fn version(&self) -> &str {
         "0.1.0"
@@ -119,8 +119,8 @@ impl Module for MockNetworkCollector {
     }
 }
 
-impl Collector for MockNetworkCollector {
-    fn collect(&self, _config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+impl Observer for MockNetworkObserver {
+    fn observe(&self, _config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         let now = Utc::now();
         Ok(vec![Evidence {
             id: Uuid::new_v4(),
@@ -134,7 +134,7 @@ impl Collector for MockNetworkCollector {
                 module: ModuleInfo {
                     name: "mock.network".to_string(),
                     version: "0.1.0".to_string(),
-                    module_type: "collector".to_string(),
+                    module_type: "observer".to_string(),
                 },
                 source: SourceInfo {
                     system: "mock".to_string(),
@@ -189,47 +189,47 @@ impl Collector for MockNetworkCollector {
 mod tests {
     use super::*;
 
-    // ─── MockCollector ────────────────────────────────────────────────────────
+    // ─── MockObserver ────────────────────────────────────────────────────────
 
     #[test]
-    fn mock_collector_id() {
-        assert_eq!(MockCollector.id(), "mock.test");
+    fn mock_observer_id() {
+        assert_eq!(MockObserver.id(), "mock.test");
     }
 
     #[test]
-    fn mock_collector_name() {
-        assert_eq!(MockCollector.name(), "Mock Test Collector");
+    fn mock_observer_name() {
+        assert_eq!(MockObserver.name(), "Mock Test Observer");
     }
 
     #[test]
-    fn mock_collector_version() {
-        assert_eq!(MockCollector.version(), "0.1.0");
+    fn mock_observer_version() {
+        assert_eq!(MockObserver.version(), "0.1.0");
     }
 
     #[test]
-    fn mock_collector_source_system() {
-        assert_eq!(MockCollector.source_system(), "mock");
+    fn mock_observer_source_system() {
+        assert_eq!(MockObserver.source_system(), "mock");
     }
 
     #[test]
-    fn mock_collector_evidence_types() {
-        assert_eq!(MockCollector.evidence_types(), &[1001]);
+    fn mock_observer_evidence_types() {
+        assert_eq!(MockObserver.evidence_types(), &[1001]);
     }
 
     #[test]
-    fn mock_collector_credential_requirements_empty() {
-        assert!(MockCollector.credential_requirements().is_empty());
+    fn mock_observer_credential_requirements_empty() {
+        assert!(MockObserver.credential_requirements().is_empty());
     }
 
     #[test]
-    fn mock_collector_collect_returns_one() {
-        let results = MockCollector.collect(&HashMap::new()).unwrap();
+    fn mock_observer_collect_returns_one() {
+        let results = MockObserver.observe(&HashMap::new()).unwrap();
         assert_eq!(results.len(), 1);
     }
 
     #[test]
-    fn mock_collector_collect_core_fields() {
-        let ev = &MockCollector.collect(&HashMap::new()).unwrap()[0];
+    fn mock_observer_collect_core_fields() {
+        let ev = &MockObserver.observe(&HashMap::new()).unwrap()[0];
         assert_eq!(ev.control_id, "mock.mfa_enforcement");
         assert_eq!(ev.class_uid, 1001);
         assert_eq!(ev.category_uid, 1);
@@ -242,11 +242,11 @@ mod tests {
     }
 
     #[test]
-    fn mock_collector_collect_metadata() {
-        let ev = &MockCollector.collect(&HashMap::new()).unwrap()[0];
+    fn mock_observer_collect_metadata() {
+        let ev = &MockObserver.observe(&HashMap::new()).unwrap()[0];
         assert_eq!(ev.metadata.module.name, "mock.test");
         assert_eq!(ev.metadata.module.version, "0.1.0");
-        assert_eq!(ev.metadata.module.module_type, "collector");
+        assert_eq!(ev.metadata.module.module_type, "observer");
         assert_eq!(ev.metadata.source.system, "mock");
         assert_eq!(ev.metadata.source.api_version, "v1");
         assert!(!ev.metadata.source.endpoint.is_empty());
@@ -254,23 +254,23 @@ mod tests {
     }
 
     #[test]
-    fn mock_collector_collect_has_observables() {
-        let ev = &MockCollector.collect(&HashMap::new()).unwrap()[0];
+    fn mock_observer_collect_has_observables() {
+        let ev = &MockObserver.observe(&HashMap::new()).unwrap()[0];
         assert!(!ev.observables.is_empty());
         assert_eq!(ev.observables[0].obs_type, "resource");
     }
 
     #[test]
-    fn mock_collector_collect_has_findings() {
-        let ev = &MockCollector.collect(&HashMap::new()).unwrap()[0];
+    fn mock_observer_collect_has_findings() {
+        let ev = &MockObserver.observe(&HashMap::new()).unwrap()[0];
         assert!(!ev.findings.is_empty());
         assert_eq!(ev.findings[0].title, "MFA Policy Active");
         assert_eq!(ev.findings[0].severity_id, 0);
     }
 
     #[test]
-    fn mock_collector_collect_raw_data_keys() {
-        let ev = &MockCollector.collect(&HashMap::new()).unwrap()[0];
+    fn mock_observer_collect_raw_data_keys() {
+        let ev = &MockObserver.observe(&HashMap::new()).unwrap()[0];
         assert!(ev.raw_data.get("mfa_policy").is_some());
         assert!(ev.raw_data.get("total_users").is_some());
         assert!(ev.raw_data.get("mfa_enrolled").is_some());
@@ -279,59 +279,59 @@ mod tests {
     }
 
     #[test]
-    fn mock_collector_collect_unique_ids() {
-        let id1 = MockCollector.collect(&HashMap::new()).unwrap()[0].id;
-        let id2 = MockCollector.collect(&HashMap::new()).unwrap()[0].id;
+    fn mock_observer_collect_unique_ids() {
+        let id1 = MockObserver.observe(&HashMap::new()).unwrap()[0].id;
+        let id2 = MockObserver.observe(&HashMap::new()).unwrap()[0].id;
         assert_ne!(id1, id2);
     }
 
     #[test]
-    fn mock_collector_collect_no_enrichments() {
-        let ev = &MockCollector.collect(&HashMap::new()).unwrap()[0];
+    fn mock_observer_collect_no_enrichments() {
+        let ev = &MockObserver.observe(&HashMap::new()).unwrap()[0];
         assert!(ev.enrichments.is_empty());
     }
 
-    // ─── MockNetworkCollector ─────────────────────────────────────────────────
+    // ─── MockNetworkObserver ─────────────────────────────────────────────────
 
     #[test]
     fn mock_network_id() {
-        assert_eq!(MockNetworkCollector.id(), "mock.network");
+        assert_eq!(MockNetworkObserver.id(), "mock.network");
     }
 
     #[test]
     fn mock_network_name() {
-        assert_eq!(MockNetworkCollector.name(), "Mock Network Collector");
+        assert_eq!(MockNetworkObserver.name(), "Mock Network Observer");
     }
 
     #[test]
     fn mock_network_version() {
-        assert_eq!(MockNetworkCollector.version(), "0.1.0");
+        assert_eq!(MockNetworkObserver.version(), "0.1.0");
     }
 
     #[test]
     fn mock_network_source_system() {
-        assert_eq!(MockNetworkCollector.source_system(), "mock");
+        assert_eq!(MockNetworkObserver.source_system(), "mock");
     }
 
     #[test]
     fn mock_network_evidence_types() {
-        assert_eq!(MockNetworkCollector.evidence_types(), &[1002]);
+        assert_eq!(MockNetworkObserver.evidence_types(), &[1002]);
     }
 
     #[test]
     fn mock_network_credential_requirements_empty() {
-        assert!(MockNetworkCollector.credential_requirements().is_empty());
+        assert!(MockNetworkObserver.credential_requirements().is_empty());
     }
 
     #[test]
     fn mock_network_collect_returns_one() {
-        let results = MockNetworkCollector.collect(&HashMap::new()).unwrap();
+        let results = MockNetworkObserver.observe(&HashMap::new()).unwrap();
         assert_eq!(results.len(), 1);
     }
 
     #[test]
     fn mock_network_collect_core_fields() {
-        let ev = &MockNetworkCollector.collect(&HashMap::new()).unwrap()[0];
+        let ev = &MockNetworkObserver.observe(&HashMap::new()).unwrap()[0];
         assert_eq!(ev.control_id, "mock.waf_protection");
         assert_eq!(ev.class_uid, 1002);
         assert_eq!(ev.category_uid, 4);
@@ -343,9 +343,9 @@ mod tests {
 
     #[test]
     fn mock_network_collect_metadata() {
-        let ev = &MockNetworkCollector.collect(&HashMap::new()).unwrap()[0];
+        let ev = &MockNetworkObserver.observe(&HashMap::new()).unwrap()[0];
         assert_eq!(ev.metadata.module.name, "mock.network");
-        assert_eq!(ev.metadata.module.module_type, "collector");
+        assert_eq!(ev.metadata.module.module_type, "observer");
         assert_eq!(ev.metadata.source.system, "mock");
         assert_eq!(ev.metadata.source.api_version, "v1");
         assert_eq!(ev.metadata.source.endpoint, "/api/v1/waf/config");
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn mock_network_collect_has_two_observables() {
-        let ev = &MockNetworkCollector.collect(&HashMap::new()).unwrap()[0];
+        let ev = &MockNetworkObserver.observe(&HashMap::new()).unwrap()[0];
         assert_eq!(ev.observables.len(), 2);
         assert_eq!(ev.observables[0].obs_type, "resource");
         assert_eq!(ev.observables[1].obs_type, "resource");
@@ -361,14 +361,14 @@ mod tests {
 
     #[test]
     fn mock_network_collect_has_finding() {
-        let ev = &MockNetworkCollector.collect(&HashMap::new()).unwrap()[0];
+        let ev = &MockNetworkObserver.observe(&HashMap::new()).unwrap()[0];
         assert_eq!(ev.findings.len(), 1);
         assert_eq!(ev.findings[0].title, "WAF Active");
     }
 
     #[test]
     fn mock_network_collect_raw_data_keys() {
-        let ev = &MockNetworkCollector.collect(&HashMap::new()).unwrap()[0];
+        let ev = &MockNetworkObserver.observe(&HashMap::new()).unwrap()[0];
         assert!(ev.raw_data.get("waf_config").is_some());
         assert!(ev.raw_data.get("protected_origins").is_some());
         assert!(ev.raw_data.get("blocked_requests_24h").is_some());
@@ -380,8 +380,8 @@ mod tests {
 
     #[test]
     fn mock_network_collect_unique_ids() {
-        let id1 = MockNetworkCollector.collect(&HashMap::new()).unwrap()[0].id;
-        let id2 = MockNetworkCollector.collect(&HashMap::new()).unwrap()[0].id;
+        let id1 = MockNetworkObserver.observe(&HashMap::new()).unwrap()[0].id;
+        let id2 = MockNetworkObserver.observe(&HashMap::new()).unwrap()[0].id;
         assert_ne!(id1, id2);
     }
 }

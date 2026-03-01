@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
 };
-use crate::module::{collector::Collector, CredentialReq, Module};
+use crate::module::{observer::Observer, CredentialReq, Module};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ fn github_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16)> {
     }
 }
 
-// ─── BranchProtectionCollector ────────────────────────────────────────────────
+// ─── BranchProtectionObserver ────────────────────────────────────────────────
 
 /// Queries the GitHub branch protection API to gather evidence about
 /// repository branch protection rules. Checks PR reviews, status checks,
@@ -53,14 +53,14 @@ fn github_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16)> {
 ///
 /// Required config: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`.
 /// Optional: `GITHUB_BRANCH` (defaults to "main"), `GITHUB_API_URL` (test override).
-pub struct BranchProtectionCollector;
+pub struct BranchProtectionObserver;
 
-impl Module for BranchProtectionCollector {
+impl Module for BranchProtectionObserver {
     fn id(&self) -> &str {
         "github.branch_protection"
     }
     fn name(&self) -> &str {
-        "GitHub Branch Protection Collector"
+        "GitHub Branch Protection Observer"
     }
     fn version(&self) -> &str {
         "0.1.0"
@@ -102,8 +102,8 @@ impl Module for BranchProtectionCollector {
     }
 }
 
-impl Collector for BranchProtectionCollector {
-    fn collect(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+impl Observer for BranchProtectionObserver {
+    fn observe(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
         let token = config
             .get("GITHUB_TOKEN")
             .ok_or_else(|| anyhow!("GITHUB_TOKEN is required"))?;
@@ -142,7 +142,7 @@ impl Collector for BranchProtectionCollector {
                     module: ModuleInfo {
                         name: "github.branch_protection".to_string(),
                         version: "0.1.0".to_string(),
-                        module_type: "collector".to_string(),
+                        module_type: "observer".to_string(),
                     },
                     source: SourceInfo {
                         system: "github".to_string(),
@@ -343,7 +343,7 @@ impl Collector for BranchProtectionCollector {
                 module: ModuleInfo {
                     name: "github.branch_protection".to_string(),
                     version: "0.1.0".to_string(),
-                    module_type: "collector".to_string(),
+                    module_type: "observer".to_string(),
                 },
                 source: SourceInfo {
                     system: "github".to_string(),
@@ -419,36 +419,36 @@ mod tests {
     // ── Module metadata ──────────────────────────────────────────────────────
 
     #[test]
-    fn bp_collector_id() {
-        assert_eq!(BranchProtectionCollector.id(), "github.branch_protection");
+    fn bp_observer_id() {
+        assert_eq!(BranchProtectionObserver.id(), "github.branch_protection");
     }
 
     #[test]
-    fn bp_collector_name() {
+    fn bp_observer_name() {
         assert_eq!(
-            BranchProtectionCollector.name(),
-            "GitHub Branch Protection Collector"
+            BranchProtectionObserver.name(),
+            "GitHub Branch Protection Observer"
         );
     }
 
     #[test]
-    fn bp_collector_version() {
-        assert_eq!(BranchProtectionCollector.version(), "0.1.0");
+    fn bp_observer_version() {
+        assert_eq!(BranchProtectionObserver.version(), "0.1.0");
     }
 
     #[test]
-    fn bp_collector_source_system() {
-        assert_eq!(BranchProtectionCollector.source_system(), "github");
+    fn bp_observer_source_system() {
+        assert_eq!(BranchProtectionObserver.source_system(), "github");
     }
 
     #[test]
-    fn bp_collector_evidence_types() {
-        assert_eq!(BranchProtectionCollector.evidence_types(), &[1003]);
+    fn bp_observer_evidence_types() {
+        assert_eq!(BranchProtectionObserver.evidence_types(), &[1003]);
     }
 
     #[test]
-    fn bp_collector_credential_requirements() {
-        let reqs = BranchProtectionCollector.credential_requirements();
+    fn bp_observer_credential_requirements() {
+        let reqs = BranchProtectionObserver.credential_requirements();
         assert_eq!(reqs.len(), 4);
         assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
         assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
@@ -461,9 +461,9 @@ mod tests {
     // ── Config validation ────────────────────────────────────────────────────
 
     #[test]
-    fn bp_collector_missing_token_errors() {
-        let err = BranchProtectionCollector
-            .collect(&HashMap::from([
+    fn bp_observer_missing_token_errors() {
+        let err = BranchProtectionObserver
+            .observe(&HashMap::from([
                 ("GITHUB_OWNER".to_string(), "o".to_string()),
                 ("GITHUB_REPO".to_string(), "r".to_string()),
             ]))
@@ -472,9 +472,9 @@ mod tests {
     }
 
     #[test]
-    fn bp_collector_missing_owner_errors() {
-        let err = BranchProtectionCollector
-            .collect(&HashMap::from([
+    fn bp_observer_missing_owner_errors() {
+        let err = BranchProtectionObserver
+            .observe(&HashMap::from([
                 ("GITHUB_TOKEN".to_string(), "tok".to_string()),
                 ("GITHUB_REPO".to_string(), "r".to_string()),
             ]))
@@ -483,9 +483,9 @@ mod tests {
     }
 
     #[test]
-    fn bp_collector_missing_repo_errors() {
-        let err = BranchProtectionCollector
-            .collect(&HashMap::from([
+    fn bp_observer_missing_repo_errors() {
+        let err = BranchProtectionObserver
+            .observe(&HashMap::from([
                 ("GITHUB_TOKEN".to_string(), "tok".to_string()),
                 ("GITHUB_OWNER".to_string(), "o".to_string()),
             ]))
@@ -527,10 +527,10 @@ mod tests {
     }"#;
 
     #[test]
-    fn bp_collector_404_means_protection_disabled() {
+    fn bp_observer_404_means_protection_disabled() {
         let srv = mock_server(404, r#"{"message":"Branch not protected"}"#);
-        let ev = &BranchProtectionCollector
-            .collect(&base_config(&srv))
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert_eq!(ev.findings[0].title, "Branch Protection Disabled");
@@ -538,10 +538,10 @@ mod tests {
     }
 
     #[test]
-    fn bp_collector_full_protection_is_effective() {
+    fn bp_observer_full_protection_is_effective() {
         let srv = mock_server(200, FULL_PROTECTION);
-        let ev = &BranchProtectionCollector
-            .collect(&base_config(&srv))
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(
@@ -553,10 +553,10 @@ mod tests {
     }
 
     #[test]
-    fn bp_collector_no_pr_reviews_is_ineffective() {
+    fn bp_observer_no_pr_reviews_is_ineffective() {
         let srv = mock_server(200, NO_PR_REVIEWS);
-        let ev = &BranchProtectionCollector
-            .collect(&base_config(&srv))
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev
@@ -566,10 +566,10 @@ mod tests {
     }
 
     #[test]
-    fn bp_collector_force_pushes_enabled_is_ineffective() {
+    fn bp_observer_force_pushes_enabled_is_ineffective() {
         let srv = mock_server(200, FORCE_PUSHES_ON);
-        let ev = &BranchProtectionCollector
-            .collect(&base_config(&srv))
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev
@@ -579,35 +579,35 @@ mod tests {
     }
 
     #[test]
-    fn bp_collector_500_returns_error() {
+    fn bp_observer_500_returns_error() {
         let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
         // 500 is not 200 or 404 → should return Err
-        let result = BranchProtectionCollector.collect(&base_config(&srv));
+        let result = BranchProtectionObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }
 
     #[test]
-    fn bp_collector_uses_default_main_branch() {
+    fn bp_observer_uses_default_main_branch() {
         // No GITHUB_BRANCH key → should still make a request (uses "main")
         let srv = mock_server(200, FULL_PROTECTION);
         let mut cfg = base_config(&srv);
         cfg.remove("GITHUB_BRANCH");
-        let ev = &BranchProtectionCollector.collect(&cfg).unwrap()[0];
+        let ev = &BranchProtectionObserver.observe(&cfg).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
     }
 
     #[test]
-    fn bp_collector_custom_branch_in_metadata() {
+    fn bp_observer_custom_branch_in_metadata() {
         let srv = mock_server(200, FULL_PROTECTION);
         let mut cfg = base_config(&srv);
         cfg.insert("GITHUB_BRANCH".to_string(), "develop".to_string());
-        let ev = &BranchProtectionCollector.collect(&cfg).unwrap()[0];
+        let ev = &BranchProtectionObserver.observe(&cfg).unwrap()[0];
         // observables should reference the branch
         assert!(ev.observables[0].value.contains("develop"));
     }
 
     #[test]
-    fn bp_collector_stale_reviews_not_dismissed_finding() {
+    fn bp_observer_stale_reviews_not_dismissed_finding() {
         let body = r#"{
             "required_pull_request_reviews": {
                 "dismiss_stale_reviews": false,
@@ -617,8 +617,8 @@ mod tests {
             "enforce_admins": { "enabled": true }
         }"#;
         let srv = mock_server(200, body);
-        let ev = &BranchProtectionCollector
-            .collect(&base_config(&srv))
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert!(ev
             .findings
@@ -627,7 +627,7 @@ mod tests {
     }
 
     #[test]
-    fn bp_collector_no_status_check_contexts_finding() {
+    fn bp_observer_no_status_check_contexts_finding() {
         let body = r#"{
             "required_pull_request_reviews": {
                 "dismiss_stale_reviews": true,
@@ -637,8 +637,8 @@ mod tests {
             "enforce_admins": { "enabled": true }
         }"#;
         let srv = mock_server(200, body);
-        let ev = &BranchProtectionCollector
-            .collect(&base_config(&srv))
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
             .unwrap()[0];
         assert!(ev
             .findings

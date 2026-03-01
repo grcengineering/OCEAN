@@ -1,18 +1,18 @@
 use anyhow::{anyhow, Result};
 
-use super::{Collector, Tester};
+use super::{Observer, Tester};
 
-/// Validates that a collector has all required metadata fields populated.
-pub fn validate_collector(c: &dyn Collector) -> Result<()> {
+/// Validates that a observer has all required metadata fields populated.
+pub fn validate_observer(c: &dyn Observer) -> Result<()> {
     if c.id().is_empty() {
-        return Err(anyhow!("collector ID must not be empty"));
+        return Err(anyhow!("observer ID must not be empty"));
     }
     if c.name().is_empty() {
-        return Err(anyhow!("collector name must not be empty (id: {})", c.id()));
+        return Err(anyhow!("observer name must not be empty (id: {})", c.id()));
     }
     if c.source_system().is_empty() {
         return Err(anyhow!(
-            "collector source_system must not be empty (id: {})",
+            "observer source_system must not be empty (id: {})",
             c.id()
         ));
     }
@@ -39,34 +39,34 @@ pub fn validate_tester(t: &dyn Tester) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::{MockCollector, MockTester, TesterBadMeta};
+    use crate::testutil::{MockObserver, MockTester, TesterBadMeta};
 
-    // --- validate_collector ---
+    // --- validate_observer ---
 
     #[test]
-    fn collector_valid_passes() {
-        let c = MockCollector::new("col.valid");
-        assert!(validate_collector(&c).is_ok());
+    fn observer_valid_passes() {
+        let c = MockObserver::new("col.valid");
+        assert!(validate_observer(&c).is_ok());
     }
 
     #[test]
-    fn collector_empty_id_fails() {
-        let c = MockCollector::empty_id();
-        let err = validate_collector(&c).unwrap_err();
+    fn observer_empty_id_fails() {
+        let c = MockObserver::empty_id();
+        let err = validate_observer(&c).unwrap_err();
         assert!(err.to_string().contains("ID must not be empty"));
     }
 
     #[test]
-    fn collector_empty_name_fails() {
-        let c = MockCollector::empty_name("col.bad");
-        let err = validate_collector(&c).unwrap_err();
+    fn observer_empty_name_fails() {
+        let c = MockObserver::empty_name("col.bad");
+        let err = validate_observer(&c).unwrap_err();
         assert!(err.to_string().contains("name must not be empty"));
     }
 
     #[test]
-    fn collector_empty_source_system_fails() {
-        let c = MockCollector::empty_source("col.nosrc");
-        let err = validate_collector(&c).unwrap_err();
+    fn observer_empty_source_system_fails() {
+        let c = MockObserver::empty_source("col.nosrc");
+        let err = validate_observer(&c).unwrap_err();
         assert!(err.to_string().contains("source_system must not be empty"));
     }
 

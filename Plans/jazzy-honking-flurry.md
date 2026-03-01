@@ -7,7 +7,7 @@
 ## Context
 
 Justin requested a total refactor of the OCEAN codebase from Go to Rust, resetting to v0.1.0. The existing Go codebase is ~60 source files implementing a GRC evidence collection CLI with:
-- 9 built-in modules (4 collectors, 5 testers) across AWS/GitHub/Okta/mock
+- 9 built-in modules (4 observers, 5 testers) across AWS/GitHub/Okta/mock
 - SQLite storage with 4 tables (evidence, control_status, schedules, schedule_runs — attestations table removed)
 - CEL expression evaluation with presets
 - Cron scheduler with runner
@@ -55,7 +55,7 @@ For v0.1.0, use a single Cargo crate with both `[lib]` (public SDK) and `[[bin]]
 Use a function-based registration identical to Go pattern:
 ```rust
 pub fn register_all(registry: &mut Registry) {
-    registry.register_collector(Box::new(MockCollector::new()));
+    registry.register_observer(Box::new(MockObserver::new()));
     // ...
 }
 ```
@@ -73,7 +73,7 @@ ocean/
 │   ├── lib.rs              ← Public SDK re-exports (Client, Evidence, etc.)
 │   ├── cli/                ← CLI commands
 │   │   ├── mod.rs
-│   │   ├── collect.rs
+│   │   ├── observe.rs
 │   │   ├── test_cmd.rs
 │   │   ├── verify.rs
 │   │   ├── evaluate.rs
@@ -90,10 +90,10 @@ ocean/
 │   │   └── validator.rs    ← schema validation
 │   ├── module/             ← Module traits + registry
 │   │   ├── mod.rs          ← Module, CredentialReq, SafetyClassification, etc.
-│   │   ├── collector.rs    ← Collector trait
+│   │   ├── observer.rs    ← Observer trait
 │   │   ├── tester.rs       ← Tester trait
 │   │   ├── registry.rs     ← Registry (RwLock<HashMap>)
-│   │   ├── executor.rs     ← Executor (collect/test with config)
+│   │   ├── executor.rs     ← Executor (observe/test with config)
 │   │   ├── safety.rs       ← Authorizer trait, AutoAuthorizer
 │   │   └── validation.rs   ← validate module metadata
 │   ├── storage/
@@ -127,13 +127,13 @@ ocean/
 │   │   ├── mod.rs          ← Config, ServerConfig
 │   │   └── loader.rs       ← load from file / env / defaults
 │   └── modules/            ← Built-in modules
-│       ├── mod.rs          ← register_all_collectors(), register_all_testers()
-│       ├── collectors/
+│       ├── mod.rs          ← register_all_observers(), register_all_testers()
+│       ├── observers/
 │       │   ├── mod.rs
-│       │   ├── mock.rs           ← MockCollector, MockNetworkCollector
-│       │   ├── aws/mod.rs        ← IamCollector (SigV4)
-│       │   ├── github/mod.rs     ← BranchProtectionCollector
-│       │   └── okta/mod.rs       ← MfaPolicyCollector
+│       │   ├── mock.rs           ← MockObserver, MockNetworkObserver
+│       │   ├── aws/mod.rs        ← IamObserver (SigV4)
+│       │   ├── github/mod.rs     ← BranchProtectionObserver
+│       │   └── okta/mod.rs       ← MfaPolicyObserver
 │       └── testers/
 │           ├── mod.rs
 │           ├── mock.rs           ← MockTester
@@ -197,7 +197,7 @@ path = "src/main.rs"
 ### Phase 1 — Foundation Types (src/evidence/, src/module/)
 - Evidence struct with all fields (serde_json::Value for RawData)
 - All enums: SafetyClassification, EnvironmentScope, ConfidenceLevel, StatusId
-- Module, Collector, Tester traits
+- Module, Observer, Tester traits
 - Registry with RwLock<HashMap>
 
 ### Phase 2 — Storage (src/storage/)
@@ -213,7 +213,7 @@ path = "src/main.rs"
 - Framework YAML loader
 
 ### Phase 4 — Modules (src/modules/)
-- All 4 collectors + 5 testers
+- All 4 observers + 5 testers
 - Keep the same raw HTTP + SigV4 pattern (ureq instead of net/http)
 - register_all() functions
 
@@ -259,7 +259,7 @@ After implementation:
 2. `cargo test` — all unit tests pass
 3. `./target/debug/ocean version` → `OCEAN v0.1.0`
 4. `./target/debug/ocean modules list` → lists all 9 modules
-5. `./target/debug/ocean collect mock.test` → produces evidence in SQLite
+5. `./target/debug/ocean observe mock.test` → produces evidence in SQLite
 6. `cargo clippy -- -D warnings` — no warnings
 
 ---
@@ -268,14 +268,14 @@ After implementation:
 
 # CLI UX Redesign — Target + Control Path Paradigm
 
-**Status:** Planning
+**Status:** DONE — committed da8728b
 **Scope:** New `evaluate -t TARGET -c PATH` and `test -t TARGET -c PATH` commands with unified pipeline
 
 ---
 
 ## Context
 
-The current `ocean evaluate <control>` command only reads stored evidence — it doesn't run collectors or testers. Users must manually run `ocean collect <module>` and `ocean test <module>` first. This is unintuitive. The new paradigm makes `ocean evaluate` a single-command pipeline: specify a target integration and a control domain path, and OCEAN automatically collects evidence, runs active tests, evaluates CEL, and outputs a clean results table.
+The current `ocean evaluate <control>` command only reads stored evidence — it doesn't run observers or testers. Users must manually run `ocean observe <module>` and `ocean test <module>` first. This is unintuitive. The new paradigm makes `ocean evaluate` a single-command pipeline: specify a target integration and a control domain path, and OCEAN automatically collects evidence, runs active tests, evaluates CEL, and outputs a clean results table.
 
 **New UX examples:**
 ```
@@ -286,7 +286,7 @@ ocean evaluate -t * -c iam.mfa                      # MFA controls across ALL co
 ocean test -t okta -c iam.mfa.phishing_resistant    # active testers only
 ```
 
-**Backward compatibility:** `ocean collect <module>`, `ocean test <module>`, and `ocean evaluate <control>` (legacy positional) remain fully functional.
+**Backward compatibility:** `ocean observe <module>`, `ocean test <module>`, and `ocean evaluate <control>` (legacy positional) remain fully functional.
 
 ---
 
@@ -306,7 +306,7 @@ Module IDs already follow `source_system.module_name` format. Target name = sour
 - `-t aws` → only run modules where `module_id.starts_with("aws.")`
 - `-t *` → run ALL modules listed in the control (let each module handle its own credential check)
 
-The existing `collectors:` and `testers:` fields in control YAML need to be **parsed** (currently they are metadata-only / ignored by the Control struct). We add `collectors: Vec<ModuleRef>` and `testers: Vec<ModuleRef>` to the `Control` struct.
+The existing `observers:` and `testers:` fields in control YAML need to be **parsed** (currently they are metadata-only / ignored by the Control struct). We add `observers: Vec<ModuleRef>` and `testers: Vec<ModuleRef>` to the `Control` struct.
 
 ### 3. Control Struct Extension
 Add to `src/control/definition.rs`:
@@ -320,7 +320,7 @@ pub struct ModuleRef {
 
 // Add to Control:
 #[serde(default)]
-pub collectors: Vec<ModuleRef>,
+pub observers: Vec<ModuleRef>,
 #[serde(default)]
 pub testers: Vec<ModuleRef>,
 ```
@@ -373,14 +373,14 @@ Mode dispatch in `cmd_evaluate()` / `cmd_test()`:
    Error if none found.
 
 2. For each control:
-   a. Filter collectors: control.collectors where target matches module_id prefix
+   a. Filter observers: control.observers where target matches module_id prefix
    b. Filter testers:   control.testers   where target matches module_id prefix
-   c. Run each collector via Executor (same as existing cmd_collect)
-      → collect evidence, optionally store in SQLite
+   c. Run each observer via Executor (same as existing cmd_collect)
+      → observe evidence, optionally store in SQLite
    d. Run each tester via Executor (same as existing cmd_test)
-      → collect test evidence, optionally store
+      → observe test evidence, optionally store
    e. Query stored evidence for control_id, run evaluate_control()
-   f. Collect EvaluationResult { control, module_runs, status }
+   f. Observe EvaluationResult { control, module_runs, status }
 
 3. print_evaluation_table(results, format)
 ```
@@ -390,13 +390,13 @@ Mode dispatch in `cmd_evaluate()` / `cmd_test()`:
 Control                       Target  Status     Confidence  Framework
 ─────────────────────────────────────────────────────────────────────────
 iam.mfa_enforcement           okta    EFFECTIVE  HIGH        SOC2 CC6.1
-  ↳ [collect] okta.mfa_policy                   OK
-  ↳ [collect] okta.mfa_enrollment_population    OK
+  ↳ [observe] okta.mfa_policy                   OK
+  ↳ [observe] okta.mfa_enrollment_population    OK
   ↳ [test]    okta.mfa_bypass                   PASS
   ↳ [test]    okta.pr_mfa_downgrade             PASS
 
 iam.mfa_phishing_resistant    okta    EFFECTIVE  HIGH        SOC2 CC6.6
-  ↳ [collect] okta.mfa_policy                   OK
+  ↳ [observe] okta.mfa_policy                   OK
   ↳ [test]    okta.pr_mfa_downgrade             PASS
 ```
 
@@ -410,7 +410,7 @@ FINDINGS for iam.access_review:
 `print_evaluation_table()` goes in `src/cli/output.rs`.
 
 ### 7. `test -t TARGET -c PATH` (testers-only)
-Same as evaluate pipeline but skips CEL evaluation step and collectors step — runs only active testers for the matched control+target pair. Useful for quick active verification without full collection pass.
+Same as evaluate pipeline but skips CEL evaluation step and observers step — runs only active testers for the matched control+target pair. Useful for quick active verification without full collection pass.
 
 ---
 
@@ -418,7 +418,7 @@ Same as evaluate pipeline but skips CEL evaluation step and collectors step — 
 
 | File | Change |
 |------|--------|
-| `src/control/definition.rs` | Add `ModuleRef` struct + `collectors`/`testers` fields to `Control` |
+| `src/control/definition.rs` | Add `ModuleRef` struct + `observers`/`testers` fields to `Control` |
 | `src/cli/mod.rs` | Extend `Evaluate` + `Test` variants with `-t`/`-c` flags; add `cmd_evaluate_path()`, `cmd_test_path()`, `resolve_controls()`, `target_matches_module()` |
 | `src/cli/output.rs` | Add `print_evaluation_table()` |
 
@@ -450,7 +450,7 @@ After implementation:
 1. `cargo build` — no errors
 2. `cargo test` — all tests pass (existing tests unaffected)
 3. `ocean evaluate mock.test` — legacy mode still works
-4. `ocean collect mock.test` + `ocean test mock.safety_test` — primitives unchanged
+4. `ocean observe mock.test` + `ocean test mock.safety_test` — primitives unchanged
 5. `ocean evaluate -t mock -c iam` — resolves controls with mock modules, runs pipeline, outputs table
 6. `ocean test -t mock -c iam` — runs only mock testers, shows pass/fail
 7. `cargo clippy -- -D warnings` — no warnings
