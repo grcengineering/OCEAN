@@ -1,4 +1,5 @@
 pub mod aws;
+pub mod gcp;
 pub mod github;
 pub mod mock;
 pub mod okta;
@@ -12,6 +13,7 @@ use crate::module::registry::Registry;
 pub fn register_all(registry: &Registry) {
     registry.register_tester(Arc::new(mock::MockTester));
     registry.register_tester(Arc::new(aws::S3PublicAccessTester));
+    registry.register_tester(Arc::new(gcp::GcpPublicBucketTester));
     registry.register_tester(Arc::new(github::SecretPushTester));
     registry.register_tester(Arc::new(okta::MfaBypassTester));
     registry.register_tester(Arc::new(okta_pr_mfa_downgrade::PrMfaDowngradeTester));
