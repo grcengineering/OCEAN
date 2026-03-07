@@ -1,5 +1,6 @@
 pub mod aws;
 pub mod azure;
+pub mod gcp;
 pub mod github;
 pub mod github_action_pin_audit;
 pub mod github_actions_restriction;
@@ -21,6 +22,7 @@ pub fn register_all(registry: &Registry) {
     registry.register_tester(Arc::new(azure::MfaBypassTester));
     registry.register_tester(Arc::new(mock::MockTester));
     registry.register_tester(Arc::new(aws::S3PublicAccessTester));
+    registry.register_tester(Arc::new(gcp::GcpPublicBucketTester));
     registry.register_tester(Arc::new(github::SecretPushTester));
     registry.register_tester(Arc::new(github_branch_bypass::BranchBypassTester));
     registry.register_tester(Arc::new(okta::MfaBypassTester));

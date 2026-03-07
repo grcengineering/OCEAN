@@ -1776,6 +1776,7 @@ dependencies = [
  "jsonschema",
  "ratatui",
  "regex",
+ "ring",
  "rusqlite",
  "secrecy",
  "serde",
