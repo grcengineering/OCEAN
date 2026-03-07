@@ -1,0 +1,25 @@
+id: scm.code_scanning
+name: Code Scanning and Vulnerability Detection
+description: >
+  Verifies that GitHub code scanning (CodeQL or equivalent) is actively
+  detecting security vulnerabilities in source code. Monitors for unresolved
+  critical code scanning alerts that may indicate exploitable vulnerabilities.
+threat_mitigated: >
+  Exploitable security vulnerabilities in application source code such as
+  SQL injection, cross-site scripting, buffer overflows, and insecure
+  deserialization that remain undetected without automated static analysis.
+framework_mappings:
+  - framework: soc2
+    control: CC7.2
+  - framework: iso27001
+    control: A.12.6.1
+  - framework: nist_csf
+    control: DE.CM-8
+  - framework: cis_controls
+    control: "16.12"
+evidence_requirements:
+  - code_scanning_alerts_status
+observers:
+  - module_id: github.code_scanning_alerts
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

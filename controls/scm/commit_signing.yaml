@@ -1,0 +1,26 @@
+id: scm.commit_signing
+name: Commit Signature Verification
+description: >
+  Verifies that branch protection rules require signed commits to ensure
+  commit authenticity and prevent unauthorized commits from being attributed
+  to legitimate developers. Uses existing branch protection data to check
+  the required_signatures enforcement setting.
+threat_mitigated: >
+  Commit spoofing where an attacker crafts commits attributed to trusted
+  developers to bypass review policies, inject malicious code with false
+  provenance, or manipulate git history to hide unauthorized changes.
+framework_mappings:
+  - framework: soc2
+    control: CC6.1
+  - framework: iso27001
+    control: A.10.1.1
+  - framework: nist_csf
+    control: PR.DS-6
+  - framework: cis_controls
+    control: "16.14"
+evidence_requirements:
+  - branch_protection_configuration
+observers:
+  - module_id: github.branch_protection
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

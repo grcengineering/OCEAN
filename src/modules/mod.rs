@@ -1,3 +1,4 @@
+pub mod github_common;
 pub mod observers;
 pub mod testers;
 

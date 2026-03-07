@@ -1,0 +1,30 @@
+id: scm.branch_protection
+name: Branch Protection Configuration
+description: >
+  Verifies that repository branch protection rules are properly configured
+  to require pull request reviews, status checks, and prevent force pushes
+  and branch deletions. Active testing confirms that direct pushes to
+  protected branches are blocked.
+threat_mitigated: >
+  Unauthorized code changes pushed directly to production branches without
+  peer review or CI validation, enabling injection of malicious code,
+  bypassing of quality gates, and undetected modifications to critical
+  application logic.
+framework_mappings:
+  - framework: soc2
+    control: CC8.1
+  - framework: iso27001
+    control: A.14.2.2
+  - framework: nist_csf
+    control: PR.IP-2
+  - framework: cis_controls
+    control: "16.2"
+evidence_requirements:
+  - branch_protection_configuration
+  - branch_bypass_test_result
+observers:
+  - module_id: github.branch_protection
+testers:
+  - module_id: github.branch_bypass
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0 && has_active"

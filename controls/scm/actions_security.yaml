@@ -1,0 +1,29 @@
+id: scm.actions_security
+name: GitHub Actions Security Configuration
+description: >
+  Verifies that GitHub Actions are restricted to trusted sources (verified
+  creators or specific allow-listed actions) and that workflow tokens follow
+  least privilege with read-only default permissions. Prevents supply chain
+  attacks through malicious third-party Actions.
+threat_mitigated: >
+  Supply chain compromise through malicious GitHub Actions that exfiltrate
+  secrets, modify build artifacts to inject backdoors, steal source code,
+  or use overly permissive workflow tokens to escalate privileges and
+  modify repository contents.
+framework_mappings:
+  - framework: soc2
+    control: CC9.2
+  - framework: iso27001
+    control: A.14.2.7
+  - framework: nist_csf
+    control: PR.IP-1
+  - framework: cis_controls
+    control: "16.7"
+evidence_requirements:
+  - actions_permissions_configuration
+  - workflow_permissions_configuration
+observers:
+  - module_id: github.actions_permissions
+  - module_id: github.workflow_permissions
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

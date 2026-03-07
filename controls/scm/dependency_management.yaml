@@ -1,0 +1,27 @@
+id: scm.dependency_management
+name: Dependency Vulnerability Management
+description: >
+  Verifies that Dependabot is actively monitoring repository dependencies
+  for known vulnerabilities and that no critical severity alerts remain
+  unresolved. Ensures the software supply chain is protected against
+  exploitation of known CVEs in third-party libraries.
+threat_mitigated: >
+  Exploitation of known vulnerabilities in third-party dependencies and
+  open-source libraries, enabling remote code execution, data exfiltration,
+  or denial of service through unpatched components in the software supply
+  chain.
+framework_mappings:
+  - framework: soc2
+    control: CC7.2
+  - framework: iso27001
+    control: A.12.6.1
+  - framework: nist_csf
+    control: ID.SC-2
+  - framework: cis_controls
+    control: "16.4"
+evidence_requirements:
+  - dependabot_alerts_status
+observers:
+  - module_id: github.dependabot_alerts
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"
