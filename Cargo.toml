@@ -31,11 +31,13 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-# Cryptography (AWS SigV4 signing)
+# Cryptography (AWS SigV4 signing, GCP JWT signing)
 sha2 = "0.10"
 hmac = "0.12"
 base64 = "0.22"
 hex = "0.4"
+ring = "0.17"
+
 # HTTP (sync)
 ureq = { version = "2", features = ["json"] }
 url = "2"
