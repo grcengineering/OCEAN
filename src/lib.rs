@@ -5,6 +5,7 @@
 pub mod api;
 pub mod config;
 pub mod control;
+pub mod dashboard;
 pub mod eval;
 pub mod evidence;
 pub mod module;

@@ -181,6 +181,17 @@ pub enum Commands {
         #[arg(long, env = "OCEAN_AUTH_TOKEN")]
         auth_token: Option<String>,
     },
+
+    /// Launch interactive TUI dashboard with real-time control monitoring.
+    Dashboard {
+        /// Auto-refresh interval in seconds (default: 30).
+        #[arg(long, default_value = "30")]
+        refresh: u64,
+
+        /// Directory containing control YAML files.
+        #[arg(long, default_value = "controls")]
+        controls_dir: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -377,6 +388,13 @@ pub fn run() -> Result<()> {
         Commands::Serve { port, auth_token } => {
             let db_path = resolve_db_path(&cli.db);
             cmd_serve(port, auth_token.as_deref(), &db_path)
+        }
+        Commands::Dashboard {
+            refresh,
+            controls_dir,
+        } => {
+            let store = open_store(&cli.db)?;
+            ocean::dashboard::run(&store, &controls_dir, refresh)
         }
     }
 }
