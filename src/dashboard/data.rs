@@ -152,7 +152,11 @@ fn visit_yaml_files(dir: &std::path::Path, controls: &mut Vec<Control>) -> Resul
                 continue;
             }
             visit_yaml_files(&path, controls)?;
-        } else if path.extension().map(|e| e == "yaml" || e == "yml").unwrap_or(false) {
+        } else if path
+            .extension()
+            .map(|e| e == "yaml" || e == "yml")
+            .unwrap_or(false)
+        {
             let content = std::fs::read_to_string(&path)?;
             match Control::load_yaml(&content) {
                 Ok(control) => controls.push(control),
@@ -214,10 +218,19 @@ mod tests {
         match controls {
             Ok(c) => {
                 // We know there are at least 4 control files
-                assert!(c.len() >= 2, "expected at least 2 controls, got {}", c.len());
+                assert!(
+                    c.len() >= 2,
+                    "expected at least 2 controls, got {}",
+                    c.len()
+                );
                 // Should be sorted by ID
                 for w in c.windows(2) {
-                    assert!(w[0].id <= w[1].id, "controls not sorted: {} > {}", w[0].id, w[1].id);
+                    assert!(
+                        w[0].id <= w[1].id,
+                        "controls not sorted: {} > {}",
+                        w[0].id,
+                        w[1].id
+                    );
                 }
             }
             Err(_) => {

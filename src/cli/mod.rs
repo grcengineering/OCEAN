@@ -16,7 +16,9 @@ use ocean::{
     storage::{EvidenceQuery, SqliteStore, Store},
 };
 
-use output::{print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat};
+use output::{
+    print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat,
+};
 
 // ---------------------------------------------------------------------------
 // CLI structure
@@ -280,9 +282,9 @@ pub fn run() -> Result<()> {
         } => {
             if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
+                let p = control
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
                 cmd_observe_path(&mut out, format, &cli.db, t, p, &controls_dir, !no_store)
             } else if let Some(m) = module.as_deref() {
                 cmd_observe(&mut out, format, &cli.db, m, !no_store)
@@ -302,10 +304,19 @@ pub fn run() -> Result<()> {
         } => {
             if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
-                cmd_test_path(&mut out, format, &cli.db, t, p, &env, &controls_dir, !no_store)
+                let p = control
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
+                cmd_test_path(
+                    &mut out,
+                    format,
+                    &cli.db,
+                    t,
+                    p,
+                    &env,
+                    &controls_dir,
+                    !no_store,
+                )
             } else if let Some(m) = module.as_deref() {
                 cmd_test(&mut out, format, &cli.db, m, &env, !no_store)
             } else {
@@ -329,12 +340,19 @@ pub fn run() -> Result<()> {
         } => {
             if target.is_some() || control_path.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control_path.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
+                let p = control_path
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
                 cmd_evaluate_path(&mut out, format, &cli.db, t, p, &controls_dir)
             } else if let Some(ctrl) = control.as_deref() {
-                cmd_evaluate(&mut out, format, &cli.db, ctrl, cel.as_deref(), &controls_dir)
+                cmd_evaluate(
+                    &mut out,
+                    format,
+                    &cli.db,
+                    ctrl,
+                    cel.as_deref(),
+                    &controls_dir,
+                )
             } else {
                 Err(anyhow!(
                     "Specify a control ID or use --target/-t and --control/-c"
@@ -696,9 +714,7 @@ fn target_matches_module(target: &str, module_id: &str) -> bool {
 fn resolve_controls(controls_dir: &str, path: &str) -> Result<Vec<Control>> {
     let dir = std::path::Path::new(controls_dir);
     if !dir.exists() {
-        return Err(anyhow!(
-            "controls directory not found: '{controls_dir}'"
-        ));
+        return Err(anyhow!("controls directory not found: '{controls_dir}'"));
     }
 
     let mut all: Vec<Control> = Vec::new();

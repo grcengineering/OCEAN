@@ -463,10 +463,7 @@ mod tests {
         HashMap::from([
             ("AZURE_TENANT_ID".to_string(), "test-tenant".to_string()),
             ("AZURE_CLIENT_ID".to_string(), "test-client".to_string()),
-            (
-                "AZURE_CLIENT_SECRET".to_string(),
-                "test-secret".to_string(),
-            ),
+            ("AZURE_CLIENT_SECRET".to_string(), "test-secret".to_string()),
             ("AZURE_BASE_URL".to_string(), base_url.to_string()),
             ("AZURE_LOGIN_BASE".to_string(), base_url.to_string()),
         ])
@@ -640,10 +637,7 @@ mod tests {
 
     #[test]
     fn disabled_policy_is_ineffective() {
-        let srv = mock_server_multi(vec![
-            token_response(),
-            (200, DISABLED_POLICY.to_string()),
-        ]);
+        let srv = mock_server_multi(vec![token_response(), (200, DISABLED_POLICY.to_string())]);
         let ev = &ConditionalAccessObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
@@ -656,10 +650,7 @@ mod tests {
 
     #[test]
     fn no_mfa_policy_is_ineffective() {
-        let srv = mock_server_multi(vec![
-            token_response(),
-            (200, NO_MFA_POLICY.to_string()),
-        ]);
+        let srv = mock_server_multi(vec![token_response(), (200, NO_MFA_POLICY.to_string())]);
         let ev = &ConditionalAccessObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
@@ -697,10 +688,7 @@ mod tests {
 
     #[test]
     fn empty_policies_is_ineffective() {
-        let srv = mock_server_multi(vec![
-            token_response(),
-            (200, EMPTY_POLICIES.to_string()),
-        ]);
+        let srv = mock_server_multi(vec![token_response(), (200, EMPTY_POLICIES.to_string())]);
         let ev = &ConditionalAccessObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
@@ -749,10 +737,7 @@ mod tests {
 
     #[test]
     fn observer_does_not_set_test_transcript() {
-        let srv = mock_server_multi(vec![
-            token_response(),
-            (200, EMPTY_POLICIES.to_string()),
-        ]);
+        let srv = mock_server_multi(vec![token_response(), (200, EMPTY_POLICIES.to_string())]);
         let ev = &ConditionalAccessObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
@@ -774,11 +759,7 @@ mod tests {
         );
         let page2 = r#"{"value":[{"id":"ca2","displayName":"P2","state":"enabled","conditions":{},"grantControls":{"operator":"OR","builtInControls":["mfa"]}}]}"#;
 
-        let responses = vec![
-            token_response(),
-            (200, page1),
-            (200, page2.to_string()),
-        ];
+        let responses = vec![token_response(), (200, page1), (200, page2.to_string())];
 
         use std::io::{Read, Write};
         use std::sync::{Arc, Mutex};

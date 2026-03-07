@@ -201,12 +201,7 @@ impl Observer for MfaPolicyObserver {
 
         let first_active = policies
             .iter()
-            .find(|p| {
-                p.get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "ACTIVE"
-            });
+            .find(|p| p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE");
 
         if let Some(active_policy) = first_active {
             first_active_policy_name = active_policy

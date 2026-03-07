@@ -15,7 +15,7 @@ pub mod secrets;
 pub mod storage;
 
 pub use evidence::{ConfidenceLevel, Evidence, StatusId};
-pub use module::{Observer, Module, Registry, Tester};
+pub use module::{Module, Observer, Registry, Tester};
 
 #[cfg(test)]
 pub mod testutil;

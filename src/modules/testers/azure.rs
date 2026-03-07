@@ -123,9 +123,7 @@ impl Tester for MfaBypassTester {
         let mut recorder = TranscriptRecorder::new();
         let safety_class = "safe".to_string();
         let endpoint = format!("/{}/oauth2/v2.0/token", tenant_id);
-        let url = format!(
-            "{}{}", login_base.trim_end_matches('/'), endpoint
-        );
+        let url = format!("{}{}", login_base.trim_end_matches('/'), endpoint);
 
         recorder.record_action(
             "initiate ROPC authentication without MFA interaction",
@@ -183,80 +181,62 @@ impl Tester for MfaBypassTester {
         // Determine control effectiveness.
         // "interaction_required" means CA policy demands MFA — bypass blocked.
         // A 200 with access_token means ROPC succeeded without MFA — bypass worked.
-        let (status_id, status_text, bypass_blocked) =
-            if error_code == "interaction_required" {
-                recorder.record_observation(
-                    format!(
-                        "ROPC rejected with interaction_required (HTTP {})",
-                        http_status
-                    ),
-                    true,
-                );
-                recorder.record_observation(
-                    "Conditional Access policy requires MFA interaction",
-                    true,
-                );
-                (
-                    StatusId::Effective,
-                    "MFA bypass attempt was correctly blocked by Conditional Access".to_string(),
-                    true,
-                )
-            } else if error_code == "invalid_grant"
-                && error_description.contains("AADSTS50076")
-            {
-                // AADSTS50076 specifically means MFA is required.
-                recorder.record_observation(
-                    "ROPC rejected with AADSTS50076 (MFA required)",
-                    true,
-                );
-                (
-                    StatusId::Effective,
-                    "MFA bypass attempt was correctly blocked by Conditional Access".to_string(),
-                    true,
-                )
-            } else if http_status == 200 && resp_body.get("access_token").is_some() {
-                recorder.record_observation(
-                    "ROPC succeeded — access token issued without MFA",
-                    false,
-                );
-                recorder.record_observation(
-                    "session established without MFA verification",
-                    false,
-                );
-                (
-                    StatusId::Ineffective,
-                    "MFA bypass succeeded — ROPC authentication completed without MFA".to_string(),
-                    false,
-                )
-            } else if http_status == 401 || http_status == 403 {
-                recorder.record_observation(
-                    format!("authentication rejected with HTTP {}", http_status),
-                    true,
-                );
-                (
-                    StatusId::Effective,
-                    "MFA bypass attempt was correctly blocked".to_string(),
-                    true,
-                )
-            } else {
-                // Other errors (bad credentials, locked account, etc.) — bypass not achieved.
-                recorder.record_observation(
-                    format!(
-                        "ROPC returned error {:?} (HTTP {})",
-                        error_code, http_status
-                    ),
-                    true,
-                );
-                recorder.record_observation(
-                    "authentication did not succeed without MFA",
-                    true,
-                );
-                (
-                    StatusId::Effective,
-                    "MFA bypass attempt was correctly blocked".to_string(),
-                    true,
-                )
-            };
+        let (status_id, status_text, bypass_blocked) = if error_code == "interaction_required" {
+            recorder.record_observation(
+                format!(
+                    "ROPC rejected with interaction_required (HTTP {})",
+                    http_status
+                ),
+                true,
+            );
+            recorder.record_observation("Conditional Access policy requires MFA interaction", true);
+            (
+                StatusId::Effective,
+                "MFA bypass attempt was correctly blocked by Conditional Access".to_string(),
+                true,
+            )
+        } else if error_code == "invalid_grant" && error_description.contains("AADSTS50076") {
+            // AADSTS50076 specifically means MFA is required.
+            recorder.record_observation("ROPC rejected with AADSTS50076 (MFA required)", true);
+            (
+                StatusId::Effective,
+                "MFA bypass attempt was correctly blocked by Conditional Access".to_string(),
+                true,
+            )
+        } else if http_status == 200 && resp_body.get("access_token").is_some() {
+            recorder.record_observation("ROPC succeeded — access token issued without MFA", false);
+            recorder.record_observation("session established without MFA verification", false);
+            (
+                StatusId::Ineffective,
+                "MFA bypass succeeded — ROPC authentication completed without MFA".to_string(),
+                false,
+            )
+        } else if http_status == 401 || http_status == 403 {
+            recorder.record_observation(
+                format!("authentication rejected with HTTP {}", http_status),
+                true,
+            );
+            (
+                StatusId::Effective,
+                "MFA bypass attempt was correctly blocked".to_string(),
+                true,
+            )
+        } else {
+            // Other errors (bad credentials, locked account, etc.) — bypass not achieved.
+            recorder.record_observation(
+                format!(
+                    "ROPC returned error {:?} (HTTP {})",
+                    error_code, http_status
+                ),
+                true,
+            );
+            recorder.record_observation("authentication did not succeed without MFA", true);
+            (
+                StatusId::Effective,
+                "MFA bypass attempt was correctly blocked".to_string(),
+                true,
+            )
+        };
 
         let transcript = recorder.finalize();
 
@@ -371,10 +351,7 @@ mod tests {
         HashMap::from([
             ("AZURE_TENANT_ID".to_string(), "test-tenant".to_string()),
             ("AZURE_CLIENT_ID".to_string(), "test-client".to_string()),
-            (
-                "AZURE_CLIENT_SECRET".to_string(),
-                "test-secret".to_string(),
-            ),
+            ("AZURE_CLIENT_SECRET".to_string(), "test-secret".to_string()),
             (
                 "AZURE_TEST_USER".to_string(),
                 "test@example.com".to_string(),

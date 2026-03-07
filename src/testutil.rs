@@ -14,7 +14,7 @@ use crate::evidence::{
     SourceInfo, StatusId,
 };
 use crate::module::{
-    AuthorizationLevel, Authorizer, Observer, CredentialReq, EnvironmentScope, Module,
+    AuthorizationLevel, Authorizer, CredentialReq, EnvironmentScope, Module, Observer,
     SafetyClassification, Tester,
 };
 
