@@ -1,37 +1,27 @@
 // Shared GitHub API utilities for all GitHub observers and testers.
+//
+// Delegates to grc-controls-apis::github::GitHubClient under the hood.
+// Preserves the legacy function signature for backward compatibility.
 
-use anyhow::{anyhow, Result};
-use serde_json::{json, Value};
+pub use grc_controls_apis::github::{DEFAULT_GITHUB_API, GITHUB_API_VERSION};
 
-pub const DEFAULT_GITHUB_API: &str = "https://api.github.com";
-pub const GITHUB_API_VERSION: &str = "2022-11-28";
+use anyhow::Result;
+use grc_controls_apis::github::GitHubClient;
+use grc_controls_apis::GitHubCredentials;
+use secrecy::SecretString;
+use serde_json::Value;
 
 /// Performs an authenticated GET to the GitHub REST API v3.
 /// `base_url` is `https://api.github.com` by default; tests override it.
 pub fn github_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16)> {
-    let url = format!("{}{}", base_url.trim_end_matches('/'), path);
-    let resp = ureq::get(&url)
-        .set("Accept", "application/vnd.github+json")
-        .set("Authorization", &format!("Bearer {}", token))
-        .set("X-GitHub-Api-Version", GITHUB_API_VERSION)
-        .call();
-
-    match resp {
-        Ok(r) => {
-            let status = r.status();
-            let body: Value = r
-                .into_json()
-                .map_err(|e| anyhow!("parsing GitHub JSON: {}", e))?;
-            Ok((body, status))
-        }
-        Err(ureq::Error::Status(code, r)) => {
-            let body: Value = r
-                .into_json()
-                .unwrap_or_else(|_| json!({"message": "unknown error"}));
-            Ok((body, code))
-        }
-        Err(e) => Err(anyhow!("GitHub API request failed: {}", e)),
-    }
+    let creds = GitHubCredentials {
+        token: SecretString::from(token.to_string()),
+        org: None,
+        owner: None,
+        repo: None,
+    };
+    let client = GitHubClient::with_base_url(&creds, base_url);
+    client.get(path)
 }
 
 // ─── Test utilities ──────────────────────────────────────────────────────────

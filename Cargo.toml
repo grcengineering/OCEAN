@@ -48,6 +48,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 thiserror = "1"
 
+# Shared GRC control types and API clients
+grc-controls-models = { path = "../grc-controls/grc-controls-models" }
+grc-controls-apis = { path = "../grc-controls/grc-controls-apis" }
+secrecy = { version = "0.10", features = ["serde"] }
+
 # Regex
 regex = "1"
 

@@ -1,200 +1,38 @@
 // Evidence — the foundational entity in OCEAN.
 //
-// Every observer and tester produces Evidence records. Evidence is immutable
-// once created and carries enough context to prove what was observed, when,
-// and by which module.
+// Types are re-exported from grc-controls-models (the shared crate).
+// OCEAN-specific logic (observable extraction, redaction, validation)
+// remains in local submodules.
 
 pub mod observable;
 pub mod redaction;
 pub mod transcript;
 pub mod validator;
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use uuid::Uuid;
+// Re-export all evidence types from shared crate
+pub use grc_controls_models::{
+    ConfidenceLevel, Enrichment, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo,
+    StatusId,
+};
 
 pub use observable::extract_observables;
 pub use redaction::{redact_evidence, RedactionConfig};
 pub use transcript::{TestTranscript, TranscriptRecorder};
 
-// ---------------------------------------------------------------------------
-// StatusId
-// ---------------------------------------------------------------------------
-
-/// The outcome of an evidence observation or active test.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(from = "i32", into = "i32")]
-pub enum StatusId {
-    /// Outcome could not be determined.
-    Unknown,
-    /// Control is operating effectively.
-    Effective,
-    /// Control is not operating effectively.
-    Ineffective,
-    /// Non-standard outcome requiring human review.
-    Other,
+// Extension trait for ConfidenceLevel — preserves OCEAN's existing API.
+pub trait ConfidenceLevelExt {
+    fn is_valid(&self) -> bool;
 }
 
-impl From<i32> for StatusId {
-    fn from(v: i32) -> Self {
-        match v {
-            1 => Self::Effective,
-            2 => Self::Ineffective,
-            99 => Self::Other,
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl From<StatusId> for i32 {
-    fn from(s: StatusId) -> Self {
-        match s {
-            StatusId::Unknown => 0,
-            StatusId::Effective => 1,
-            StatusId::Ineffective => 2,
-            StatusId::Other => 99,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// ConfidenceLevel
-// ---------------------------------------------------------------------------
-
-/// Degree of confidence in an evidence record.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ConfidenceLevel {
-    /// Evidence gathered by reading state (observer).
-    PassiveObservation,
-    /// Evidence gathered by performing an active test (tester).
-    ActiveVerification,
-}
-
-impl ConfidenceLevel {
-    pub fn is_valid(&self) -> bool {
+impl ConfidenceLevelExt for ConfidenceLevel {
+    fn is_valid(&self) -> bool {
         true // all enum variants are valid
     }
-}
-
-// ---------------------------------------------------------------------------
-// Supporting types
-// ---------------------------------------------------------------------------
-
-/// Identifies the OCEAN module that produced this evidence.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleInfo {
-    pub name: String,
-    pub version: String,
-    /// "observer", "tester", or "dual"
-    #[serde(rename = "type")]
-    pub module_type: String,
-}
-
-/// Identifies the external system from which evidence was gathered.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SourceInfo {
-    pub system: String,
-    pub api_version: String,
-    pub endpoint: String,
-}
-
-/// Provenance information about how evidence was observed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Metadata {
-    pub module: ModuleInfo,
-    pub source: SourceInfo,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub original_time: Option<DateTime<Utc>>,
-    pub processed_time: DateTime<Utc>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub safety_classification: Option<String>,
-}
-
-/// A single observable value extracted from evidence (username, IP, resource ID, etc.).
-///
-/// The optional `name` field marks a module-authored named export — a semantic
-/// label that composite controls can reference in cross-checks (e.g., a WAF
-/// module tagging its egress CIDRs as `name: "egress_ip"`).  Auto-extracted
-/// observables (via `extract_observables`) leave `name` empty.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Observable {
-    #[serde(rename = "type")]
-    pub obs_type: String,
-    pub value: String,
-    /// Semantic export name set by the module (empty for auto-extracted observables).
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub name: String,
-}
-
-/// A discrete finding within an evidence record (misconfiguration, ineffective control).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Finding {
-    pub title: String,
-    pub description: String,
-    pub severity_id: i32,
-}
-
-/// Additional context added to evidence after initial observation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Enrichment {
-    #[serde(rename = "type")]
-    pub enrichment_type: String,
-    pub data: Value,
-    pub enriched_time: DateTime<Utc>,
-}
-
-// ---------------------------------------------------------------------------
-// Evidence — the core entity
-// ---------------------------------------------------------------------------
-
-/// A structured, immutable record proving a control was (or was not) operating
-/// effectively at a given point in time.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Evidence {
-    pub id: Uuid,
-    pub control_id: String,
-    pub class_uid: i32,
-    pub category_uid: i32,
-    pub activity_id: i32,
-    pub time: DateTime<Utc>,
-    pub confidence_level: ConfidenceLevel,
-    pub metadata: Metadata,
-    #[serde(default)]
-    pub observables: Vec<Observable>,
-    pub status_id: StatusId,
-    pub status: String,
-    pub raw_data: Value,
-    #[serde(default)]
-    pub findings: Vec<Finding>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub test_transcript: Option<TestTranscript>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub enrichments: Vec<Enrichment>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make_metadata() -> Metadata {
-        Metadata {
-            module: ModuleInfo {
-                name: "test.module".to_string(),
-                version: "0.1.0".to_string(),
-                module_type: "observer".to_string(),
-            },
-            source: SourceInfo {
-                system: "mock".to_string(),
-                api_version: "v1".to_string(),
-                endpoint: "mock://ep".to_string(),
-            },
-            original_time: None,
-            processed_time: chrono::Utc::now(),
-            safety_classification: None,
-        }
-    }
 
     #[test]
     fn status_id_from_known_values() {
@@ -302,7 +140,21 @@ mod tests {
 
     #[test]
     fn metadata_with_optional_fields_populated() {
-        let mut m = make_metadata();
+        let mut m = Metadata {
+            module: ModuleInfo {
+                name: "test.module".to_string(),
+                version: "0.1.0".to_string(),
+                module_type: "observer".to_string(),
+            },
+            source: SourceInfo {
+                system: "mock".to_string(),
+                api_version: "v1".to_string(),
+                endpoint: "mock://ep".to_string(),
+            },
+            original_time: None,
+            processed_time: chrono::Utc::now(),
+            safety_classification: None,
+        };
         m.original_time = Some(chrono::Utc::now());
         m.safety_classification = Some("safe".to_string());
         let json = serde_json::to_string(&m).unwrap();
