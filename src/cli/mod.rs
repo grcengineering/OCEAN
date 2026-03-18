@@ -43,7 +43,7 @@ pub struct Cli {
     pub verbose: bool,
 
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -269,7 +269,12 @@ pub fn run() -> Result<()> {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    match cli.command {
+    let command = cli.command.unwrap_or(Commands::Dashboard {
+        refresh: 30,
+        controls_dir: "controls".to_string(),
+    });
+
+    match command {
         Commands::Version => cmd_version(&mut out, format),
         Commands::Observe {
             module,
