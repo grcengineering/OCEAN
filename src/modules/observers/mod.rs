@@ -1,4 +1,5 @@
 pub mod aws;
+pub mod gcp;
 pub mod github;
 pub mod github_actions;
 pub mod github_code_scanning;
@@ -19,6 +20,7 @@ pub fn register_all(registry: &Registry) {
     registry.register_observer(Arc::new(mock::MockObserver));
     registry.register_observer(Arc::new(mock::MockNetworkObserver));
     registry.register_observer(Arc::new(aws::IamObserver));
+    registry.register_observer(Arc::new(gcp::GcpIamPolicyObserver));
     registry.register_observer(Arc::new(github::BranchProtectionObserver));
     registry.register_observer(Arc::new(github_repo_security::RepoSecurityObserver));
     registry.register_observer(Arc::new(github_actions::ActionsPermissionsObserver));
