@@ -181,27 +181,28 @@
     .nav-logo-mark {
       position: relative;
       height: 36px; padding: 0 14px;
-      background: var(--bg);
+      background: linear-gradient(135deg, var(--orange), var(--blue));
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-family: var(--heading); font-weight: 700; font-size: 0.9rem;
       letter-spacing: 0.06em;
-      color: #fff;
+      color: #000;
+      box-shadow: 0 0 20px var(--orange-glow);
       white-space: nowrap;
       z-index: 1;
     }
     .nav-logo-mark::before {
       content: '';
       position: absolute;
-      inset: -2px;
-      border-radius: 10px;
+      inset: -1px;
+      border-radius: 9px;
       background: conic-gradient(
         from var(--gradient-angle, 0deg),
         transparent,
-        var(--orange) 10%,
+        #fff 10%,
         transparent 30%,
         transparent 70%,
-        var(--blue) 90%,
+        #fff 90%,
         transparent
       );
       z-index: -1;
@@ -209,9 +210,9 @@
     .nav-logo-mark::after {
       content: '';
       position: absolute;
-      inset: 1px;
-      border-radius: 7px;
-      background: var(--bg);
+      inset: 0;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--orange), var(--blue));
       z-index: -1;
     }
     .nav-links { display: flex; align-items: center; gap: 8px; }
