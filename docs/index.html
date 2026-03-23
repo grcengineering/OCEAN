@@ -55,6 +55,7 @@
       font-size: 16px;
       line-height: 1.6;
       overflow-x: hidden;
+      padding-top: 64px;
     }
 
     /* ── Noise texture overlay ── */
@@ -165,11 +166,12 @@
 
     /* ═══════════════════════════════════════════ NAV */
     nav {
-      position: sticky; top: 0; z-index: 100;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       background: rgba(8, 14, 28, 0.85);
       backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       padding: 14px 0;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
     .nav-inner {
       display: flex; align-items: center; justify-content: space-between;
@@ -702,9 +704,60 @@
     .kw-bracket { color: var(--text-dim); }
     .kw-comment { color: var(--text-dim); font-style: italic; }
 
+    /* ═══════════════════════════════════════════ HAMBURGER MENU */
+    .nav-hamburger {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .nav-hamburger span {
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--text-muted);
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+    .nav-hamburger:hover span {
+      background: var(--orange);
+    }
+    .nav-mobile-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: rgba(8, 14, 28, 0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+    .nav-mobile-menu.open {
+      display: block;
+    }
+    .nav-mobile-menu a {
+      display: block;
+      padding: 12px 24px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s, background 0.2s;
+    }
+    .nav-mobile-menu a:hover {
+      color: var(--orange);
+      background: var(--orange-glow);
+    }
+
     /* ═══════════════════════════════════════════ RESPONSIVE NAV */
     @media (max-width: 600px) {
-      .nav-links .nav-link:not(.btn) { display: none; }
+      .nav-links { display: none; }
+      .nav-hamburger { display: flex; }
       .hero-ctas { flex-direction: column; }
       .hero-ctas .btn { width: 100%; justify-content: center; }
       .cta-box { padding: 36px 24px; }
@@ -747,6 +800,19 @@
           GitHub
         </a>
       </div>
+      <button class="nav-hamburger" aria-label="Menu" onclick="document.querySelector('.nav-mobile-menu').classList.toggle('open')">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+    <div class="nav-mobile-menu">
+      <a href="#pillars" onclick="this.parentElement.classList.remove('open')">Pillars</a>
+      <a href="#modules" onclick="this.parentElement.classList.remove('open')">Modules</a>
+      <a href="#schema" onclick="this.parentElement.classList.remove('open')">Schema</a>
+      <a href="#demo" onclick="this.parentElement.classList.remove('open')">Demo</a>
+      <a href="#corsair" onclick="this.parentElement.classList.remove('open')">Corsair</a>
+      <a href="https://github.com/grcengineering/ocean" target="_blank" rel="noopener">GitHub</a>
     </div>
   </div>
 </nav>
