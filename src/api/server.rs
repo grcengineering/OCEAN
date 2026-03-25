@@ -5,7 +5,7 @@ use tokio::net::TcpListener;
 use super::handlers::{router, AppState};
 use crate::module::Registry;
 use crate::modules::{register_all_observers, register_all_testers};
-use crate::storage::SqliteStore;
+use crate::storage::{open_store, Store};
 
 /// Start the OCEAN REST API server.
 ///
@@ -16,7 +16,7 @@ use crate::storage::SqliteStore;
 /// The CLI's `cmd_serve` creates a `tokio::runtime::Runtime` and calls
 /// `block_on(serve(...))`.
 pub async fn serve(port: u16, auth_token: Option<String>, db_path: String) -> Result<()> {
-    let store = Arc::new(SqliteStore::open(&db_path)?);
+    let store: Arc<dyn Store> = Arc::from(open_store(&db_path)?);
 
     let registry = Arc::new(Registry::new());
     register_all_observers(&registry);

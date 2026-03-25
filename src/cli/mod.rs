@@ -13,7 +13,7 @@ use ocean::{
     module::{AutoAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
     modules::{register_all_observers, register_all_testers},
     scheduler::Schedule,
-    storage::{EvidenceQuery, SqliteStore, Store},
+    storage::{open_store, EvidenceQuery, Store},
 };
 
 use output::{print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat};
@@ -419,13 +419,13 @@ fn resolve_db_path(db: &str) -> String {
     format!("{home}/.ocean/evidence.db")
 }
 
-fn open_store(db: &str) -> Result<SqliteStore> {
+fn open_store(db: &str) -> Result<Box<dyn Store>> {
     let path = resolve_db_path(db);
     if let Some(parent) = std::path::Path::new(&path).parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("create database directory: {parent:?}"))?;
     }
-    SqliteStore::open(&path)
+    crate::storage::open_store(&path)
 }
 
 fn build_registry() -> Arc<Registry> {

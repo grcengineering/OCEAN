@@ -27,6 +27,11 @@ serde_yaml = "0.9"
 # Storage
 rusqlite = { version = "0.31", features = ["bundled"] }
 
+# PostgreSQL backend (enabled with --features postgres)
+postgres = { version = "0.19", optional = true }
+r2d2 = { version = "0.8", optional = true }
+r2d2_postgres = { version = "0.18", optional = true }
+
 # IDs and time
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -75,6 +80,10 @@ crossterm = "0.28"
 [dev-dependencies]
 tempfile = "3"
 tower = { version = "0.4", features = ["util"] }
+
+[features]
+default = []
+postgres = ["dep:postgres", "dep:r2d2", "dep:r2d2_postgres"]
 
 [profile.release]
 strip = true
