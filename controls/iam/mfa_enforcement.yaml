@@ -23,7 +23,9 @@ evidence_requirements:
   - mfa_bypass_test_result
 observers:
   - module_id: okta.mfa_policy
+  - module_id: azure.conditional_access
 testers:
   - module_id: okta.mfa_bypass
+  - module_id: azure.mfa_bypass
 evaluation:
   cel: "effective_count > 0 && ineffective_count == 0 && has_active"

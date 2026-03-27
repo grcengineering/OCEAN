@@ -1,4 +1,5 @@
 pub mod aws;
+pub mod azure;
 pub mod github;
 pub mod github_actions;
 pub mod github_code_scanning;
@@ -26,6 +27,7 @@ pub fn register_all(registry: &Registry) {
     registry.register_observer(Arc::new(github_secret_scanning::SecretScanningAlertsObserver));
     registry.register_observer(Arc::new(github_code_scanning::CodeScanningAlertsObserver));
     registry.register_observer(Arc::new(github_workflow_permissions::WorkflowPermissionsObserver));
+    registry.register_observer(Arc::new(azure::ConditionalAccessObserver));
     registry.register_observer(Arc::new(okta::MfaPolicyObserver));
     registry.register_observer(Arc::new(okta_population::MfaEnrollmentPopulationObserver));
 }
