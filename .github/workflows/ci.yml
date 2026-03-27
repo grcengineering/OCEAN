@@ -42,15 +42,42 @@ jobs:
       - run: cargo fmt --check
 
   # -------------------------------------------------------------------------
-  # Build (release)
+  # Build matrix (Linux, macOS, Windows)
   # -------------------------------------------------------------------------
-  build:
-    name: Build
+  build-linux:
+    name: Build (ubuntu-latest)
+    needs: [test, lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-latest
+      - run: cargo build --release
+
+  build-macos:
+    name: Build (macos-latest)
+    needs: [test, lint]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-latest
+      - run: cargo build --release
+
+  build-windows:
+    name: Build (windows-latest)
+    needs: [test, lint]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-latest
       - run: cargo build --release
 
   # -------------------------------------------------------------------------

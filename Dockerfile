@@ -1,46 +1,42 @@
 # Stage 1: Build
-FROM golang:1.24-alpine AS builder
-
-RUN apk add --no-cache git
+FROM rust:bookworm AS builder
 
 WORKDIR /build
 
-# Cache dependency downloads
-COPY go.mod go.sum ./
-RUN go mod download
+# Cache dependencies separately from source
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir -p src && \
+    echo "fn main() {}" > src/main.rs && \
+    printf "" > src/lib.rs && \
+    cargo build --release 2>/dev/null; \
+    rm -rf src
 
-# Copy source and build
-COPY . .
+# Build the real binary
+COPY src ./src
+RUN touch src/main.rs src/lib.rs && \
+    cargo build --release
 
-ARG VERSION=dev
-ARG BUILD_TIME=unknown
+# Stage 2: Minimal production image
+FROM debian:bookworm-slim
 
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags "-s -w -X github.com/grcengineering/ocean/internal/cli.version=${VERSION} -X github.com/grcengineering/ocean/internal/cli.buildTime=${BUILD_TIME}" \
-    -o ocean ./cmd/ocean
-
-# Stage 2: Production image (scratch for minimal attack surface)
-FROM scratch
+# CA certs for HTTPS API calls
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 LABEL org.opencontainers.image.title="OCEAN" \
-      org.opencontainers.image.description="Open Control Evidence Acquisition Normalizer" \
+      org.opencontainers.image.description="Open Control Evidence Assessment Normalizer" \
       org.opencontainers.image.url="https://github.com/grcengineering/ocean" \
       org.opencontainers.image.source="https://github.com/grcengineering/ocean" \
       org.opencontainers.image.licenses="Apache-2.0"
 
-# Copy CA certificates for HTTPS API calls
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /build/target/release/ocean /usr/local/bin/ocean
 
-# Copy the binary
-COPY --from=builder /build/ocean /ocean
-
-# Default data directory
 VOLUME ["/data"]
-
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/ocean", "version"]
+    CMD ["/usr/local/bin/ocean", "version"]
 
-ENTRYPOINT ["/ocean"]
+ENTRYPOINT ["/usr/local/bin/ocean"]
 CMD ["serve", "--port", "8080"]

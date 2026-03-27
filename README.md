@@ -1,5 +1,9 @@
 # OCEAN — Open Control Evidence Assessment Normalizer
 
+[![CI](https://github.com/grcengineering/OCEAN/actions/workflows/ci.yml/badge.svg)](https://github.com/grcengineering/OCEAN/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/grcengineering/OCEAN/branch/main/graph/badge.svg)](https://codecov.io/gh/grcengineering/OCEAN)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
 **The "Metasploit for GRC"** — an open-source CLI tool and Rust library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring.
 
 Imagine a standardized API model and data model for retrieving control evidence. Something that security/GRC practitioners, control owners, and auditors could consistently validate the completeness and accuracy of and thus trust as a gold standard source of truth for compliance audits of all kinds.

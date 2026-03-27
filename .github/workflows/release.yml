@@ -1,0 +1,211 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Build multi-platform binaries
+  # -------------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux amd64 — musl for maximum portability
+          - name: linux-amd64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use_cross: false
+            binary: ocean
+
+          # Linux arm64 — cross-compile via cross
+          - name: linux-arm64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            use_cross: true
+            binary: ocean
+
+          # macOS Intel (macos-13 is x86_64)
+          - name: darwin-amd64
+            os: macos-13
+            target: x86_64-apple-darwin
+            use_cross: false
+            binary: ocean
+
+          # macOS Apple Silicon (macos-latest is arm64)
+          - name: darwin-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            use_cross: false
+            binary: ocean
+
+          # Windows amd64
+          - name: windows-amd64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use_cross: false
+            binary: ocean.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install musl-tools (linux-amd64)
+        if: matrix.name == 'linux-amd64'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
+
+      - name: Install cross (linux-arm64)
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build with cross
+        if: matrix.use_cross
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+        run: cross build --release --target "$BUILD_TARGET"
+
+      - name: Build with cargo
+        if: "!matrix.use_cross"
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+        run: cargo build --release --target "$BUILD_TARGET"
+
+      - name: Package binary (Unix)
+        if: matrix.name != 'windows-amd64'
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_BINARY: ${{ matrix.binary }}
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ASSET="ocean-${TAG}-${MATRIX_NAME}.tar.gz"
+          cp "target/${BUILD_TARGET}/release/${MATRIX_BINARY}" ocean
+          tar -czf "${ASSET}" ocean
+          echo "ASSET=${ASSET}" >> "$GITHUB_ENV"
+
+      - name: Package binary (Windows)
+        if: matrix.name == 'windows-amd64'
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          MATRIX_BINARY: ${{ matrix.binary }}
+        shell: pwsh
+        run: |
+          $TAG = $env:GITHUB_REF_NAME
+          $ASSET = "ocean-${TAG}-windows-amd64.zip"
+          $BuildTarget = $env:BUILD_TARGET
+          $MatrixBinary = $env:MATRIX_BINARY
+          Copy-Item "target/$BuildTarget/release/$MatrixBinary" ocean.exe
+          Compress-Archive -Path ocean.exe -DestinationPath $ASSET
+          "ASSET=$ASSET" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Compute checksum (Unix)
+        if: matrix.name != 'windows-amd64'
+        shell: bash
+        run: |
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "$ASSET" > "$ASSET.sha256"
+          else
+            shasum -a 256 "$ASSET" > "$ASSET.sha256"
+          fi
+
+      - name: Compute checksum (Windows)
+        if: matrix.name == 'windows-amd64'
+        shell: pwsh
+        run: |
+          $hash = Get-FileHash $env:ASSET -Algorithm SHA256
+          "$($hash.Hash.ToLower())  $env:ASSET" | Out-File "$env:ASSET.sha256" -Encoding utf8
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET }}.sha256
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Docker image
+  # -------------------------------------------------------------------------
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # -------------------------------------------------------------------------
+  # Create GitHub Release
+  # -------------------------------------------------------------------------
+  release:
+    name: Create Release
+    needs: [build, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**
+          generate_release_notes: true
+          fail_on_unmatched_files: true
