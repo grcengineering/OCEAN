@@ -31,11 +31,13 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-# Cryptography (AWS SigV4 signing — no attestation)
+# Cryptography (AWS SigV4 signing + DSSE attestation)
 sha2 = "0.10"
 hmac = "0.12"
 base64 = "0.22"
 hex = "0.4"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
 
 # HTTP (sync)
 ureq = { version = "2", features = ["json"] }
@@ -71,6 +73,9 @@ cel-interpreter = "0.8"
 # TUI dashboard
 ratatui = "0.29"
 crossterm = "0.28"
+
+# Code pack generation (ocean build)
+handlebars = "6"
 
 [dev-dependencies]
 tempfile = "3"

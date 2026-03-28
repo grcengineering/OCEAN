@@ -5,11 +5,13 @@
 pub mod api;
 pub mod attest;
 pub mod check;
+pub mod codegen;
 pub mod config;
 pub mod control;
 pub mod dashboard;
 pub mod eval;
 pub mod evidence;
+pub mod harden;
 pub mod module;
 pub mod modules;
 pub mod scheduler;

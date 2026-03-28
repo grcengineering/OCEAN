@@ -85,6 +85,28 @@ pub fn load_check_file(path: &Path) -> Result<CheckDefinition> {
     Ok(def)
 }
 
+/// Load all `.check.yaml` files from a directory tree and return their parsed definitions.
+///
+/// Unlike `load_checks_from_dir`, this does not require a Registry and is useful
+/// for harden, codegen, and report commands that need the raw definitions.
+/// Skips files that fail to parse with a warning.
+pub fn load_definitions_from_dir(dir: &Path) -> Vec<CheckDefinition> {
+    if !dir.exists() {
+        debug!("checks directory does not exist, skipping: {}", dir.display());
+        return Vec::new();
+    }
+    walk_check_files(dir)
+        .into_iter()
+        .filter_map(|p| match load_check_file(&p) {
+            Ok(def) => Some(def),
+            Err(e) => {
+                warn!("skipping {}: {:#}", p.display(), e);
+                None
+            }
+        })
+        .collect()
+}
+
 /// Register a CheckDefinition into the registry as the appropriate module type.
 pub fn register_check(registry: &Registry, def: CheckDefinition) {
     let id = def.id.clone();

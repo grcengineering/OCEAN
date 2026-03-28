@@ -10,9 +10,14 @@ use uuid::Uuid;
 
 use ocean::{
     check::loader::load_all_checks,
+    codegen::{generate as codegen_generate, BuildTarget},
     control::{
         calculate_uptime, evaluate_composite, evaluate_control, ComponentResult, Control,
         Framework, ModuleRef,
+    },
+    harden::{
+        execute_plans, plan_harden, print_dry_run as harden_print_dry_run,
+        print_results as harden_print_results, RemediationMode,
     },
     module::{AutoAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
     modules::{register_all_observers, register_all_testers},
@@ -154,11 +159,27 @@ pub enum Commands {
         to: Option<String>,
     },
 
-    /// Generate a compliance report for a time period.
+    /// Generate a compliance report.
+    ///
+    /// Two modes:
+    ///   --period YYYY-MM-DD:YYYY-MM-DD    DB evidence report (default)
+    ///   --framework soc2,nist,...          Live check run mapped to frameworks
     Report {
-        /// Time period: YYYY-MM-DD:YYYY-MM-DD.
+        /// Time period: YYYY-MM-DD:YYYY-MM-DD (DB evidence mode).
         #[arg(long)]
-        period: String,
+        period: Option<String>,
+
+        /// Compliance frameworks to report on (live mode): soc2, nist, iso27001, pci-dss, disa-stig, all.
+        #[arg(long, value_delimiter = ',')]
+        framework: Option<Vec<String>>,
+
+        /// Directory containing .check.yaml files (live framework mode).
+        #[arg(long, default_value = "checks")]
+        checks_dir: String,
+
+        /// Include passing checks in framework report.
+        #[arg(long)]
+        include_passing: bool,
 
         /// Report format: json (default), yaml, markdown, csv.
         #[arg(long, default_value = "json")]
@@ -167,6 +188,60 @@ pub enum Commands {
         /// Filter to a specific control ID.
         #[arg(long)]
         control: Option<String>,
+    },
+
+    /// Remediate failing controls using API calls or Terraform.
+    Harden {
+        /// Remediation mode: api (default), terraform, cli, all.
+        #[arg(long, default_value = "api")]
+        mode: String,
+
+        /// Apply remediation (without this flag, shows dry-run plan).
+        #[arg(long)]
+        apply: bool,
+
+        /// Filter checks by ID prefix or source system (e.g., GH, github).
+        #[arg(long)]
+        control: Option<String>,
+
+        /// Directory containing .check.yaml files.
+        #[arg(long, default_value = "checks")]
+        checks_dir: String,
+
+        /// Output directory for generated Terraform files (terraform mode only).
+        #[arg(long, default_value = "./ocean-terraform")]
+        terraform_dir: String,
+
+        /// Output format: json (default), table.
+        #[arg(long, default_value = "table")]
+        format: String,
+    },
+
+    /// Generate standalone code packs from .check.yaml files.
+    Build {
+        /// Output target: api-script, gh-cli.
+        #[arg(long, default_value = "api-script")]
+        target: String,
+
+        /// Directory containing .check.yaml source files.
+        #[arg(long, default_value = "checks")]
+        source: String,
+
+        /// Output directory (default: packs/<target>/).
+        #[arg(long)]
+        output: Option<String>,
+
+        /// Validate check files without generating output.
+        #[arg(long)]
+        validate: bool,
+
+        /// Show what would change without writing files.
+        #[arg(long)]
+        diff: bool,
+
+        /// Filter checks by ID prefix or source system.
+        #[arg(long)]
+        filter: Option<String>,
     },
 
     /// Manage recurring observation schedules.
@@ -381,9 +456,59 @@ pub fn run() -> Result<()> {
         ),
         Commands::Report {
             period,
+            framework,
+            checks_dir,
+            include_passing,
             format: rep_fmt,
             control,
-        } => cmd_report(&mut out, &cli.db, &period, &rep_fmt, control.as_deref()),
+        } => {
+            if let Some(frameworks) = framework {
+                cmd_report_framework(
+                    &mut out,
+                    &checks_dir,
+                    &frameworks,
+                    include_passing,
+                    &rep_fmt,
+                )
+            } else {
+                let p = period.ok_or_else(|| {
+                    anyhow!("--period YYYY-MM-DD:YYYY-MM-DD is required when --framework is not specified")
+                })?;
+                cmd_report(&mut out, &cli.db, &p, &rep_fmt, control.as_deref())
+            }
+        }
+        Commands::Harden {
+            mode,
+            apply,
+            control,
+            checks_dir,
+            terraform_dir,
+            format: harden_fmt,
+        } => cmd_harden(
+            &mut out,
+            &checks_dir,
+            &mode,
+            apply,
+            control.as_deref(),
+            &terraform_dir,
+            &harden_fmt,
+        ),
+        Commands::Build {
+            target,
+            source,
+            output,
+            validate,
+            diff,
+            filter,
+        } => cmd_build(
+            &mut out,
+            &source,
+            &target,
+            output.as_deref(),
+            validate,
+            diff,
+            filter.as_deref(),
+        ),
         Commands::Schedule { cmd } => match cmd {
             ScheduleCmd::Add {
                 control,
@@ -1259,6 +1384,201 @@ fn cmd_serve(port: u16, auth_token: Option<&str>, db: &str) -> Result<()> {
         auth_token.map(String::from),
         db.to_string(),
     ))
+}
+
+// ─── ocean report --framework ─────────────────────────────────────────────────
+
+fn cmd_report_framework<W: Write>(
+    out: &mut W,
+    checks_dir: &str,
+    frameworks: &[String],
+    include_passing: bool,
+    format: &str,
+) -> Result<()> {
+    use ocean::check::definition::StringOrVec;
+
+    let dir = std::path::Path::new(checks_dir);
+    let defs = ocean::check::loader::load_definitions_from_dir(dir);
+
+    if defs.is_empty() {
+        writeln!(out, "No checks found in '{checks_dir}'")?;
+        return Ok(());
+    }
+
+    let registry = build_registry();
+    let executor = Executor::new(registry);
+    let config = env_as_config();
+
+    // Normalize requested frameworks.
+    let all_fws = ["soc2", "nist", "iso27001", "pci-dss", "disa-stig"];
+    let requested: Vec<&str> = if frameworks.iter().any(|f| f == "all") {
+        all_fws.to_vec()
+    } else {
+        frameworks.iter().map(String::as_str).collect()
+    };
+
+    #[derive(serde::Serialize)]
+    struct FrameworkRow {
+        framework: String,
+        control_ref: String,
+        check_id: String,
+        check_name: String,
+        status: String,
+    }
+
+    let mut rows: Vec<FrameworkRow> = Vec::new();
+
+    for def in &defs {
+        // Run the check (passive only; skip active).
+        if def.check_type != ocean::check::definition::CheckType::Passive {
+            continue;
+        }
+
+        let status = match executor.execute_observer(&def.id, &config) {
+            Ok(evidence) => {
+                let any_fail = evidence
+                    .iter()
+                    .any(|e| matches!(e.status_id, ocean::StatusId::Ineffective));
+                if any_fail {
+                    "FAIL"
+                } else {
+                    "PASS"
+                }
+            }
+            Err(_) => "ERROR",
+        };
+
+        if !include_passing && status == "PASS" {
+            continue;
+        }
+
+        let refs = &def.references;
+        let mapping: &[(&str, &StringOrVec)] = &[
+            ("soc2", &refs.soc2),
+            ("nist", &refs.nist),
+            ("iso27001", &refs.iso27001),
+            ("pci-dss", &refs.pci_dss),
+            ("disa-stig", &refs.disa_stig),
+        ];
+
+        for (fw_name, fw_refs) in mapping {
+            if !requested.contains(fw_name) {
+                continue;
+            }
+            for control_ref in fw_refs.as_vec() {
+                rows.push(FrameworkRow {
+                    framework: fw_name.to_string(),
+                    control_ref,
+                    check_id: def.id.clone(),
+                    check_name: def.name.clone(),
+                    status: status.to_string(),
+                });
+            }
+        }
+    }
+
+    match format.to_lowercase().as_str() {
+        "json" => {
+            writeln!(out, "{}", serde_json::to_string_pretty(&rows)?)?;
+        }
+        "csv" => {
+            writeln!(out, "framework,control_ref,check_id,check_name,status")?;
+            for r in &rows {
+                writeln!(
+                    out,
+                    "{},{},{},{},{}",
+                    r.framework, r.control_ref, r.check_id, r.check_name, r.status
+                )?;
+            }
+        }
+        _ => {
+            // Table output grouped by framework.
+            let mut by_fw: std::collections::BTreeMap<&str, Vec<&FrameworkRow>> =
+                std::collections::BTreeMap::new();
+            for r in &rows {
+                by_fw.entry(r.framework.as_str()).or_default().push(r);
+            }
+            for (fw, fw_rows) in &by_fw {
+                writeln!(out, "\n{} Compliance Report", fw.to_uppercase())?;
+                writeln!(out, "{:-<60}", "")?;
+                writeln!(out, "{:<12} {:<8} {:<12} {}", "Control", "Status", "Check", "Name")?;
+                writeln!(out, "{:-<60}", "")?;
+                for r in fw_rows {
+                    writeln!(
+                        out,
+                        "{:<12} {:<8} {:<12} {}",
+                        r.control_ref, r.status, r.check_id, r.check_name
+                    )?;
+                }
+            }
+            if rows.is_empty() {
+                writeln!(out, "No framework mappings found for the specified frameworks.")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+// ─── ocean harden ─────────────────────────────────────────────────────────────
+
+fn cmd_harden<W: Write>(
+    out: &mut W,
+    checks_dir: &str,
+    mode: &str,
+    apply: bool,
+    filter: Option<&str>,
+    terraform_dir: &str,
+    format: &str,
+) -> Result<()> {
+    let dir = std::path::Path::new(checks_dir);
+    let rem_mode = RemediationMode::from_str(mode)?;
+    let config = env_as_config();
+
+    let plans = plan_harden(dir, &rem_mode, &config, filter)?;
+
+    if !apply {
+        harden_print_dry_run(out, &plans, format)?;
+        return Ok(());
+    }
+
+    eprintln!("Executing {} remediation plan(s)...", plans.len());
+    let tf_dir = std::path::Path::new(terraform_dir);
+    let results = execute_plans(
+        &plans,
+        &config,
+        if rem_mode == RemediationMode::Terraform || rem_mode == RemediationMode::All {
+            Some(tf_dir)
+        } else {
+            None
+        },
+    );
+    harden_print_results(out, &results, format)?;
+
+    let failures = results.iter().filter(|r| !r.success).count();
+    if failures > 0 {
+        return Err(anyhow!("{failures} remediation(s) failed"));
+    }
+    Ok(())
+}
+
+// ─── ocean build ──────────────────────────────────────────────────────────────
+
+fn cmd_build<W: Write>(
+    out: &mut W,
+    source: &str,
+    target: &str,
+    output: Option<&str>,
+    validate: bool,
+    diff: bool,
+    filter: Option<&str>,
+) -> Result<()> {
+    let build_target = BuildTarget::from_str(target)?;
+    let source_dir = std::path::Path::new(source);
+    let default_output = format!("packs/{}", build_target.slug());
+    let output_dir = std::path::Path::new(output.unwrap_or(&default_output));
+
+    codegen_generate(out, source_dir, &build_target, output_dir, validate, diff, filter)?;
+    Ok(())
 }
 
 fn cmd_compliance<W: Write>(
