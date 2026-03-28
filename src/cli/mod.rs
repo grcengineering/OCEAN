@@ -1,4 +1,6 @@
+pub mod filter;
 pub mod output;
+pub mod sarif;
 
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -181,13 +183,25 @@ pub enum Commands {
         #[arg(long)]
         include_passing: bool,
 
-        /// Report format: json (default), yaml, markdown, csv.
+        /// Report format: json (default), yaml, markdown, csv, sarif.
         #[arg(long, default_value = "json")]
         format: String,
 
         /// Filter to a specific control ID.
         #[arg(long)]
         control: Option<String>,
+
+        /// Filter checks by tags (comma-separated, e.g., mfa,identity).
+        #[arg(long)]
+        tags: Option<String>,
+
+        /// Filter checks by severity (comma-separated, e.g., critical,high).
+        #[arg(long)]
+        severity: Option<String>,
+
+        /// Filter checks by profile tier (L1, L2, L3). Includes the tier and below.
+        #[arg(long)]
+        profile: Option<String>,
     },
 
     /// Remediate failing controls using API calls or Terraform.
@@ -215,6 +229,18 @@ pub enum Commands {
         /// Output format: json (default), table.
         #[arg(long, default_value = "table")]
         format: String,
+
+        /// Filter checks by tags (comma-separated, e.g., mfa,identity).
+        #[arg(long)]
+        tags: Option<String>,
+
+        /// Filter checks by severity (comma-separated, e.g., critical,high).
+        #[arg(long)]
+        severity: Option<String>,
+
+        /// Filter checks by profile tier (L1, L2, L3). Includes the tier and below.
+        #[arg(long)]
+        profile: Option<String>,
     },
 
     /// Generate standalone code packs from .check.yaml files.
@@ -461,7 +487,15 @@ pub fn run() -> Result<()> {
             include_passing,
             format: rep_fmt,
             control,
+            tags,
+            severity,
+            profile,
         } => {
+            let check_filter = filter::CheckFilter {
+                tags: tags.map(|t| filter::parse_csv(&t)).unwrap_or_default(),
+                severities: severity.map(|s| filter::parse_csv(&s)).unwrap_or_default(),
+                profile,
+            };
             if let Some(frameworks) = framework {
                 cmd_report_framework(
                     &mut out,
@@ -469,6 +503,7 @@ pub fn run() -> Result<()> {
                     &frameworks,
                     include_passing,
                     &rep_fmt,
+                    &check_filter,
                 )
             } else {
                 let p = period.ok_or_else(|| {
@@ -484,15 +519,26 @@ pub fn run() -> Result<()> {
             checks_dir,
             terraform_dir,
             format: harden_fmt,
-        } => cmd_harden(
-            &mut out,
-            &checks_dir,
-            &mode,
-            apply,
-            control.as_deref(),
-            &terraform_dir,
-            &harden_fmt,
-        ),
+            tags,
+            severity,
+            profile,
+        } => {
+            let check_filter = filter::CheckFilter {
+                tags: tags.map(|t| filter::parse_csv(&t)).unwrap_or_default(),
+                severities: severity.map(|s| filter::parse_csv(&s)).unwrap_or_default(),
+                profile,
+            };
+            cmd_harden(
+                &mut out,
+                &checks_dir,
+                &mode,
+                apply,
+                control.as_deref(),
+                &terraform_dir,
+                &harden_fmt,
+                &check_filter,
+            )
+        }
         Commands::Build {
             target,
             source,
@@ -1394,11 +1440,17 @@ fn cmd_report_framework<W: Write>(
     frameworks: &[String],
     include_passing: bool,
     format: &str,
+    check_filter: &filter::CheckFilter,
 ) -> Result<()> {
     use ocean::check::definition::StringOrVec;
 
     let dir = std::path::Path::new(checks_dir);
-    let defs = ocean::check::loader::load_definitions_from_dir(dir);
+    let all_defs = ocean::check::loader::load_definitions_from_dir(dir);
+    let defs: Vec<_> = if check_filter.is_empty() {
+        all_defs
+    } else {
+        all_defs.into_iter().filter(|d| check_filter.matches(d)).collect()
+    };
 
     if defs.is_empty() {
         writeln!(out, "No checks found in '{checks_dir}'")?;
@@ -1427,6 +1479,7 @@ fn cmd_report_framework<W: Write>(
     }
 
     let mut rows: Vec<FrameworkRow> = Vec::new();
+    let mut sarif_results: Vec<sarif::CheckResult> = Vec::new();
 
     for def in &defs {
         // Run the check (passive only; skip active).
@@ -1447,6 +1500,23 @@ fn cmd_report_framework<W: Write>(
             }
             Err(_) => "ERROR",
         };
+
+        // Collect SARIF results for all checks (SARIF filters internally).
+        let sev = def.assertions.first().map(|a| a.severity.as_str()).unwrap_or(&def.severity);
+        sarif_results.push(sarif::CheckResult {
+            check_id: def.id.clone(),
+            check_name: def.name.clone(),
+            description: def.description.clone(),
+            severity: if sev.is_empty() { "medium".to_string() } else { sev.to_string() },
+            tags: def.tags.clone(),
+            status: status.to_string(),
+            message: if status == "PASS" {
+                format!("{}: passed", def.name)
+            } else {
+                format!("{}: {}", def.name, status.to_lowercase())
+            },
+            source: def.source.clone(),
+        });
 
         if !include_passing && status == "PASS" {
             continue;
@@ -1478,6 +1548,10 @@ fn cmd_report_framework<W: Write>(
     }
 
     match format.to_lowercase().as_str() {
+        "sarif" => {
+            let sarif_log = sarif::build_sarif(&defs, &sarif_results);
+            sarif::write_sarif(out, &sarif_log)?;
+        }
         "json" => {
             writeln!(out, "{}", serde_json::to_string_pretty(&rows)?)?;
         }
@@ -1526,15 +1600,26 @@ fn cmd_harden<W: Write>(
     checks_dir: &str,
     mode: &str,
     apply: bool,
-    filter: Option<&str>,
+    id_filter: Option<&str>,
     terraform_dir: &str,
     format: &str,
+    check_filter: &filter::CheckFilter,
 ) -> Result<()> {
     let dir = std::path::Path::new(checks_dir);
     let rem_mode = RemediationMode::from_str(mode)?;
     let config = env_as_config();
 
-    let plans = plan_harden(dir, &rem_mode, &config, filter)?;
+    let mut plans = plan_harden(dir, &rem_mode, &config, id_filter)?;
+    if !check_filter.is_empty() {
+        // Load definitions to apply tag/severity/profile filter.
+        let defs = ocean::check::loader::load_definitions_from_dir(dir);
+        let allowed: std::collections::HashSet<String> = defs
+            .iter()
+            .filter(|d| check_filter.matches(d))
+            .map(|d| d.id.clone())
+            .collect();
+        plans.retain(|p| allowed.contains(&p.check_id));
+    }
 
     if !apply {
         harden_print_dry_run(out, &plans, format)?;
