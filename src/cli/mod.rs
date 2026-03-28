@@ -211,6 +211,9 @@ pub enum Commands {
 
     /// Remediate failing controls using API calls or Terraform.
     Harden {
+        /// Check ID (e.g., GH-1.08) or source system (e.g., github). If omitted, runs all checks.
+        target: Option<String>,
+
         /// Remediation mode: api (default), terraform, cli, all.
         #[arg(long, default_value = "api")]
         mode: String,
@@ -222,10 +225,6 @@ pub enum Commands {
         /// Skip interactive confirmation prompt (requires --apply; for CI/automation).
         #[arg(long)]
         confirm: bool,
-
-        /// Filter checks by ID prefix or source system (e.g., GH, github).
-        #[arg(long)]
-        control: Option<String>,
 
         /// Directory containing .check.yaml files.
         #[arg(long, default_value = "checks")]
@@ -523,10 +522,10 @@ pub fn run() -> Result<()> {
             }
         }
         Commands::Harden {
+            target,
             mode,
             apply,
             confirm,
-            control,
             checks_dir,
             terraform_dir,
             format: harden_fmt,
@@ -545,7 +544,7 @@ pub fn run() -> Result<()> {
                 &mode,
                 apply,
                 confirm,
-                control.as_deref(),
+                target.as_deref(),
                 &terraform_dir,
                 &harden_fmt,
                 &check_filter,
@@ -1637,6 +1636,15 @@ fn cmd_harden<W: Write>(
 
     // TH-3a: Warn about user-authored checks from ~/.ocean/checks/.
     warn_user_checks(out, dir, &[]);
+
+    // Validate that target check ID exists if a specific one was given.
+    if let Some(target) = id_filter {
+        let all_defs = ocean::check::loader::load_definitions_from_dir(dir);
+        let target_exists = all_defs.iter().any(|d| d.id == target || d.source == target || d.id.starts_with(target));
+        if !target_exists {
+            return Err(anyhow!("Check '{}' not found in {}", target, checks_dir));
+        }
+    }
 
     let mut plans = plan_harden(dir, &rem_mode, &config, id_filter)?;
     if !check_filter.is_empty() {
