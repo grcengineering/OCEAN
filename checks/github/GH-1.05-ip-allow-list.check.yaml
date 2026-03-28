@@ -1,0 +1,93 @@
+id: GH-1.05
+name: Configure IP Allow List
+description: |
+  Checks whether the GitHub organization has an IP allow list configured
+  to restrict access to trusted network ranges. IP allow lists are only
+  available on GitHub Enterprise Cloud plans.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L2
+tags: [ip-allowlist, enterprise, network]
+
+references:
+  cis: "1.5"
+  nist: ["AC-17", "SC-7"]
+  soc2: CC6.6
+  iso27001: A.13.1.1
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org, read:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_org_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    extract:
+      plan_name: "$.plan.name"
+      org_name: "$.login"
+
+  - id: get_ip_allow_list
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}/ip-allow-list"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    on_error:
+      "*": continue
+    extract:
+      ip_entries: "$[*].value"
+      ip_entry_count: "$length"
+      api_available: "$status_code"
+
+assertions:
+  - id: ip_allow_list_configured
+    expr: "ip_entry_count > 0"
+    severity: medium
+    title: IP Allow List Configuration
+    pass_message: "IP allow list is configured with {{ip_entry_count}} entry/entries"
+    fail_message: "No IP allow list entries found — access is unrestricted by IP"
+    finding:
+      description: |
+        The organization does not have an IP allow list configured. Without
+        IP restrictions, organization resources can be accessed from any
+        network location. This increases exposure to credential-based attacks
+        originating from untrusted networks.
+        IP allow lists are only available on GitHub Enterprise Cloud plans.
+        If the organization is not on Enterprise Cloud, this check is not applicable.
+
+remediation:
+  description: |
+    Configure an IP allow list to restrict access to known corporate
+    or VPN network ranges. This feature requires GitHub Enterprise Cloud.
+  steps:
+    - "Navigate to github.com/orgs/{org}/settings/security"
+    - "Under 'IP allow list', click 'Add IP allow list entry'"
+    - "Enter the CIDR range for your trusted network"
+    - "Add a description for the entry"
+    - "Click 'Create'"
+    - "Enable the IP allow list by checking 'Enable IP allow list'"
+    - "Click Save"
+  manual:
+    - "Identify all trusted network CIDR ranges (office, VPN, CI/CD runners)"
+    - "Ensure CI/CD service IPs are included before enabling the allow list"
+    - "Test with a subset of users before enforcing organization-wide"
+    - "Review and update IP entries quarterly or when network topology changes"

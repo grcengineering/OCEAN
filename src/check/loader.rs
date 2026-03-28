@@ -264,4 +264,23 @@ assertions: []
         let count = load_checks_from_dir(&registry, dir.path()).unwrap();
         assert_eq!(count, 1);
     }
+
+    #[test]
+    fn all_bundled_checks_load_successfully() {
+        let checks_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("checks");
+        if !checks_dir.exists() {
+            return;
+        }
+        let mut failures = Vec::new();
+        for path in walk_check_files(&checks_dir) {
+            if let Err(e) = load_check_file(&path) {
+                failures.push(format!("{}: {:#}", path.display(), e));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "bundled check files failed to load:\n{}",
+            failures.join("\n")
+        );
+    }
 }

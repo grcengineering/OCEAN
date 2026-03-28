@@ -44,6 +44,10 @@ pub struct CheckDefinition {
     #[serde(default)]
     pub environment: String,
 
+    /// Top-level severity for native checks that have no assertions.
+    #[serde(default)]
+    pub severity: String,
+
     /// Hardening profile tier: "L1", "L2", or "L3".
     #[serde(default)]
     pub profile: String,

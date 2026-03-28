@@ -4,7 +4,7 @@
   "title": "OCEAN Check Definition",
   "description": "Schema for .check.yaml files — the single source of truth for OCEAN checks.",
   "type": "object",
-  "required": ["id", "name", "source", "steps", "assertions"],
+  "required": ["id", "name", "source"],
   "additionalProperties": false,
   "properties": {
     "id": {
@@ -48,6 +48,11 @@
       "type": "string",
       "enum": ["staging", "production"],
       "description": "Required environment for active checks."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "info"],
+      "description": "Top-level severity for native checks that have no assertions."
     },
     "profile": {
       "type": "string",
