@@ -11,7 +11,8 @@ pub use observer::Observer;
 pub use executor::{Executor, TestConfig};
 pub use registry::{ModuleInfo, Registry};
 pub use safety::{
-    AuthorizationLevel, Authorizer, AutoAuthorizer, EnvironmentScope, SafetyClassification,
+    AuthorizationLevel, Authorizer, AutoAuthorizer, ConfirmAuthorizer, EnvironmentScope,
+    SafetyClassification,
 };
 pub use tester::Tester;
 

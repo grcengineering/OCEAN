@@ -21,7 +21,7 @@ use ocean::{
         execute_plans, plan_harden, print_dry_run as harden_print_dry_run,
         print_results as harden_print_results, RemediationMode,
     },
-    module::{AutoAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
+    module::{AutoAuthorizer, ConfirmAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
     modules::{register_all_observers, register_all_testers},
     scheduler::Schedule,
     storage::{EvidenceQuery, SqliteStore, Store},
@@ -111,6 +111,11 @@ pub enum Commands {
         /// Skip storing evidence to the database.
         #[arg(long)]
         no_store: bool,
+
+        /// Confirm execution of active tests that require authorization (observable, reversible, destructive).
+        /// Without this flag, only safe tests will run; others are rejected.
+        #[arg(long)]
+        confirm: bool,
     },
 
     /// Manage and inspect registered modules.
@@ -424,15 +429,16 @@ pub fn run() -> Result<()> {
             env,
             controls_dir,
             no_store,
+            confirm,
         } => {
             if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
                 let p = control.as_deref().ok_or_else(|| {
                     anyhow!("--control/-c is required when using --target/-t")
                 })?;
-                cmd_test_path(&mut out, format, &cli.db, t, p, &env, &controls_dir, !no_store)
+                cmd_test_path(&mut out, format, &cli.db, t, p, &env, &controls_dir, !no_store, confirm)
             } else if let Some(m) = module.as_deref() {
-                cmd_test(&mut out, format, &cli.db, m, &env, !no_store)
+                cmd_test(&mut out, format, &cli.db, m, &env, !no_store, confirm)
             } else {
                 Err(anyhow!(
                     "Specify a module ID or use --target/-t and --control/-c"
@@ -796,16 +802,23 @@ fn cmd_test<W: Write>(
     module_id: &str,
     target: &str,
     store: bool,
+    confirm: bool,
 ) -> Result<()> {
     let scope = parse_env_scope(target)?;
     let registry = build_registry();
     let executor = Executor::new(registry);
     let config = env_as_config();
 
+    let authorizer: Box<dyn ocean::module::Authorizer> = if confirm {
+        Box::new(ConfirmAuthorizer)
+    } else {
+        Box::new(AutoAuthorizer)
+    };
+
     let cfg = TestConfig {
         module_config: config,
         target_environment: scope,
-        authorizer: Box::new(AutoAuthorizer),
+        authorizer,
     };
 
     let evidence = executor
@@ -1150,6 +1163,7 @@ fn cmd_test_path<W: Write>(
     env: &str,
     controls_dir: &str,
     store: bool,
+    confirm: bool,
 ) -> Result<()> {
     parse_env_scope(env)?; // validate early before any work
     let controls = resolve_controls(controls_dir, control_path)?;
@@ -1171,10 +1185,15 @@ fn cmd_test_path<W: Write>(
             .collect();
 
         for mref in testers {
+            let authorizer: Box<dyn ocean::module::Authorizer> = if confirm {
+                Box::new(ConfirmAuthorizer)
+            } else {
+                Box::new(AutoAuthorizer)
+            };
             let cfg = TestConfig {
                 module_config: config.clone(),
                 target_environment: parse_env_scope(env).unwrap_or(EnvironmentScope::Production),
-                authorizer: Box::new(AutoAuthorizer),
+                authorizer,
             };
             match executor.execute_tester(&mref.module_id, &cfg) {
                 Ok(evidence) => {
@@ -2071,6 +2090,7 @@ evaluation_logic:
             "mock.safety_test",
             "production",
             false,
+            false,
         );
         assert!(result.is_ok(), "test failed: {:?}", result);
         let s = String::from_utf8(buf).unwrap();
@@ -2088,9 +2108,28 @@ evaluation_logic:
             "mock.safety_test",
             "invalid_env",
             false,
+            false,
         )
         .unwrap_err();
         assert!(err.to_string().contains("unknown environment scope"));
+    }
+
+    #[test]
+    fn cmd_test_with_confirm_flag() {
+        let mut buf = Vec::new();
+        let result = cmd_test(
+            &mut buf,
+            OutputFormat::Json,
+            "",
+            "mock.safety_test",
+            "production",
+            false,
+            true, // --confirm
+        );
+        assert!(result.is_ok(), "test with --confirm should succeed: {:?}", result);
+        let s = String::from_utf8(buf).unwrap();
+        let ev: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert!(ev.as_array().unwrap().len() >= 1);
     }
 
     // --- cmd_report period parsing ---

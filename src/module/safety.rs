@@ -192,6 +192,20 @@ impl Authorizer for AutoAuthorizer {
     }
 }
 
+/// Authorizes all safety levels — used when the user passes `--confirm`.
+pub struct ConfirmAuthorizer;
+
+impl Authorizer for ConfirmAuthorizer {
+    fn authorize(
+        &self,
+        _: &str,
+        _: SafetyClassification,
+        _: AuthorizationLevel,
+    ) -> Result<bool> {
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -451,5 +465,23 @@ mod tests {
                 AuthorizationLevel::Warning
             )
             .unwrap());
+    }
+
+    // --- ConfirmAuthorizer ---
+
+    #[test]
+    fn confirm_authorizer_approves_all_levels() {
+        let auth = ConfirmAuthorizer;
+        for (class, level) in [
+            (SafetyClassification::Safe, AuthorizationLevel::Auto),
+            (SafetyClassification::Observable, AuthorizationLevel::Prompt),
+            (SafetyClassification::Reversible, AuthorizationLevel::Explicit),
+            (SafetyClassification::Destructive, AuthorizationLevel::Warning),
+        ] {
+            assert!(
+                auth.authorize("t", class, level).unwrap(),
+                "ConfirmAuthorizer should approve {class} / {level}"
+            );
+        }
     }
 }
