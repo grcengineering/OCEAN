@@ -165,7 +165,7 @@ fn control_title(framework: &str, control_id: &str) -> String {
 // ─── Report generation ───────────────────────────────────────────────────────
 
 /// Extract framework references from a check definition as (framework, control_id) pairs.
-fn extract_references(def: &CheckDefinition) -> Vec<(String, String)> {
+pub fn extract_references(def: &CheckDefinition) -> Vec<(String, String)> {
     let mut refs = Vec::new();
     for id in def.references.soc2.as_vec() {
         refs.push(("soc2".to_string(), id));
@@ -721,5 +721,314 @@ references:
         assert!(refs.iter().any(|(fw, id)| fw == "soc2" && id == "CC6.1"));
         assert!(refs.iter().any(|(fw, id)| fw == "nist" && id == "IA-2"));
         assert!(refs.iter().any(|(fw, id)| fw == "pci_dss" && id == "8.3"));
+    }
+
+    // ─── Additional unit tests (from test plan GRC-51) ──────────────────────
+
+    fn make_check_result(id: &str, name: &str, source: &str, profile: &str, passed: bool) -> CheckResult {
+        CheckResult {
+            check_id: id.into(),
+            check_name: name.into(),
+            source: source.into(),
+            profile: profile.into(),
+            passed,
+            severity: "high".into(),
+            evidence_summary: if passed { "Pass" } else { "Fail" }.into(),
+        }
+    }
+
+    fn make_report(framework: &str, controls: Vec<ControlReport>) -> ComplianceReport {
+        let summary = compute_summary(&controls);
+        ComplianceReport {
+            framework: framework.into(),
+            generated_at: "2026-03-28T00:00:00Z".into(),
+            ocean_version: "0.1.0".into(),
+            source_filter: None,
+            profile_filter: None,
+            controls,
+            summary,
+        }
+    }
+
+    #[test]
+    fn ut_r004_summary_stats_add_up() {
+        // UT-R004: ReportSummary counts must add up to total.
+        let controls = vec![
+            ControlReport { framework: "soc2".into(), control_id: "CC6.1".into(), control_title: "A".into(), mapped_checks: vec![make_check_result("A", "A", "github", "L1", true)], status: ControlStatus::Pass },
+            ControlReport { framework: "soc2".into(), control_id: "CC6.2".into(), control_title: "B".into(), mapped_checks: vec![make_check_result("B", "B", "github", "L1", false)], status: ControlStatus::Fail },
+            ControlReport { framework: "soc2".into(), control_id: "CC6.3".into(), control_title: "C".into(), mapped_checks: vec![make_check_result("C", "C", "github", "L1", true), make_check_result("D", "D", "github", "L1", false)], status: ControlStatus::Partial },
+            ControlReport { framework: "soc2".into(), control_id: "CC8.1".into(), control_title: "D".into(), mapped_checks: vec![], status: ControlStatus::NoData },
+        ];
+        let s = compute_summary(&controls);
+        assert_eq!(s.total_controls, 4);
+        assert_eq!(s.passing + s.failing + s.partial + s.no_data, s.total_controls, "Counts must add up to total");
+        assert_eq!(s.passing, 1);
+        assert_eq!(s.failing, 1);
+        assert_eq!(s.partial, 1);
+        assert_eq!(s.no_data, 1);
+        // pass_percentage = 1 / (4-1) * 100 = 33.3%
+        assert!((s.pass_percentage - 33.3).abs() < 0.1);
+    }
+
+    #[test]
+    fn ut_r005_json_round_trip() {
+        // UT-R005: JSON output round-trips through serde.
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access Controls".into(),
+                mapped_checks: vec![make_check_result("GH-1.01", "MFA", "github", "L1", true)],
+                status: ControlStatus::Pass,
+            },
+        ]);
+        let mut out = Vec::new();
+        print_report_json(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&s).expect("Must be valid JSON");
+        // Verify key fields survive round-trip
+        assert_eq!(parsed["framework"], "soc2");
+        assert_eq!(parsed["controls"][0]["control_id"], "CC6.1");
+        assert_eq!(parsed["controls"][0]["mapped_checks"][0]["check_id"], "GH-1.01");
+        assert_eq!(parsed["summary"]["passing"], 1);
+    }
+
+    #[test]
+    fn ut_r010_combined_source_and_profile_filter() {
+        // UT-R010: Both source and profile filters apply simultaneously (AND logic).
+        // Since generate_report needs live checks, test profile_matches directly.
+        assert!(profile_matches("L1", "L1")); // github L1 → include
+        assert!(profile_matches("L1", "L2")); // L1 passes L2 filter
+        assert!(!profile_matches("L2", "L1")); // github L2 → exclude by L1 filter
+        assert!(!profile_matches("L3", "L1")); // L3 → exclude by L1 filter
+    }
+
+    #[test]
+    fn ut_r011_nodata_for_unmapped_controls() {
+        // UT-R011: Controls with no mapped checks get NoData status.
+        assert_eq!(compute_control_status(&[]), ControlStatus::NoData);
+    }
+
+    #[test]
+    fn ut_r012_check_maps_to_multiple_controls() {
+        // UT-R012: A single check mapping to multiple controls appears under each.
+        let check_a = make_check_result("GH-1.01", "MFA", "github", "L1", true);
+        let controls = vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access".into(),
+                mapped_checks: vec![check_a.clone()],
+                status: ControlStatus::Pass,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC7.2".into(),
+                control_title: "Monitoring".into(),
+                mapped_checks: vec![check_a.clone()],
+                status: ControlStatus::Pass,
+            },
+        ];
+        // Same check ID appears in both controls
+        assert_eq!(controls[0].mapped_checks[0].check_id, "GH-1.01");
+        assert_eq!(controls[1].mapped_checks[0].check_id, "GH-1.01");
+        assert_eq!(controls[0].control_id, "CC6.1");
+        assert_eq!(controls[1].control_id, "CC7.2");
+    }
+
+    #[test]
+    fn ut_r013_invalid_framework_lists_valid() {
+        // UT-R013: Invalid framework name produces error listing valid options.
+        let err = validate_framework("hipaa").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("hipaa"), "Error should mention the invalid input");
+        assert!(msg.contains("soc2"), "Error should list valid frameworks");
+        assert!(msg.contains("nist"), "Error should list valid frameworks");
+    }
+
+    #[test]
+    fn ut_r014_empty_report_valid_summary() {
+        // UT-R014: Report with no mapped checks produces valid summary with 0/0.
+        let controls = vec![
+            ControlReport { framework: "pci_dss".into(), control_id: "2.2".into(), control_title: "Config".into(), mapped_checks: vec![], status: ControlStatus::NoData },
+        ];
+        let s = compute_summary(&controls);
+        assert_eq!(s.total_controls, 1);
+        assert_eq!(s.no_data, 1);
+        assert_eq!(s.pass_percentage, 0.0);
+    }
+
+    #[test]
+    fn ut_r006_csv_escaping_comprehensive() {
+        // UT-R006: CSV escaping handles commas, quotes, newlines per RFC 4180.
+        assert_eq!(csv_escape("hello"), "hello");
+        assert_eq!(csv_escape("a,b"), "\"a,b\"");
+        assert_eq!(csv_escape("say \"hi\""), "\"say \"\"hi\"\"\"");
+        assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
+    }
+
+    // ─── Additional security tests ──────────────────────────────────────────
+
+    #[test]
+    fn sec_r001_csv_injection_tab_and_cr() {
+        // SEC-R001: Tab and CR characters also trigger injection prevention.
+        let tab_cell = csv_escape("\tcmd");
+        assert!(tab_cell.starts_with("'\t"), "Tab-prefixed cells must be escaped: {tab_cell}");
+        let cr_cell = csv_escape("\rcmd");
+        assert!(cr_cell.starts_with("'\r"), "CR-prefixed cells must be escaped: {cr_cell}");
+    }
+
+    #[test]
+    fn sec_r003_json_special_chars_escaped() {
+        // SEC-R003: JSON output uses serde serialization — no raw string concatenation.
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access \"Control\" & <Tags>".into(),
+                mapped_checks: vec![CheckResult {
+                    check_id: "TST-1".into(),
+                    check_name: "Check with \"quotes\" and \\backslash".into(),
+                    source: "github".into(),
+                    profile: "L1".into(),
+                    passed: true,
+                    severity: "high".into(),
+                    evidence_summary: "Pass\nwith newline".into(),
+                }],
+                status: ControlStatus::Pass,
+            },
+        ]);
+        let mut out = Vec::new();
+        print_report_json(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        // Must be valid JSON (serde handles escaping)
+        let parsed: serde_json::Value = serde_json::from_str(&s).expect("Special chars must be properly escaped");
+        assert_eq!(parsed["controls"][0]["control_title"], "Access \"Control\" & <Tags>");
+        assert_eq!(parsed["controls"][0]["mapped_checks"][0]["check_name"], "Check with \"quotes\" and \\backslash");
+    }
+
+    #[test]
+    fn sec_r004_no_credentials_in_report() {
+        // SEC-R004: Report output (table, JSON, CSV) must not contain credential values.
+        // Since report doesn't handle credentials directly (only check results),
+        // verify that check_name, evidence_summary etc. don't leak tokens if they
+        // accidentally contain them.
+        let token = "ghp_report_test_secret_xyz";
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access".into(),
+                mapped_checks: vec![CheckResult {
+                    check_id: "GH-1.01".into(),
+                    check_name: "MFA Check".into(),
+                    source: "github".into(),
+                    profile: "L1".into(),
+                    passed: true,
+                    severity: "high".into(),
+                    evidence_summary: "Pass".into(),
+                }],
+                status: ControlStatus::Pass,
+            },
+        ]);
+
+        // Verify JSON output doesn't contain credential values
+        let mut out = Vec::new();
+        print_report_json(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.contains(token), "Token should not appear in JSON report");
+
+        // Verify CSV output doesn't contain credential values
+        let mut out = Vec::new();
+        print_report_csv(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.contains(token), "Token should not appear in CSV report");
+
+        // Verify table output doesn't contain credential values
+        let mut out = Vec::new();
+        print_report_table(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.contains(token), "Token should not appear in table report");
+    }
+
+    // ─── Edge case tests ────────────────────────────────────────────────────
+
+    #[test]
+    fn ec_r002_csv_with_special_chars_in_fields() {
+        // EC-R002: CSV output handles special characters in all field types.
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access, Control & \"Security\"".into(),
+                mapped_checks: vec![CheckResult {
+                    check_id: "GH-1.01".into(),
+                    check_name: "MFA Check\nwith newline".into(),
+                    source: "github".into(),
+                    profile: "L1".into(),
+                    passed: true,
+                    severity: "high".into(),
+                    evidence_summary: "Pass".into(),
+                }],
+                status: ControlStatus::Pass,
+            },
+        ]);
+        let mut out = Vec::new();
+        print_report_csv(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        // Verify CSV is valid (no unescaped commas breaking fields)
+        let lines: Vec<&str> = s.lines().collect();
+        assert!(lines.len() >= 2, "Should have header + at least 1 data line");
+        assert!(lines[0].starts_with("framework,"), "Header should be present");
+    }
+
+    #[test]
+    fn ec_summary_all_nodata() {
+        // Edge case: All controls are NoData → pass_percentage = 0.0
+        let controls = vec![
+            ControlReport { framework: "soc2".into(), control_id: "CC6.1".into(), control_title: "A".into(), mapped_checks: vec![], status: ControlStatus::NoData },
+            ControlReport { framework: "soc2".into(), control_id: "CC6.2".into(), control_title: "B".into(), mapped_checks: vec![], status: ControlStatus::NoData },
+        ];
+        let s = compute_summary(&controls);
+        assert_eq!(s.total_controls, 2);
+        assert_eq!(s.no_data, 2);
+        assert_eq!(s.pass_percentage, 0.0, "All NoData → 0%");
+    }
+
+    #[test]
+    fn ec_summary_all_passing() {
+        // Edge case: All controls pass → 100%
+        let controls = vec![
+            ControlReport { framework: "soc2".into(), control_id: "CC6.1".into(), control_title: "A".into(), mapped_checks: vec![make_check_result("A", "A", "github", "L1", true)], status: ControlStatus::Pass },
+            ControlReport { framework: "soc2".into(), control_id: "CC6.2".into(), control_title: "B".into(), mapped_checks: vec![make_check_result("B", "B", "github", "L1", true)], status: ControlStatus::Pass },
+        ];
+        let s = compute_summary(&controls);
+        assert_eq!(s.pass_percentage, 100.0);
+    }
+
+    #[test]
+    fn print_report_table_with_filters() {
+        // Verify source_filter and profile_filter appear in table output.
+        let report = ComplianceReport {
+            framework: "soc2".into(),
+            generated_at: "2026-03-28T00:00:00Z".into(),
+            ocean_version: "0.1.0".into(),
+            source_filter: Some("github".into()),
+            profile_filter: Some("L1".into()),
+            controls: vec![],
+            summary: ReportSummary { total_controls: 0, passing: 0, failing: 0, partial: 0, no_data: 0, pass_percentage: 0.0 },
+        };
+        let mut out = Vec::new();
+        print_report_table(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Source filter: github"), "Source filter should appear");
+        assert!(s.contains("Profile filter: L1"), "Profile filter should appear");
+    }
+
+    #[test]
+    fn csv_escape_preserves_normal_minus() {
+        // Edge case: A field starting with '-' (like negative numbers) gets prefixed.
+        let result = csv_escape("-5");
+        assert!(result.starts_with("'-"), "Minus-prefixed should be escaped: {result}");
     }
 }

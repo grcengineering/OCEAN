@@ -207,6 +207,10 @@ pub enum Commands {
         /// Filter checks by profile tier (L1, L2, L3). Includes the tier and below.
         #[arg(long)]
         profile: Option<String>,
+
+        /// Filter checks by source system (e.g., github, okta, aws).
+        #[arg(long)]
+        source: Option<String>,
     },
 
     /// Remediate failing controls using API calls or Terraform.
@@ -499,11 +503,12 @@ pub fn run() -> Result<()> {
             tags,
             severity,
             profile,
+            source,
         } => {
             let check_filter = filter::CheckFilter {
                 tags: tags.map(|t| filter::parse_csv(&t)).unwrap_or_default(),
                 severities: severity.map(|s| filter::parse_csv(&s)).unwrap_or_default(),
-                profile,
+                profile: profile.clone(),
             };
             if let Some(frameworks) = framework {
                 cmd_report_framework(
@@ -513,6 +518,8 @@ pub fn run() -> Result<()> {
                     include_passing,
                     &rep_fmt,
                     &check_filter,
+                    source.as_deref(),
+                    profile.as_deref(),
                 )
             } else {
                 let p = period.ok_or_else(|| {
@@ -1465,11 +1472,69 @@ fn cmd_report_framework<W: Write>(
     include_passing: bool,
     format: &str,
     check_filter: &filter::CheckFilter,
+    source_filter: Option<&str>,
+    profile_filter: Option<&str>,
 ) -> Result<()> {
-    use ocean::check::definition::StringOrVec;
-
     let dir = std::path::Path::new(checks_dir);
-    let all_defs = ocean::check::loader::load_definitions_from_dir(dir);
+    let config = env_as_config();
+
+    // Normalize framework names: CLI uses hyphens, report module uses underscores.
+    let normalize_fw = |name: &str| -> String {
+        match name {
+            "pci-dss" => "pci_dss".to_string(),
+            "disa-stig" => "disa_stig".to_string(),
+            other => other.to_string(),
+        }
+    };
+
+    let all_fws = ["soc2", "nist", "iso27001", "pci_dss", "disa_stig"];
+    let requested: Vec<String> = if frameworks.iter().any(|f| f == "all") {
+        all_fws.iter().map(|s| s.to_string()).collect()
+    } else {
+        frameworks.iter().map(|f| normalize_fw(f)).collect()
+    };
+
+    // Validate all requested frameworks.
+    for fw in &requested {
+        ocean::report::validate_framework(fw)?;
+    }
+
+    // SARIF mode: fall back to legacy check-level output (SARIF doesn't map to
+    // the control-level ComplianceReport model).
+    if format.eq_ignore_ascii_case("sarif") {
+        return cmd_report_framework_sarif(out, dir, &requested, check_filter, &config);
+    }
+
+    // Generate a ComplianceReport for each requested framework.
+    for fw in &requested {
+        let report = ocean::report::generate_report(
+            dir,
+            fw,
+            &config,
+            source_filter,
+            profile_filter,
+        )?;
+
+        // If not including passing and there are no failing/partial controls, skip.
+        if !include_passing && report.summary.failing == 0 && report.summary.partial == 0 {
+            continue;
+        }
+
+        ocean::report::print_report(out, &report, format)?;
+    }
+
+    Ok(())
+}
+
+/// SARIF output for framework reports — operates at check level, not control level.
+fn cmd_report_framework_sarif<W: Write>(
+    out: &mut W,
+    checks_dir: &std::path::Path,
+    frameworks: &[String],
+    check_filter: &filter::CheckFilter,
+    config: &HashMap<String, String>,
+) -> Result<()> {
+    let all_defs = ocean::check::loader::load_definitions_from_dir(checks_dir);
     let defs: Vec<_> = if check_filter.is_empty() {
         all_defs
     } else {
@@ -1477,55 +1542,37 @@ fn cmd_report_framework<W: Write>(
     };
 
     if defs.is_empty() {
-        writeln!(out, "No checks found in '{checks_dir}'")?;
+        writeln!(out, "No checks found in '{}'", checks_dir.display())?;
         return Ok(());
     }
 
     let registry = build_registry();
     let executor = Executor::new(registry);
-    let config = env_as_config();
 
-    // Normalize requested frameworks.
-    let all_fws = ["soc2", "nist", "iso27001", "pci-dss", "disa-stig"];
-    let requested: Vec<&str> = if frameworks.iter().any(|f| f == "all") {
-        all_fws.to_vec()
-    } else {
-        frameworks.iter().map(String::as_str).collect()
-    };
-
-    #[derive(serde::Serialize)]
-    struct FrameworkRow {
-        framework: String,
-        control_ref: String,
-        check_id: String,
-        check_name: String,
-        status: String,
-    }
-
-    let mut rows: Vec<FrameworkRow> = Vec::new();
     let mut sarif_results: Vec<sarif::CheckResult> = Vec::new();
 
     for def in &defs {
-        // Run the check (passive only; skip active).
         if def.check_type != ocean::check::definition::CheckType::Passive {
             continue;
         }
 
-        let status = match executor.execute_observer(&def.id, &config) {
+        // Only include checks that reference at least one requested framework.
+        let refs = ocean::report::extract_references(def);
+        let matches_fw = refs.iter().any(|(fw, _)| frameworks.contains(fw));
+        if !matches_fw {
+            continue;
+        }
+
+        let status = match executor.execute_observer(&def.id, config) {
             Ok(evidence) => {
                 let any_fail = evidence
                     .iter()
                     .any(|e| matches!(e.status_id, ocean::StatusId::Ineffective));
-                if any_fail {
-                    "FAIL"
-                } else {
-                    "PASS"
-                }
+                if any_fail { "FAIL" } else { "PASS" }
             }
             Err(_) => "ERROR",
         };
 
-        // Collect SARIF results for all checks (SARIF filters internally).
         let sev = def.assertions.first().map(|a| a.severity.as_str()).unwrap_or(&def.severity);
         sarif_results.push(sarif::CheckResult {
             check_id: def.id.clone(),
@@ -1541,79 +1588,10 @@ fn cmd_report_framework<W: Write>(
             },
             source: def.source.clone(),
         });
-
-        if !include_passing && status == "PASS" {
-            continue;
-        }
-
-        let refs = &def.references;
-        let mapping: &[(&str, &StringOrVec)] = &[
-            ("soc2", &refs.soc2),
-            ("nist", &refs.nist),
-            ("iso27001", &refs.iso27001),
-            ("pci-dss", &refs.pci_dss),
-            ("disa-stig", &refs.disa_stig),
-        ];
-
-        for (fw_name, fw_refs) in mapping {
-            if !requested.contains(fw_name) {
-                continue;
-            }
-            for control_ref in fw_refs.as_vec() {
-                rows.push(FrameworkRow {
-                    framework: fw_name.to_string(),
-                    control_ref,
-                    check_id: def.id.clone(),
-                    check_name: def.name.clone(),
-                    status: status.to_string(),
-                });
-            }
-        }
     }
 
-    match format.to_lowercase().as_str() {
-        "sarif" => {
-            let sarif_log = sarif::build_sarif(&defs, &sarif_results);
-            sarif::write_sarif(out, &sarif_log)?;
-        }
-        "json" => {
-            writeln!(out, "{}", serde_json::to_string_pretty(&rows)?)?;
-        }
-        "csv" => {
-            writeln!(out, "framework,control_ref,check_id,check_name,status")?;
-            for r in &rows {
-                writeln!(
-                    out,
-                    "{},{},{},{},{}",
-                    r.framework, r.control_ref, r.check_id, r.check_name, r.status
-                )?;
-            }
-        }
-        _ => {
-            // Table output grouped by framework.
-            let mut by_fw: std::collections::BTreeMap<&str, Vec<&FrameworkRow>> =
-                std::collections::BTreeMap::new();
-            for r in &rows {
-                by_fw.entry(r.framework.as_str()).or_default().push(r);
-            }
-            for (fw, fw_rows) in &by_fw {
-                writeln!(out, "\n{} Compliance Report", fw.to_uppercase())?;
-                writeln!(out, "{:-<60}", "")?;
-                writeln!(out, "{:<12} {:<8} {:<12} {}", "Control", "Status", "Check", "Name")?;
-                writeln!(out, "{:-<60}", "")?;
-                for r in fw_rows {
-                    writeln!(
-                        out,
-                        "{:<12} {:<8} {:<12} {}",
-                        r.control_ref, r.status, r.check_id, r.check_name
-                    )?;
-                }
-            }
-            if rows.is_empty() {
-                writeln!(out, "No framework mappings found for the specified frameworks.")?;
-            }
-        }
-    }
+    let sarif_log = sarif::build_sarif(&defs, &sarif_results);
+    sarif::write_sarif(out, &sarif_log)?;
     Ok(())
 }
 
