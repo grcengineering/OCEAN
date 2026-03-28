@@ -12,6 +12,7 @@ pub mod eval;
 pub mod evidence;
 pub mod harden;
 pub mod module;
+pub mod report;
 pub mod modules;
 pub mod scheduler;
 pub mod secrets;
