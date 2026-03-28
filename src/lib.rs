@@ -3,6 +3,8 @@
 // Public SDK re-exports. Import `ocean::*` to access all core types.
 
 pub mod api;
+pub mod attest;
+pub mod check;
 pub mod config;
 pub mod control;
 pub mod dashboard;

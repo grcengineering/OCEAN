@@ -9,7 +9,11 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use ocean::{
-    control::{calculate_uptime, evaluate_control, Control, ModuleRef},
+    check::loader::load_all_checks,
+    control::{
+        calculate_uptime, evaluate_composite, evaluate_control, ComponentResult, Control,
+        Framework, ModuleRef,
+    },
     module::{AutoAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
     modules::{register_all_observers, register_all_testers},
     scheduler::Schedule,
@@ -191,6 +195,21 @@ pub enum Commands {
         /// Directory containing control YAML files.
         #[arg(long, default_value = "controls")]
         controls_dir: String,
+    },
+
+    /// Show compliance posture against a framework.
+    Compliance {
+        /// Framework file path (YAML). If omitted, scans controls_dir for framework YAMLs.
+        #[arg(long)]
+        framework: Option<String>,
+
+        /// Directory containing control YAML files.
+        #[arg(long, default_value = "controls")]
+        controls_dir: String,
+
+        /// Output format: json (default), markdown.
+        #[arg(long, default_value = "json")]
+        format: String,
     },
 }
 
@@ -401,6 +420,11 @@ pub fn run() -> Result<()> {
             let store = open_store(&cli.db)?;
             ocean::dashboard::run(&store, &controls_dir, refresh)
         }
+        Commands::Compliance {
+            framework,
+            controls_dir,
+            format: fmt,
+        } => cmd_compliance(&mut out, &cli.db, framework.as_deref(), &controls_dir, &fmt),
     }
 }
 
@@ -432,6 +456,12 @@ fn build_registry() -> Arc<Registry> {
     let registry = Arc::new(Registry::new());
     register_all_observers(&registry);
     register_all_testers(&registry);
+
+    // Load .check.yaml checks from the bundled checks/ directory (relative to
+    // the binary's working directory) and from ~/.ocean/checks/.
+    let checks_dir = std::path::Path::new("checks");
+    load_all_checks(&registry, checks_dir);
+
     registry
 }
 
@@ -676,7 +706,55 @@ fn cmd_evaluate<W: Write>(
         ..Default::default()
     })?;
 
-    let status = evaluate_control(&control, &evidence);
+    let mut status = evaluate_control(&control, &evidence);
+
+    // If this control has component_controls, perform composite evaluation and
+    // override the status with the composite result.
+    if !control.component_controls.is_empty() {
+        let mut component_results: Vec<ComponentResult> = Vec::new();
+        for comp_id in &control.component_controls {
+            let comp_evidence = db_store.query_evidence(&EvidenceQuery {
+                control_id: Some(comp_id.clone()),
+                ..Default::default()
+            })?;
+            // Load the component control if possible (best-effort; fall back to
+            // a synthetic control with no evaluation logic if not found).
+            let comp_ctrl_result = load_control(comp_id, controls_dir, None);
+            let comp_status = match comp_ctrl_result {
+                Ok(comp_ctrl) => evaluate_control(&comp_ctrl, &comp_evidence),
+                Err(_) => {
+                    // Create a minimal synthetic control for evaluation.
+                    let synthetic = Control {
+                        id: comp_id.clone(),
+                        name: comp_id.clone(),
+                        description: String::new(),
+                        evaluation_logic: ocean::control::EvaluationLogic::default(),
+                        framework_mappings: vec![],
+                        observers: vec![],
+                        testers: vec![],
+                        component_controls: vec![],
+                        components: vec![],
+                        evaluation_expression_hash: String::new(),
+                    };
+                    evaluate_control(&synthetic, &comp_evidence)
+                }
+            };
+            component_results.push(ComponentResult {
+                control_id: comp_id.clone(),
+                status: comp_status.status,
+                evidence_ids: comp_status.evidence_ids,
+            });
+        }
+        let composite_status = evaluate_composite(&control, &component_results);
+        status.status = composite_status;
+        let existing_details = status.evaluation_details.clone();
+        status.evaluation_details = if existing_details.is_empty() {
+            "composite evaluation used".to_string()
+        } else {
+            format!("{existing_details}; composite evaluation used")
+        };
+    }
+
     db_store.store_control_status(&status)?;
 
     print_output(out, &status, format)
@@ -1183,6 +1261,170 @@ fn cmd_serve(port: u16, auth_token: Option<&str>, db: &str) -> Result<()> {
     ))
 }
 
+fn cmd_compliance<W: Write>(
+    out: &mut W,
+    db: &str,
+    framework_path: Option<&str>,
+    controls_dir: &str,
+    format: &str,
+) -> Result<()> {
+    // Load framework YAML.
+    let framework_yaml = match framework_path {
+        Some(path) => std::fs::read_to_string(path)
+            .with_context(|| format!("read framework file '{path}'"))?,
+        None => {
+            // Scan controls_dir for *.framework.yaml or frameworks/*.yaml files.
+            let dir = std::path::Path::new(controls_dir);
+            let candidates = [
+                dir.join("frameworks"),
+                dir.to_path_buf(),
+            ];
+            let mut found_yaml: Option<String> = None;
+            'outer: for search_dir in &candidates {
+                if !search_dir.exists() {
+                    continue;
+                }
+                if let Ok(entries) = std::fs::read_dir(search_dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                        if name.ends_with(".framework.yaml")
+                            || name.ends_with(".framework.yml")
+                            || (search_dir.ends_with("frameworks")
+                                && (name.ends_with(".yaml") || name.ends_with(".yml")))
+                        {
+                            if let Ok(content) = std::fs::read_to_string(&p) {
+                                found_yaml = Some(content);
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            found_yaml.ok_or_else(|| {
+                anyhow!(
+                    "no framework YAML found; use --framework to specify a path"
+                )
+            })?
+        }
+    };
+
+    let framework = Framework::load_yaml(&framework_yaml)
+        .context("parsing framework YAML")?;
+
+    let db_store = open_store(db)?;
+    let checked_at = Utc::now().to_rfc3339();
+
+    let mut passing = 0usize;
+    let mut failing = 0usize;
+    let mut unknown = 0usize;
+
+    let mut requirements: Vec<serde_json::Value> = Vec::new();
+
+    for fc in &framework.controls {
+        let req_status: &str;
+        let mut details_parts: Vec<String> = Vec::new();
+
+        if fc.ocean_control_ids.is_empty() {
+            req_status = "unknown";
+            details_parts.push("no ocean_control_ids mapped".to_string());
+        } else {
+            let mut all_effective = true;
+            let mut any_ineffective = false;
+            let mut any_unknown = false;
+
+            for ctrl_id in &fc.ocean_control_ids {
+                match db_store.get_control_status(ctrl_id) {
+                    Ok(cs) => match cs.status.as_str() {
+                        "effective" => {}
+                        "ineffective" => {
+                            any_ineffective = true;
+                            all_effective = false;
+                            details_parts.push(format!("{ctrl_id}: ineffective"));
+                        }
+                        _ => {
+                            any_unknown = true;
+                            all_effective = false;
+                            details_parts.push(format!("{ctrl_id}: {}", cs.status));
+                        }
+                    },
+                    Err(_) => {
+                        any_unknown = true;
+                        all_effective = false;
+                        details_parts.push(format!("{ctrl_id}: no status"));
+                    }
+                }
+            }
+
+            req_status = if any_ineffective {
+                "failing"
+            } else if all_effective && !any_unknown {
+                "passing"
+            } else {
+                "unknown"
+            };
+        }
+
+        match req_status {
+            "passing" => passing += 1,
+            "failing" => failing += 1,
+            _ => unknown += 1,
+        }
+
+        requirements.push(serde_json::json!({
+            "ref": fc.ref_id,
+            "title": fc.title,
+            "status": req_status,
+            "ocean_control_ids": fc.ocean_control_ids,
+            "details": details_parts.join("; "),
+        }));
+    }
+
+    let total = framework.controls.len();
+
+    match format.to_lowercase().as_str() {
+        "markdown" | "md" => {
+            writeln!(out, "# Compliance Report: {}", framework.name)?;
+            writeln!(out)?;
+            writeln!(out, "| Ref | Title | Status |")?;
+            writeln!(out, "|-----|-------|--------|")?;
+            for req in &requirements {
+                let status_icon = match req["status"].as_str().unwrap_or("unknown") {
+                    "passing" => "✅",
+                    "failing" => "❌",
+                    _ => "⚠️",
+                };
+                writeln!(
+                    out,
+                    "| {} | {} | {} |",
+                    req["ref"].as_str().unwrap_or(""),
+                    req["title"].as_str().unwrap_or(""),
+                    status_icon,
+                )?;
+            }
+            writeln!(out)?;
+            writeln!(out, "**Summary:** {passing}/{total} passing")?;
+        }
+        _ => {
+            let report = serde_json::json!({
+                "framework": framework.name,
+                "checked_at": checked_at,
+                "requirements": requirements,
+                "summary": {
+                    "total": total,
+                    "passing": passing,
+                    "failing": failing,
+                    "unknown": unknown,
+                },
+            });
+            let fmt = OutputFormat::from_str(format);
+            print_output(out, &report, fmt)?;
+        }
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -1637,5 +1879,78 @@ evaluation_logic:
         let s = String::from_utf8(buf).unwrap();
         assert!(s.starts_with("id,module,status,time"));
         let _ = std::fs::remove_file(&db_path);
+    }
+
+    // --- cmd_compliance ---
+
+    #[test]
+    fn cmd_compliance_no_framework_file() {
+        // Should fail gracefully when framework file doesn't exist
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = tmp.path().join("ocean.db").to_str().unwrap().to_string();
+        let fw = tmp.path().join("nonexistent.yaml").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_compliance(&mut out, &db, Some(&fw), "controls", "json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_compliance_json_empty_db() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = tmp.path().join("ocean.db").to_str().unwrap().to_string();
+        let fw_path = tmp.path().join("soc2.framework.yaml");
+        std::fs::write(
+            &fw_path,
+            r#"
+id: soc2
+name: SOC 2 Type II
+version: "2017"
+controls:
+  - ref: CC6.1
+    title: Logical Access Controls
+    ocean_control_ids:
+      - iam.mfa_enforcement
+"#,
+        )
+        .unwrap();
+        let fw_str = fw_path.to_str().unwrap();
+        let mut out = Vec::new();
+        cmd_compliance(&mut out, &db, Some(fw_str), "controls", "json").unwrap();
+        let s = String::from_utf8(out).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(v["framework"].as_str().unwrap(), "SOC 2 Type II");
+        assert_eq!(v["summary"]["total"].as_u64().unwrap(), 1);
+        assert_eq!(v["summary"]["passing"].as_u64().unwrap(), 0);
+        assert_eq!(v["summary"]["unknown"].as_u64().unwrap(), 1);
+        // The requirement has no status in DB so it is "unknown"
+        assert_eq!(
+            v["requirements"][0]["status"].as_str().unwrap(),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn cmd_compliance_markdown_format() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = tmp.path().join("ocean.db").to_str().unwrap().to_string();
+        let fw_path = tmp.path().join("iso.framework.yaml");
+        std::fs::write(
+            &fw_path,
+            r#"
+id: iso27001
+name: ISO 27001
+controls:
+  - ref: A.9.4.2
+    title: Secure log-on procedures
+    ocean_control_ids: []
+"#,
+        )
+        .unwrap();
+        let fw_str = fw_path.to_str().unwrap();
+        let mut out = Vec::new();
+        cmd_compliance(&mut out, &db, Some(fw_str), "controls", "markdown").unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("# Compliance Report: ISO 27001"));
+        assert!(s.contains("**Summary:**"));
     }
 }

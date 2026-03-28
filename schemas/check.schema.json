@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grc.engineering/schemas/check.schema.json",
+  "title": "OCEAN Check Definition",
+  "description": "Schema for .check.yaml files — the single source of truth for OCEAN checks.",
+  "type": "object",
+  "required": ["id", "name", "source", "steps", "assertions"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique check identifier (e.g., GH-1.01, AWS-IAM-01).",
+      "pattern": "^[A-Z][A-Z0-9-]*-[0-9]+(\\.[0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable name for this check."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of what this check verifies."
+    },
+    "author": {
+      "type": "string",
+      "default": "grc-engineering"
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "source": {
+      "type": "string",
+      "description": "Source system identifier (e.g., github, aws, okta, azure).",
+      "examples": ["github", "aws", "okta", "azure", "gcp"]
+    },
+    "type": {
+      "type": "string",
+      "enum": ["passive", "active"],
+      "default": "passive",
+      "description": "passive = read-only observation; active = performs actions against the target system."
+    },
+    "safety": {
+      "type": "string",
+      "enum": ["observable", "reversible"],
+      "description": "Safety classification for active checks only."
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["staging", "production"],
+      "description": "Required environment for active checks."
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["L1", "L2", "L3"],
+      "description": "Hardening profile tier."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "references": {
+      "type": "object",
+      "description": "Compliance framework references.",
+      "additionalProperties": false,
+      "properties": {
+        "cis":      { "$ref": "#/$defs/stringOrArray" },
+        "nist":     { "$ref": "#/$defs/stringOrArray" },
+        "soc2":     { "$ref": "#/$defs/stringOrArray" },
+        "iso27001": { "$ref": "#/$defs/stringOrArray" },
+        "pci_dss":  { "$ref": "#/$defs/stringOrArray" },
+        "disa_stig":{ "$ref": "#/$defs/stringOrArray" }
+      }
+    },
+    "credentials": {
+      "type": "object",
+      "description": "Credentials required, keyed by env var name.",
+      "additionalProperties": {
+        "$ref": "#/$defs/credentialDef"
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Runtime inputs, keyed by input name.",
+      "additionalProperties": {
+        "$ref": "#/$defs/inputDef"
+      }
+    },
+    "pre_flight": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Pre-flight checks displayed before running an active test.",
+      "default": []
+    },
+    "steps": {
+      "type": "array",
+      "description": "HTTP steps to execute in order.",
+      "items": { "$ref": "#/$defs/checkStep" },
+      "minItems": 0
+    },
+    "assertions": {
+      "type": "array",
+      "description": "CEL assertions evaluated against extracted variables.",
+      "items": { "$ref": "#/$defs/checkAssertion" },
+      "minItems": 0
+    },
+    "remediation": {
+      "$ref": "#/$defs/remediationDef"
+    },
+    "implementation": {
+      "type": "string",
+      "enum": ["", "native"],
+      "description": "Set to 'native' to delegate execution to a compiled Rust module."
+    },
+    "native_module": {
+      "type": "string",
+      "description": "Rust module name when implementation == 'native'."
+    }
+  },
+  "$defs": {
+    "stringOrArray": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "credentialDef": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "examples": ["api_token", "oauth2", "basic_auth"]
+        },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "inputDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "env": {
+          "type": "string",
+          "description": "Environment variable name to read this input from."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "checkStep": {
+      "type": "object",
+      "required": ["id", "request"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "action": {
+          "type": "string",
+          "enum": ["api_call"],
+          "default": "api_call"
+        },
+        "when": {
+          "type": "string",
+          "description": "CEL expression; step is skipped when this evaluates to false."
+        },
+        "request": { "$ref": "#/$defs/requestDef" },
+        "extract": {
+          "type": "object",
+          "description": "JSONPath expressions keyed by variable name.",
+          "additionalProperties": { "type": "string" }
+        },
+        "on_error": {
+          "type": "object",
+          "description": "Per HTTP status code error handling (e.g., '422': 'continue').",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "requestDef": {
+      "type": "object",
+      "required": ["method", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        },
+        "url": {
+          "type": "string",
+          "description": "URL template with {{variable}} placeholders."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "body": {
+          "description": "Request body (any JSON value)."
+        },
+        "paginate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Follow Link header pagination (GitHub-style)."
+        }
+      }
+    },
+    "checkAssertion": {
+      "type": "object",
+      "required": ["id", "expr"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "expr": {
+          "type": "string",
+          "description": "CEL expression evaluated against extracted variables. Must return bool."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "info"],
+          "default": "medium"
+        },
+        "title": { "type": "string" },
+        "pass_message": {
+          "type": "string",
+          "description": "Message shown when assertion passes. Supports {{variable}} templates."
+        },
+        "fail_message": {
+          "type": "string",
+          "description": "Message shown when assertion fails. Supports {{variable}} templates."
+        },
+        "finding": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "description": { "type": "string" }
+          }
+        }
+      }
+    },
+    "remediationDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "api": {
+          "type": "object",
+          "required": ["method", "url"],
+          "additionalProperties": false,
+          "properties": {
+            "method": { "type": "string" },
+            "url": { "type": "string" },
+            "body": {}
+          }
+        },
+        "cli": {
+          "type": "object",
+          "required": ["command"],
+          "additionalProperties": false,
+          "properties": {
+            "command": { "type": "string" }
+          }
+        },
+        "terraform": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "resources": {
+              "type": "array",
+              "items": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}
