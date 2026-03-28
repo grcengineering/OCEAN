@@ -36,9 +36,6 @@ sha2 = "0.10"
 hmac = "0.12"
 base64 = "0.22"
 hex = "0.4"
-ed25519-dalek = { version = "2", features = ["rand_core"] }
-rand = "0.8"
-
 # HTTP (sync)
 ureq = { version = "2", features = ["json"] }
 
