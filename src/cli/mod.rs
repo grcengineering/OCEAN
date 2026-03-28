@@ -18,8 +18,8 @@ use ocean::{
         Framework, ModuleRef,
     },
     harden::{
-        execute_plans, plan_harden, print_dry_run as harden_print_dry_run,
-        print_results as harden_print_results, RemediationMode,
+        confirm_apply, execute_plans, plan_harden, print_dry_run as harden_print_dry_run,
+        print_results as harden_print_results, warn_user_checks, RemediationMode,
     },
     module::{AutoAuthorizer, ConfirmAuthorizer, EnvironmentScope, Executor, Registry, TestConfig},
     modules::{register_all_observers, register_all_testers},
@@ -218,6 +218,10 @@ pub enum Commands {
         /// Apply remediation (without this flag, shows dry-run plan).
         #[arg(long)]
         apply: bool,
+
+        /// Skip interactive confirmation prompt (requires --apply; for CI/automation).
+        #[arg(long)]
+        confirm: bool,
 
         /// Filter checks by ID prefix or source system (e.g., GH, github).
         #[arg(long)]
@@ -521,6 +525,7 @@ pub fn run() -> Result<()> {
         Commands::Harden {
             mode,
             apply,
+            confirm,
             control,
             checks_dir,
             terraform_dir,
@@ -539,6 +544,7 @@ pub fn run() -> Result<()> {
                 &checks_dir,
                 &mode,
                 apply,
+                confirm,
                 control.as_deref(),
                 &terraform_dir,
                 &harden_fmt,
@@ -1619,6 +1625,7 @@ fn cmd_harden<W: Write>(
     checks_dir: &str,
     mode: &str,
     apply: bool,
+    confirm: bool,
     id_filter: Option<&str>,
     terraform_dir: &str,
     format: &str,
@@ -1627,6 +1634,9 @@ fn cmd_harden<W: Write>(
     let dir = std::path::Path::new(checks_dir);
     let rem_mode = RemediationMode::from_str(mode)?;
     let config = env_as_config();
+
+    // TH-3a: Warn about user-authored checks from ~/.ocean/checks/.
+    warn_user_checks(out, dir, &[]);
 
     let mut plans = plan_harden(dir, &rem_mode, &config, id_filter)?;
     if !check_filter.is_empty() {
@@ -1641,7 +1651,13 @@ fn cmd_harden<W: Write>(
     }
 
     if !apply {
-        harden_print_dry_run(out, &plans, format)?;
+        harden_print_dry_run(out, &plans, format, &config)?;
+        return Ok(());
+    }
+
+    // TH-2a: Show full plan and require confirmation before executing.
+    if !confirm_apply(out, &plans, &config, confirm)? {
+        writeln!(out, "Aborted.")?;
         return Ok(());
     }
 
@@ -1656,7 +1672,7 @@ fn cmd_harden<W: Write>(
             None
         },
     );
-    harden_print_results(out, &results, format)?;
+    harden_print_results(out, &results, format, &config)?;
 
     let failures = results.iter().filter(|r| !r.success).count();
     if failures > 0 {

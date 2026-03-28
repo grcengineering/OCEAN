@@ -15,6 +15,154 @@ use crate::evidence::StatusId;
 use crate::module::{Executor, Registry};
 use crate::modules::{register_all_observers, register_all_testers};
 
+// ─── Security: Credential masking (TH-1a) ───────────────────────────────────
+
+/// Known credential env var names. Values for these are scrubbed from all output.
+const CREDENTIAL_ENV_VARS: &[&str] = &[
+    "GITHUB_TOKEN",
+    "OKTA_API_TOKEN",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AZURE_CLIENT_SECRET",
+    "GCP_SERVICE_ACCOUNT_KEY",
+];
+
+/// Scrubs known credential values from a string, replacing them with `***REDACTED***`.
+pub struct CredentialMask {
+    secrets: Vec<String>,
+}
+
+impl CredentialMask {
+    pub fn from_config(config: &HashMap<String, String>) -> Self {
+        let secrets: Vec<String> = CREDENTIAL_ENV_VARS
+            .iter()
+            .filter_map(|key| config.get(*key))
+            .filter(|v| !v.is_empty())
+            .cloned()
+            .collect();
+        Self { secrets }
+    }
+
+    pub fn scrub(&self, input: &str) -> String {
+        let mut result = input.to_string();
+        for secret in &self.secrets {
+            result = result.replace(secret.as_str(), "***REDACTED***");
+        }
+        result
+    }
+}
+
+// ─── Security: URL allowlist (TH-2b) ────────────────────────────────────────
+
+/// Validates that a remediation URL is targeting a known-safe endpoint.
+fn validate_remediation_url(url: &str) -> Result<()> {
+    if url.starts_with("https://api.github.com/")
+        || url.starts_with("https://github.com/")
+        || is_okta_url(url)
+        || is_aws_url(url)
+        || is_azure_url(url)
+    {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "remediation URL rejected by allowlist: {url}\n\
+             Allowed: api.github.com, *.okta.com, AWS, Azure endpoints.\n\
+             If this is a legitimate endpoint, add it to ALLOWED_URL_PREFIXES in harden/mod.rs"
+        ))
+    }
+}
+
+fn is_okta_url(url: &str) -> bool {
+    // Match https://{anything}.okta.com/ or https://{anything}.oktapreview.com/
+    url.starts_with("https://")
+        && (url.contains(".okta.com/") || url.contains(".oktapreview.com/"))
+}
+
+fn is_aws_url(url: &str) -> bool {
+    url.starts_with("https://") && url.contains(".amazonaws.com/")
+}
+
+fn is_azure_url(url: &str) -> bool {
+    url.starts_with("https://")
+        && (url.contains(".azure.com/") || url.contains("management.azure.com/"))
+}
+
+// ─── Security: Template variable allowlist (TH-2d) ──────────────────────────
+
+const ALLOWED_TEMPLATE_VARS: &[&str] = &[
+    "GITHUB_TOKEN",
+    "OKTA_API_TOKEN",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AZURE_CLIENT_SECRET",
+    "AZURE_CLIENT_ID",
+    "AZURE_TENANT_ID",
+    "GCP_SERVICE_ACCOUNT_KEY",
+    "ORG_NAME",
+    "org",
+    "org_name",
+    "domain",
+    "tenant",
+];
+
+// ─── Security: Audit logging (TH-2e) ────────────────────────────────────────
+
+fn write_audit_log(plan: &RemediationPlan, result: &RemediationResult) {
+    let log_dir = std::env::var("HOME")
+        .ok()
+        .map(|h| std::path::PathBuf::from(h).join(".ocean"))
+        .unwrap_or_else(|| std::path::PathBuf::from(".ocean"));
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join("audit.log");
+
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let status = if result.success { "SUCCESS" } else { "FAILED" };
+    let api_summary = plan
+        .api_action
+        .as_ref()
+        .map(|a| format!("{} {}", a.method, a.url))
+        .unwrap_or_else(|| "no-api".to_string());
+
+    let entry = format!(
+        "[{timestamp}] HARDEN --apply | check={} | {status} | {api_summary} | actions={} errors={}\n",
+        plan.check_id,
+        result.actions_taken.len(),
+        result.errors.len(),
+    );
+
+    // Best-effort append; don't fail the remediation if logging fails.
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
+}
+
+// ─── Security: User-check source warnings (TH-3a/b) ─────────────────────────
+
+/// Returns true if the checks directory is under ~/.ocean/checks/ (user-authored).
+pub fn is_user_checks_dir(checks_dir: &Path) -> bool {
+    std::env::var("HOME")
+        .ok()
+        .map(|h| {
+            let user_dir = std::path::PathBuf::from(h).join(".ocean").join("checks");
+            checks_dir.starts_with(&user_dir)
+        })
+        .unwrap_or(false)
+}
+
+/// Print a warning about user-authored checks if the checks_dir is under ~/.ocean/checks/.
+pub fn warn_user_checks<W: Write>(out: &mut W, checks_dir: &Path, _plans: &[RemediationPlan]) {
+    if is_user_checks_dir(checks_dir) {
+        let _ = writeln!(
+            out,
+            "⚠ Loading checks from {} — these are not verified by OCEAN maintainers.",
+            checks_dir.display()
+        );
+    }
+}
+
 // ─── Public types ──────────────────────────────────────────────────────────────
 
 /// What kind of remediation actions to plan.
@@ -159,11 +307,21 @@ pub fn plan_harden(
         let rem = def.remediation.as_ref().unwrap(); // safe: filtered above
 
         let api_action = if mode.includes_api() {
-            rem.api.as_ref().map(|api| ApiAction {
-                method: api.method.clone(),
-                url: resolve_vars(&api.url, config),
-                body: api.body.clone(),
-            })
+            if let Some(api) = rem.api.as_ref() {
+                let resolved_url = resolve_vars(&api.url, config);
+                // TH-2b: Validate URL against allowlist before including in plan.
+                if let Err(e) = validate_remediation_url(&resolved_url) {
+                    eprintln!("  ⚠ Skipping {}: {e}", check_id);
+                    continue;
+                }
+                Some(ApiAction {
+                    method: api.method.clone(),
+                    url: resolved_url,
+                    body: api.body.clone(),
+                })
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -207,18 +365,29 @@ pub fn plan_harden(
 /// For API actions: makes HTTP calls via ureq.
 /// For CLI actions: shows the command (user must run it; we do not shell-exec).
 /// For Terraform: writes HCL to `terraform_dir`.
+///
+/// Each execution is logged to `~/.ocean/audit.log` (TH-2e).
 pub fn execute_plans(
     plans: &[RemediationPlan],
     config: &HashMap<String, String>,
     terraform_dir: Option<&Path>,
 ) -> Vec<RemediationResult> {
-    plans.iter().map(|plan| execute_plan(plan, config, terraform_dir)).collect()
+    let mask = CredentialMask::from_config(config);
+    plans
+        .iter()
+        .map(|plan| {
+            let result = execute_plan(plan, config, terraform_dir, &mask);
+            write_audit_log(plan, &result);
+            result
+        })
+        .collect()
 }
 
 fn execute_plan(
     plan: &RemediationPlan,
     config: &HashMap<String, String>,
     terraform_dir: Option<&Path>,
+    mask: &CredentialMask,
 ) -> RemediationResult {
     let mut actions_taken = Vec::new();
     let mut errors = Vec::new();
@@ -226,14 +395,15 @@ fn execute_plan(
     // API remediation
     if let Some(api) = &plan.api_action {
         match execute_api_call(api, config) {
-            Ok(msg) => actions_taken.push(msg),
-            Err(e) => errors.push(format!("API call failed: {e}")),
+            // TH-1a: Scrub credentials from action messages and error messages.
+            Ok(msg) => actions_taken.push(mask.scrub(&msg)),
+            Err(e) => errors.push(mask.scrub(&format!("API call failed: {e}"))),
         }
     }
 
-    // CLI remediation — show the command, don't execute it
+    // CLI remediation — show the command, don't execute it (TH-7a: NEVER shell-exec)
     if let Some(cmd) = &plan.cli_action {
-        actions_taken.push(format!("Run: {cmd}"));
+        actions_taken.push(format!("Run: {}", mask.scrub(cmd)));
     }
 
     // Terraform remediation
@@ -241,11 +411,11 @@ fn execute_plan(
         if let Some(dir) = terraform_dir {
             match write_terraform(plan, dir) {
                 Ok(path) => actions_taken.push(format!("Terraform written to {}", path.display())),
-                Err(e) => errors.push(format!("Terraform write failed: {e}")),
+                Err(e) => errors.push(mask.scrub(&format!("Terraform write failed: {e}"))),
             }
         } else {
             let hcl = generate_terraform_hcl(plan);
-            actions_taken.push(format!("Terraform HCL:\n{hcl}"));
+            actions_taken.push(format!("Terraform HCL:\n{}", mask.scrub(&hcl)));
         }
     }
 
@@ -299,10 +469,61 @@ fn generate_terraform_hcl(plan: &RemediationPlan) -> String {
     hcl
 }
 
+// ─── Confirmation prompt (TH-2a) ─────────────────────────────────────────────
+
+/// Display the full remediation plan and prompt for confirmation.
+///
+/// Returns `true` if the user confirms, `false` otherwise.
+/// When `auto_confirm` is true, skips the prompt (for CI/--confirm flag).
+pub fn confirm_apply<W: Write>(
+    out: &mut W,
+    plans: &[RemediationPlan],
+    config: &HashMap<String, String>,
+    auto_confirm: bool,
+) -> Result<bool> {
+    let mask = CredentialMask::from_config(config);
+
+    writeln!(out, "\n⚠ APPLY MODE — the following API calls will be executed:\n")?;
+    for (i, plan) in plans.iter().enumerate() {
+        writeln!(out, "  {}. {} — {}", i + 1, plan.check_id, plan.check_name)?;
+        if let Some(api) = &plan.api_action {
+            writeln!(out, "     API: {} {}", api.method, mask.scrub(&api.url))?;
+            if let Some(body) = &api.body {
+                let body_str = serde_json::to_string_pretty(body).unwrap_or_default();
+                writeln!(out, "     Body: {}", mask.scrub(&body_str))?;
+            }
+        }
+        if let Some(cmd) = &plan.cli_action {
+            writeln!(out, "     CLI (display only): {}", mask.scrub(cmd))?;
+        }
+        if !plan.terraform_resources.is_empty() {
+            writeln!(out, "     Terraform: {} resource(s) will be written", plan.terraform_resources.len())?;
+        }
+    }
+    writeln!(out)?;
+
+    if auto_confirm {
+        writeln!(out, "  --confirm flag set, proceeding automatically.")?;
+        return Ok(true);
+    }
+
+    // Interactive confirmation
+    write!(out, "Proceed? [y/N] ")?;
+    out.flush()?;
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    let answer = input.trim().to_lowercase();
+    Ok(answer == "y" || answer == "yes")
+}
+
 // ─── Output formatting ────────────────────────────────────────────────────────
 
 /// Print harden plans in dry-run mode.
-pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &str) -> Result<()> {
+///
+/// Credential values are scrubbed from all output (TH-1a).
+pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &str, config: &HashMap<String, String>) -> Result<()> {
+    let mask = CredentialMask::from_config(config);
     if format == "json" {
         let json: Vec<serde_json::Value> = plans
             .iter()
@@ -314,15 +535,16 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
                     "steps": p.steps,
                     "api": p.api_action.as_ref().map(|a| serde_json::json!({
                         "method": a.method,
-                        "url": a.url,
+                        "url": mask.scrub(&a.url),
                         "body": a.body,
                     })),
-                    "cli": p.cli_action,
+                    "cli": p.cli_action.as_ref().map(|c| mask.scrub(c)),
                     "terraform_resources": p.terraform_resources.len(),
                 })
             })
             .collect();
-        writeln!(out, "{}", serde_json::to_string_pretty(&json)?)?;
+        let json_str = serde_json::to_string_pretty(&json)?;
+        writeln!(out, "{}", mask.scrub(&json_str))?;
     } else {
         if plans.is_empty() {
             writeln!(out, "No failing checks with remediation plans found.")?;
@@ -332,10 +554,10 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
         for plan in plans {
             writeln!(out, "  ▸ {} — {}", plan.check_id, plan.check_name)?;
             if let Some(api) = &plan.api_action {
-                writeln!(out, "    API: {} {}", api.method, api.url)?;
+                writeln!(out, "    API: {} {}", api.method, mask.scrub(&api.url))?;
             }
             if let Some(cmd) = &plan.cli_action {
-                writeln!(out, "    CLI: {cmd}")?;
+                writeln!(out, "    CLI: {}", mask.scrub(cmd))?;
             }
             if !plan.terraform_resources.is_empty() {
                 writeln!(out, "    Terraform: {} resource(s)", plan.terraform_resources.len())?;
@@ -352,7 +574,10 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
 }
 
 /// Print harden execution results.
-pub fn print_results<W: Write>(out: &mut W, results: &[RemediationResult], format: &str) -> Result<()> {
+///
+/// Credential values are scrubbed from all output (TH-1a).
+pub fn print_results<W: Write>(out: &mut W, results: &[RemediationResult], format: &str, config: &HashMap<String, String>) -> Result<()> {
+    let mask = CredentialMask::from_config(config);
     if format == "json" {
         let json: Vec<serde_json::Value> = results
             .iter()
@@ -365,18 +590,20 @@ pub fn print_results<W: Write>(out: &mut W, results: &[RemediationResult], forma
                 })
             })
             .collect();
-        writeln!(out, "{}", serde_json::to_string_pretty(&json)?)?;
+        // TH-1a: Defense-in-depth scrub on serialized JSON output.
+        let json_str = serde_json::to_string_pretty(&json)?;
+        writeln!(out, "{}", mask.scrub(&json_str))?;
     } else {
         for r in results {
             if r.success {
                 writeln!(out, "  ✓ {}", r.check_id)?;
                 for action in &r.actions_taken {
-                    writeln!(out, "    {action}")?;
+                    writeln!(out, "    {}", mask.scrub(action))?;
                 }
             } else {
                 writeln!(out, "  ✗ {}", r.check_id)?;
                 for err in &r.errors {
-                    writeln!(out, "    ERROR: {err}")?;
+                    writeln!(out, "    ERROR: {}", mask.scrub(err))?;
                 }
             }
         }
@@ -387,11 +614,37 @@ pub fn print_results<W: Write>(out: &mut W, results: &[RemediationResult], forma
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /// Resolve `{{key}}` template variables from the config map.
+///
+/// Only variables in `ALLOWED_TEMPLATE_VARS` are resolved. Unknown variables
+/// are left as-is (safe for dry-run display). This prevents injection via
+/// crafted .check.yaml template variables (TH-2d).
 fn resolve_vars(template: &str, config: &HashMap<String, String>) -> String {
     let mut result = template.to_string();
-    for (key, value) in config {
-        let placeholder = format!("{{{{{key}}}}}");
-        result = result.replace(&placeholder, value);
+    for key in ALLOWED_TEMPLATE_VARS {
+        if let Some(value) = config.get(*key) {
+            let placeholder = format!("{{{{{key}}}}}");
+            result = result.replace(&placeholder, value);
+        }
+    }
+    result
+}
+
+/// Like `resolve_vars` but masks credential values for safe display (TH-1a).
+#[allow(dead_code)]
+pub fn resolve_vars_masked(template: &str, config: &HashMap<String, String>) -> String {
+    let mut result = template.to_string();
+    for key in ALLOWED_TEMPLATE_VARS {
+        if config.contains_key(*key) {
+            let placeholder = format!("{{{{{key}}}}}");
+            if CREDENTIAL_ENV_VARS.contains(key) {
+                // Leave credential placeholders unresolved in display output
+                // (they stay as {{GITHUB_TOKEN}} etc.)
+            } else {
+                if let Some(value) = config.get(*key) {
+                    result = result.replace(&placeholder, value);
+                }
+            }
+        }
     }
     result
 }
@@ -512,10 +765,14 @@ assertions: []
         assert!(hcl.contains("MFA Check"));
     }
 
+    fn empty_config() -> HashMap<String, String> {
+        HashMap::new()
+    }
+
     #[test]
     fn print_dry_run_json_empty() {
         let mut out = Vec::new();
-        print_dry_run(&mut out, &[], "json").unwrap();
+        print_dry_run(&mut out, &[], "json", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert!(v.as_array().unwrap().is_empty());
@@ -524,7 +781,7 @@ assertions: []
     #[test]
     fn print_dry_run_table_empty() {
         let mut out = Vec::new();
-        print_dry_run(&mut out, &[], "table").unwrap();
+        print_dry_run(&mut out, &[], "table", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("No failing"));
     }
@@ -545,7 +802,7 @@ assertions: []
             terraform_resources: Vec::new(),
         }];
         let mut out = Vec::new();
-        print_dry_run(&mut out, &plans, "table").unwrap();
+        print_dry_run(&mut out, &plans, "table", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("GH-1.01"));
         assert!(s.contains("PATCH"));
@@ -560,10 +817,159 @@ assertions: []
             errors: Vec::new(),
         }];
         let mut out = Vec::new();
-        print_results(&mut out, &results, "json").unwrap();
+        print_results(&mut out, &results, "json", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v[0]["check_id"], "GH-1.01");
         assert_eq!(v[0]["success"], true);
+    }
+
+    // ─── Security tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn sec_credential_mask_scrubs_tokens() {
+        // TH-1a: Credential values must never appear in output.
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_secret123abc".to_string());
+        let mask = CredentialMask::from_config(&config);
+
+        assert_eq!(
+            mask.scrub("Authorization: Bearer ghp_secret123abc"),
+            "Authorization: Bearer ***REDACTED***"
+        );
+        assert_eq!(
+            mask.scrub("https://api.github.com/orgs/my-org?token=ghp_secret123abc"),
+            "https://api.github.com/orgs/my-org?token=***REDACTED***"
+        );
+    }
+
+    #[test]
+    fn sec_credential_mask_empty_config() {
+        let mask = CredentialMask::from_config(&HashMap::new());
+        assert_eq!(mask.scrub("no secrets here"), "no secrets here");
+    }
+
+    #[test]
+    fn sec_dry_run_does_not_leak_token() {
+        // TH-1b: Dry-run output must not contain credential values.
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_test_secret_token_xyz".to_string());
+        config.insert("org".to_string(), "my-org".to_string());
+
+        let plans = vec![RemediationPlan {
+            check_id: "GH-1.08".to_string(),
+            check_name: "Restrict Repo Creation".to_string(),
+            description: "Fix it".to_string(),
+            steps: Vec::new(),
+            api_action: Some(ApiAction {
+                method: "PATCH".to_string(),
+                url: "https://api.github.com/orgs/my-org?auth=ghp_test_secret_token_xyz".to_string(),
+                body: None,
+            }),
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        }];
+
+        // Test table output
+        let mut out = Vec::new();
+        print_dry_run(&mut out, &plans, "table", &config).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.contains("ghp_test_secret_token_xyz"), "Token leaked in table output: {s}");
+
+        // Test JSON output
+        let mut out = Vec::new();
+        print_dry_run(&mut out, &plans, "json", &config).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.contains("ghp_test_secret_token_xyz"), "Token leaked in JSON output: {s}");
+    }
+
+    #[test]
+    fn sec_url_allowlist_accepts_github() {
+        assert!(validate_remediation_url("https://api.github.com/orgs/my-org").is_ok());
+    }
+
+    #[test]
+    fn sec_url_allowlist_accepts_okta() {
+        assert!(validate_remediation_url("https://mycompany.okta.com/api/v1/policies").is_ok());
+    }
+
+    #[test]
+    fn sec_url_allowlist_rejects_evil_host() {
+        // TH-2b: Malicious URLs must be rejected.
+        assert!(validate_remediation_url("https://evil.example.com/steal").is_err());
+        assert!(validate_remediation_url("http://api.github.com/orgs/my-org").is_err()); // http not https
+    }
+
+    #[test]
+    fn sec_template_var_allowlist_blocks_unknown() {
+        // TH-2d: Only known template variables are resolved.
+        let mut config = HashMap::new();
+        config.insert("MALICIOUS_VAR".to_string(), "injected_value".to_string());
+        config.insert("org".to_string(), "legit-org".to_string());
+
+        let result = resolve_vars("{{MALICIOUS_VAR}}/{{org}}", &config);
+        assert!(result.contains("{{MALICIOUS_VAR}}"), "Unknown var was resolved: {result}");
+        assert!(result.contains("legit-org"), "Known var was not resolved: {result}");
+    }
+
+    #[test]
+    fn sec_resolve_vars_masked_hides_credentials() {
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_secret".to_string());
+        config.insert("org".to_string(), "my-org".to_string());
+
+        let result = resolve_vars_masked("{{GITHUB_TOKEN}} {{org}}", &config);
+        assert!(result.contains("{{GITHUB_TOKEN}}"), "Credential should stay as placeholder: {result}");
+        assert!(result.contains("my-org"), "Non-credential should be resolved: {result}");
+    }
+
+    #[test]
+    fn sec_no_shell_exec_in_cli_mode() {
+        // TH-7a/c: CLI commands are displayed, never executed.
+        // Verify by running execute_plan with a dangerous CLI command —
+        // if it were executed, the test would fail (or worse).
+        let plan = RemediationPlan {
+            check_id: "TST-EVIL".to_string(),
+            check_name: "Evil Check".to_string(),
+            description: "Should not execute".to_string(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: Some("rm -rf / --no-preserve-root".to_string()),
+            terraform_resources: Vec::new(),
+        };
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+        let result = execute_plan(&plan, &config, None, &mask);
+
+        // The command should appear in actions_taken as display text, not executed.
+        assert!(result.success);
+        assert!(result.actions_taken[0].contains("rm -rf"));
+        // Verify we're still alive (i.e., the command was NOT executed).
+        assert!(std::path::Path::new("/").exists());
+    }
+
+    #[test]
+    fn sec_confirm_auto_confirm() {
+        // TH-2a: auto-confirm should proceed without stdin.
+        let config = HashMap::new();
+        let plans = vec![RemediationPlan {
+            check_id: "GH-1.01".to_string(),
+            check_name: "Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(ApiAction {
+                method: "PATCH".to_string(),
+                url: "https://api.github.com/orgs/test".to_string(),
+                body: None,
+            }),
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        }];
+        let mut out = Vec::new();
+        let result = confirm_apply(&mut out, &plans, &config, true).unwrap();
+        assert!(result, "auto-confirm should return true");
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("APPLY MODE"), "Should show plan header");
+        assert!(s.contains("PATCH"), "Should show API method");
     }
 }
