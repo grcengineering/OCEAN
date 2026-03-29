@@ -1,427 +1,173 @@
-# Module Development Guide
+# OCEAN Module Catalog
 
-This guide explains how to create custom observers and testers for OCEAN. Modules are the pluggable integration points that gather evidence from external systems (observers) and actively verify control effectiveness (testers).
+OCEAN ships 52 modules across 4 source systems. Each module is either an
+**Observer** (passive evidence collection) or a **Tester** (active control
+verification).
 
-## Architecture Overview
+---
 
-OCEAN uses a Metasploit-style module system. Each module:
+## GitHub (29 modules)
 
-1. Implements a Go interface (`Observer` or `Tester`)
-2. Registers itself with the module registry at startup
-3. Produces structured `evidence.Evidence` records
-4. Declares its credential requirements and source system
+### Observers
 
-```
-modules/
-  observers/
-    aws/             AWS IAM observer
-    github/          GitHub branch protection observer
-    mock/            Reference observer implementation
-    okta/            Okta MFA policy observer
-  testers/
-    aws/             S3 public access tester
-    github/          Secret push protection tester
-    mock/            Reference tester implementation
-    okta/            MFA bypass tester
-```
+| Module ID | Control | API Endpoint | Config Keys |
+|-----------|---------|-------------|-------------|
+| `github.branch_protection` | Branch protection rules | `GET /repos/{owner}/{repo}/branches/{branch}/protection` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.repo_security` | Repository security settings | `GET /repos/{owner}/{repo}` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.actions_permissions` | Actions permissions | `GET /repos/{owner}/{repo}/actions/permissions` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.dependabot_alerts` | Dependabot vulnerability alerts | `GET /repos/{owner}/{repo}/dependabot/alerts` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.secret_scanning_alerts` | Secret scanning alerts | `GET /repos/{owner}/{repo}/secret-scanning/alerts` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.code_scanning_alerts` | Code scanning alerts | `GET /repos/{owner}/{repo}/code-scanning/alerts` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.workflow_permissions` | Default workflow permissions | `GET /repos/{owner}/{repo}/actions/permissions/workflow` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.org_mfa_enforcement` | 2FA required for all members (GH-1.1) | `GET /orgs/{org}` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.org_base_permissions` | Member base permissions (GH-1.2) | `GET /orgs/{org}` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.org_admin_audit` | Admin audit log enabled (GH-1.3) | `GET /orgs/{org}` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.saml_sso` | SAML SSO enforcement (GHEC only) | `GET /orgs/{org}/credential-authorizations` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.pat_policy` | PAT expiration policy | `GET /orgs/{org}` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.org_rulesets` | Org branch rulesets (GH-2.3) | `GET /orgs/{org}/rulesets` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.commit_signing` | Required commit signing (GH-2.4) | `GET /repos/{owner}/{repo}/branches/{branch}/protection/required_signatures` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.actions_allowed` | Actions allowed policy (GH-3.1) | `GET /orgs/{org}/actions/permissions` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.runner_config` | Self-hosted runner detection (GH-3.2) | `GET /orgs/{org}/actions/runners` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.environment_protection` | Environment protection rules (GH-3.3) | `GET /repos/{owner}/{repo}/environments` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.oidc_config` | Actions OIDC sub-claim config (GH-5.2) | `GET /orgs/{org}/actions/oidc/customization/sub` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.oauth_apps` | OAuth app authorizations | `GET /orgs/{org}/oauth_authorizations` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.installed_apps` | Installed GitHub Apps | `GET /orgs/{org}/installations` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.dependency_review` | Dependency review enforcement | `GET /repos/{owner}/{repo}/dependency-graph` | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.audit_log_streaming` | Audit log streaming (GHEC only) | `GET /orgs/{org}/audit-log/streams` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.security_config` | Org security configuration (GHEC only) | `GET /orgs/{org}/security-configuration` | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.copilot_governance` | Copilot usage policies | `GET /orgs/{org}/copilot/billing` | `GITHUB_TOKEN`, `GITHUB_ORG` |
 
-## Module Interface
+### Testers
 
-All modules implement the base `Module` interface:
+| Module ID | What it tests | Safety | Config Keys |
+|-----------|---------------|--------|-------------|
+| `github.branch_bypass` | Branch protection bypass | Observable | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.secret_push` | Secret push protection | Observable | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.actions_restriction` | Actions restriction enforcement | Safe | `GITHUB_TOKEN`, `GITHUB_ORG` |
+| `github.unsigned_commit` | Unsigned commit detection | Observable | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.workflow_injection` | Workflow expression injection | Observable | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
+| `github.action_pin_audit` | Unpinned Actions detection | Safe | `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` |
 
-```go
-// From internal/module/module.go
-type Module interface {
-    ID() string                              // Unique identifier (e.g., "okta.mfa_policy")
-    Name() string                            // Human-readable name
-    Version() string                         // Semantic version
-    SourceSystem() string                    // External system name (e.g., "okta")
-    EvidenceTypes() []int                    // OCSF class UIDs produced
-    CredentialRequirements() []CredentialReq // Required credentials
+---
+
+## Okta (15 modules)
+
+### Observers
+
+| Module ID | Control | API Endpoint | Config Keys |
+|-----------|---------|-------------|-------------|
+| `okta.mfa_policy` | MFA policy enforcement | `GET /api/v1/policies?type=MFA_ENROLL` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.mfa_enrollment_population` | MFA enrollment population | `GET /api/v1/groups/{id}/users` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.password_policy` | Password policy strength | `GET /api/v1/policies?type=PASSWORD` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.session_policy` | Session lifetime policy | `GET /api/v1/policies?type=OKTA_SIGN_ON` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.recovery_policy` | Account recovery policy | `GET /api/v1/policies?type=OKTA_SIGN_ON` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.threat_insight` | ThreatInsight configuration | `GET /api/v1/threats/configuration` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.system_log_streaming` | System log streaming | `GET /api/v1/logStreams` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.behavior_detection` | Behavior detection rules | `GET /api/v1/behaviors` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.authenticators` | Authenticator configuration | `GET /api/v1/authenticators` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.admin_roles` | Admin role assignments | `GET /api/v1/iam/roles` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.network_zones` | Network zone configuration | `GET /api/v1/zones` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.oauth_app_policy` | OAuth app sign-on policy | `GET /api/v1/policies?type=ACCESS_POLICY` | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+
+### Testers
+
+| Module ID | What it tests | Safety | Config Keys |
+|-----------|---------------|--------|-------------|
+| `okta.mfa_bypass` | MFA policy bypass | Observable | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.admin_ip_restriction` | Admin IP restriction enforcement | Observable | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.default_policy_bypass` | Default policy bypass | Observable | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+| `okta.pr_mfa_downgrade` | PR-triggered MFA downgrade | Observable | `OKTA_DOMAIN`, `OKTA_API_TOKEN` |
+
+---
+
+## AWS (2 modules)
+
+| Module ID | Type | Control | Config Keys |
+|-----------|------|---------|-------------|
+| `aws.iam` | Observer | IAM policy configuration | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `aws.s3_public_access` | Tester | S3 public access block | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET` |
+
+---
+
+## Azure (2 modules)
+
+| Module ID | Type | Control | Config Keys |
+|-----------|------|---------|-------------|
+| `azure.conditional_access` | Observer | Conditional Access policies | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
+| `azure.mfa_bypass` | Tester | MFA bypass attempt | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
+
+---
+
+## Mock (testing only)
+
+These modules are excluded from production use. They serve as reference
+implementations and for integration testing.
+
+| Module ID | Type | Purpose |
+|-----------|------|---------|
+| `mock.test` | Observer | Returns a single synthetic Evidence record |
+| `mock.network` | Observer | Simulates a network-dependent observation |
+| `mock.safety_test` | Tester | Demonstrates the safety classification system |
+
+---
+
+## Writing a Custom Module
+
+All modules implement the `Module` trait plus either `Observer` or `Tester`:
+
+```rust
+use ocean::module::{Module, Observer, CredentialReq};
+use ocean::evidence::Evidence;
+use std::collections::HashMap;
+use anyhow::Result;
+
+pub struct MyObserver;
+
+impl Module for MyObserver {
+    fn id(&self) -> &str { "myco.my_control" }
+    fn name(&self) -> &str { "My Control Observer" }
+    fn version(&self) -> &str { "0.1.0" }
+    fn source_system(&self) -> &str { "myco" }
+    fn evidence_types(&self) -> &[i32] { &[1001] }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![CredentialReq {
+            name: "MY_API_TOKEN".to_string(),
+            cred_type: "api_token".to_string(),
+            description: "API token for MyService".to_string(),
+            required: true,
+        }]
+    }
 }
-```
 
-## Observer Interface
-
-Observers perform **passive observation** -- they read system state without modifying it. They produce evidence at the `passive_observation` confidence level.
-
-```go
-// From internal/module/observer.go
-type Observer interface {
-    Module
-    Collect(ctx context.Context, config map[string]string) ([]evidence.Evidence, error)
-}
-```
-
-### Creating a Observer
-
-Here is a walkthrough based on the real Okta MFA policy observer:
-
-**Step 1: Define the struct and implement the Module interface.**
-
-```go
-package okta
-
-import "github.com/grcengineering/ocean/internal/module"
-
-type MFAPolicyObserver struct{}
-
-// Compile-time interface check.
-var _ module.Observer = (*MFAPolicyObserver)(nil)
-
-func (c *MFAPolicyObserver) ID() string            { return "okta.mfa_policy" }
-func (c *MFAPolicyObserver) Name() string          { return "Okta MFA Policy Observer" }
-func (c *MFAPolicyObserver) Version() string       { return "0.1.0" }
-func (c *MFAPolicyObserver) SourceSystem() string  { return "okta" }
-func (c *MFAPolicyObserver) EvidenceTypes() []int  { return []int{1001} }
-
-func (c *MFAPolicyObserver) CredentialRequirements() []module.CredentialReq {
-    return []module.CredentialReq{
-        {
-            Name:        "OKTA_API_TOKEN",
-            Type:        "api_key",
-            Description: "Okta API token with read-only admin access",
-            Required:    true,
-        },
-        {
-            Name:        "OKTA_DOMAIN",
-            Type:        "string",
-            Description: "Okta organization domain (e.g., dev-123456.okta.com)",
-            Required:    true,
-        },
+impl Observer for MyObserver {
+    fn observe(&self, config: &HashMap<String, String>) -> Result<Vec<Evidence>> {
+        // Call your API and return Evidence records
+        todo!()
     }
 }
 ```
 
-**Step 2: Implement the `Collect` method.**
+Register in `src/modules/observers/mod.rs`:
 
-The `config` map contains resolved credentials and configuration. Return one or more `evidence.Evidence` records.
-
-```go
-func (c *MFAPolicyObserver) Collect(ctx context.Context, config map[string]string) ([]evidence.Evidence, error) {
-    domain := config["OKTA_DOMAIN"]
-    token := config["OKTA_API_TOKEN"]
-
-    // Call the Okta API to retrieve MFA policies.
-    // ... (your API logic here)
-
-    now := time.Now().UTC()
-    ev := evidence.Evidence{
-        ID:              uuid.New(),
-        ControlID:       "iam.mfa_enforcement",
-        ClassUID:        1001,
-        CategoryUID:     1,
-        ActivityID:      1, // Config Check
-        Time:            now,
-        ConfidenceLevel: evidence.PassiveObservation,
-        Metadata: evidence.Metadata{
-            Module: evidence.ModuleInfo{
-                Name:    c.ID(),
-                Version: c.Version(),
-                Type:    "observer",
-            },
-            Source: evidence.SourceInfo{
-                System:     c.SourceSystem(),
-                APIVersion: "v1",
-                Endpoint:   fmt.Sprintf("https://%s/api/v1/policies", domain),
-            },
-            ProcessedTime: now,
-        },
-        StatusID: evidence.StatusEffective,
-        Status:   "MFA enforcement is required for all users",
-        RawData:  rawJSON,
-    }
-
-    return []evidence.Evidence{ev}, nil
-}
+```rust
+pub mod my_observer;
+// in register_all():
+registry.register_observer(Arc::new(my_observer::MyObserver));
 ```
 
-**Step 3: Create a registration function.**
+See `src/modules/observers/github_org_mfa.rs` for a complete worked example.
 
-Every module package must export a `RegisterAll` function:
+---
 
-```go
-package okta
+## Safety Classifications (Testers only)
 
-import "github.com/grcengineering/ocean/internal/module"
+| Level | Description | Permitted scopes |
+|-------|-------------|-----------------|
+| `Safe` | Read-only verification, no side effects | Production, Staging, Isolated |
+| `Observable` | Leaves an observable log trace | Staging, Isolated |
+| `Reversible` | Makes a change then rolls it back | Isolated only |
+| `Destructive` | Irreversible side effects | Isolated only |
 
-func RegisterAll(reg *module.Registry) {
-    reg.RegisterObserver(&MFAPolicyObserver{})
-}
-```
-
-**Step 4: Wire it into the CLI.**
-
-Add the import and registration call in the CLI files (`internal/cli/collect.go`, `internal/cli/modules.go`, etc.):
-
-```go
-import (
-    oktaobserver "github.com/grcengineering/ocean/modules/observers/okta"
-)
-
-// In the command's RunE function:
-reg := module.NewRegistry()
-oktaobserver.RegisterAll(reg)
-```
-
-## Tester Interface
-
-Testers perform **active verification** -- they interact with target systems to prove controls are working. They produce evidence at the `active_verification` confidence level.
-
-```go
-// From internal/module/tester.go
-type Tester interface {
-    Module
-    SafetyClass() SafetyClassification
-    EnvironmentScope() EnvironmentScope
-    PreFlightChecks() []string
-    CleanupProcedures() []string
-    Test(ctx context.Context, config map[string]string) ([]evidence.Evidence, error)
-}
-```
-
-### Safety Classifications
-
-Every tester MUST declare a safety classification that determines when and where it can run:
-
-| Classification | Description | Environments | Authorization |
-|---|---|---|---|
-| `safe` | Read-only, no system impact | All | Automatic |
-| `observable` | API calls visible in audit logs | Production, Staging | Prompt required |
-| `reversible` | Makes changes that can be rolled back | Staging, Isolated | Explicit approval |
-| `destructive` | Irreversible changes | Isolated only | Warning + approval |
-
-### Environment Scopes
-
-Testers declare their intended operating environment:
-
-- `production` -- Live production systems
-- `staging` -- Pre-production environments
-- `isolated` -- Fully isolated test environments
-
-### Creating a Tester
-
-Based on the real Okta MFA bypass tester:
-
-```go
-package okta
-
-import "github.com/grcengineering/ocean/internal/module"
-
-type MFABypassTester struct{}
-
-var _ module.Tester = (*MFABypassTester)(nil)
-
-func (t *MFABypassTester) ID() string            { return "okta.mfa_bypass" }
-func (t *MFABypassTester) Name() string          { return "Okta MFA Bypass Tester" }
-func (t *MFABypassTester) Version() string       { return "0.1.0" }
-func (t *MFABypassTester) SourceSystem() string  { return "okta" }
-func (t *MFABypassTester) EvidenceTypes() []int  { return []int{1001} }
-
-func (t *MFABypassTester) CredentialRequirements() []module.CredentialReq {
-    return []module.CredentialReq{
-        {Name: "OKTA_DOMAIN", Type: "string", Required: true},
-        {Name: "OKTA_API_TOKEN", Type: "api_key", Required: true},
-        {Name: "OKTA_TEST_USER", Type: "string", Required: true},
-        {Name: "OKTA_TEST_PASSWORD", Type: "string", Required: true},
-    }
-}
-
-func (t *MFABypassTester) SafetyClass() module.SafetyClassification {
-    return module.SafetyClassSafe
-}
-
-func (t *MFABypassTester) EnvironmentScope() module.EnvironmentScope {
-    return module.ScopeProduction
-}
-
-func (t *MFABypassTester) PreFlightChecks() []string {
-    return []string{
-        "verify Okta domain is reachable",
-        "verify test user credentials are valid",
-    }
-}
-
-func (t *MFABypassTester) CleanupProcedures() []string {
-    return nil // safe test, no cleanup needed
-}
-```
-
-### Test Transcripts
-
-Active tests record their actions using the transcript recorder for full auditability:
-
-```go
-func (t *MFABypassTester) Test(ctx context.Context, config map[string]string) ([]evidence.Evidence, error) {
-    recorder := evidence.NewTranscriptRecorder()
-
-    // Record actions taken.
-    recorder.RecordAction("submit login without MFA", map[string]string{
-        "target": config["OKTA_DOMAIN"],
-        "user":   config["OKTA_TEST_USER"],
-    })
-
-    // Make the actual API call...
-    // ... your test logic here ...
-
-    // Record observations.
-    recorder.RecordObservation("MFA challenge presented", true)
-    recorder.RecordObservation("login blocked without MFA token", true)
-
-    // Record cleanup (if any).
-    recorder.RecordCleanup("remove test artifacts", true)
-
-    transcript := recorder.Finalize()
-
-    ev := evidence.Evidence{
-        ID:              uuid.New(),
-        ControlID:       "iam.mfa_enforcement",
-        ClassUID:        1001,
-        CategoryUID:     1,
-        ActivityID:      2, // Active Test
-        Time:            time.Now().UTC(),
-        ConfidenceLevel: evidence.ActiveVerification,
-        TestTranscript:  transcript,
-        Metadata: evidence.Metadata{
-            Module: evidence.ModuleInfo{
-                Name:    t.ID(),
-                Version: t.Version(),
-                Type:    "tester",
-            },
-            SafetyClassification: string(t.SafetyClass()),
-        },
-        StatusID: evidence.StatusEffective,
-        Status:   "MFA bypass attempt was correctly blocked",
-    }
-
-    return []evidence.Evidence{ev}, nil
-}
-```
-
-### Registering Testers
-
-Same pattern as observers:
-
-```go
-package okta
-
-import "github.com/grcengineering/ocean/internal/module"
-
-func RegisterAll(reg *module.Registry) {
-    reg.RegisterTester(&MFABypassTester{})
-}
-```
-
-Wire into `internal/cli/test.go` and `internal/cli/modules.go`:
-
-```go
-import (
-    oktatester "github.com/grcengineering/ocean/modules/testers/okta"
-)
-
-// In RunE:
-oktatester.RegisterAll(reg)
-```
-
-## Evidence Schema
-
-Every evidence record must populate these core fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `ID` | `uuid.UUID` | Unique identifier (generate with `uuid.New()`) |
-| `ControlID` | `string` | ID of the control this evidence supports |
-| `ClassUID` | `int` | OCSF class UID for the evidence type |
-| `CategoryUID` | `int` | OCSF category UID |
-| `ActivityID` | `int` | Activity type (1=config check, 2=active test) |
-| `Time` | `time.Time` | When the evidence was observed (UTC) |
-| `ConfidenceLevel` | `ConfidenceLevel` | `passive_observation` or `active_verification` |
-| `StatusID` | `StatusID` | 0=unknown, 1=effective, 2=ineffective, 99=other |
-| `Status` | `string` | Human-readable status description |
-| `RawData` | `json.RawMessage` | Original API response or test output |
-| `Findings` | `[]Finding` | Structured findings with title, description, severity |
-| `Observables` | `[]Observable` | Entities observed (users, resources, etc.) |
-
-## Module Validation
-
-OCEAN validates modules at runtime. Run validation with:
-
-```bash
-./ocean modules validate <module-id>
-```
-
-Validation checks:
-- ID is non-empty and follows `<source>.<name>` convention
-- Name, Version, SourceSystem are populated
-- EvidenceTypes list is non-empty
-- For testers: SafetyClass and EnvironmentScope are valid values
-- For testers: CanRunInEnvironment matrix is respected
-
-## Testing Modules
-
-Write tests that verify:
-
-1. The module implements the correct interface (compile-time check)
-2. `Collect` or `Test` returns valid evidence records
-3. Evidence has all required fields populated
-4. Status mapping is correct for different scenarios
-5. Error handling works for API failures
-
-Use `net/http/httptest` to mock external APIs:
-
-```go
-func TestMFAPolicyObserver_Collect(t *testing.T) {
-    // Create a mock Okta API server.
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode([]map[string]interface{}{
-            {"id": "policy1", "status": "ACTIVE", "type": "MFA_ENROLL"},
-        })
-    }))
-    defer srv.Close()
-
-    c := &MFAPolicyObserver{}
-    evs, err := c.Collect(context.Background(), map[string]string{
-        "OKTA_DOMAIN":    strings.TrimPrefix(srv.URL, "http://"),
-        "OKTA_API_TOKEN": "test-token",
-    })
-    require.NoError(t, err)
-    require.Len(t, evs, 1)
-
-    ev := evs[0]
-    assert.Equal(t, "okta.mfa_policy", ev.Metadata.Module.Name)
-    assert.Equal(t, evidence.PassiveObservation, ev.ConfidenceLevel)
-    assert.Equal(t, evidence.StatusEffective, ev.StatusID)
-}
-```
-
-## Directory Structure
-
-Follow this convention for new modules:
-
-```
-modules/
-  observers/
-    <source_system>/
-      observer.go         # Base HTTP client and RegisterAll function
-      <feature>.go         # Feature-specific observer (e.g., mfa.go, iam.go)
-      observer_test.go    # Tests for base client
-      <feature>_test.go    # Tests for feature observer
-  testers/
-    <source_system>/
-      <feature>.go         # Feature-specific tester (e.g., mfa_bypass.go)
-      register.go          # RegisterAll function
-      <feature>_test.go    # Tests
-```
-
-## Reference Implementations
-
-Study these existing modules before creating your own:
-
-| Module | Files | Good Example Of |
-|--------|-------|-----------------|
-| `modules/observers/mock/` | Simple, self-contained | Basic observer pattern |
-| `modules/testers/mock/` | Simple, self-contained | Basic tester with transcript |
-| `modules/observers/okta/` | HTTP client + rate limiting | Real API integration |
-| `modules/observers/aws/` | SigV4 signing, pagination | Complex auth, XML parsing |
-| `modules/testers/github/` | Observable safety class | Non-safe tester pattern |
+A schedule's `max_safety_level` controls which testers run. Setting
+`max_safety_level: safe` skips all `Observable`, `Reversible`, and
+`Destructive` testers automatically.

@@ -283,4 +283,367 @@ assertions: []
             failures.join("\n")
         );
     }
+
+    // ── load_check_file direct tests ────────────────────────────────────────
+
+    #[test]
+    fn load_check_file_returns_error_for_missing_file() {
+        let result = load_check_file(Path::new("/nonexistent/file.check.yaml"));
+        assert!(result.is_err());
+        let err_msg = format!("{:#}", result.unwrap_err());
+        assert!(err_msg.contains("reading"), "error should mention reading: {err_msg}");
+    }
+
+    #[test]
+    fn load_check_file_parses_all_fields_correctly() {
+        let dir = TempDir::new().unwrap();
+        let check_yaml = r#"
+id: FULL-1
+name: Full Field Check
+description: Tests all fields are parsed
+author: qa-engineer
+version: "2.0"
+source: github
+type: active
+safety: observable
+environment: staging
+severity: high
+profile: L2
+tags:
+  - auth
+  - mfa
+references:
+  cis: "1.1"
+  nist: ["IA-2(1)", "IA-2(2)"]
+  soc2: CC6.1
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    required: true
+inputs:
+  org:
+    description: GitHub org
+    env: GITHUB_ORG
+    required: true
+pre_flight:
+  - "Ensure token has admin:org scope"
+steps:
+  - id: step1
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+    extract:
+      mfa: "$.two_factor_requirement_enabled"
+assertions:
+  - id: assert1
+    expr: "mfa == true"
+    severity: critical
+    title: MFA Check
+    pass_message: MFA enabled
+    fail_message: MFA disabled
+remediation:
+  description: Enable MFA
+  steps:
+    - "Go to org settings"
+    - "Enable 2FA requirement"
+"#;
+        let path = dir.path().join("full.check.yaml");
+        fs::write(&path, check_yaml).unwrap();
+
+        let def = load_check_file(&path).unwrap();
+        assert_eq!(def.id, "FULL-1");
+        assert_eq!(def.name, "Full Field Check");
+        assert_eq!(def.description, "Tests all fields are parsed");
+        assert_eq!(def.author, "qa-engineer");
+        assert_eq!(def.version, "2.0");
+        assert_eq!(def.source, "github");
+        assert_eq!(def.check_type, CheckType::Active);
+        assert_eq!(def.safety, "observable");
+        assert_eq!(def.environment, "staging");
+        assert_eq!(def.severity, "high");
+        assert_eq!(def.profile, "L2");
+        assert_eq!(def.tags, vec!["auth", "mfa"]);
+        assert_eq!(def.references.cis.as_vec(), vec!["1.1"]);
+        assert_eq!(def.references.nist.as_vec(), vec!["IA-2(1)", "IA-2(2)"]);
+        assert!(def.credentials.contains_key("GITHUB_TOKEN"));
+        assert!(def.credentials["GITHUB_TOKEN"].required);
+        assert!(def.inputs.contains_key("org"));
+        assert!(def.inputs["org"].required);
+        assert_eq!(def.pre_flight.len(), 1);
+        assert_eq!(def.steps.len(), 1);
+        assert_eq!(def.steps[0].id, "step1");
+        assert_eq!(def.steps[0].request.method, "GET");
+        assert!(def.steps[0].extract.contains_key("mfa"));
+        assert_eq!(def.assertions.len(), 1);
+        assert_eq!(def.assertions[0].severity, "critical");
+        let rem = def.remediation.as_ref().unwrap();
+        assert_eq!(rem.steps.len(), 2);
+    }
+
+    #[test]
+    fn load_check_file_missing_required_id_fails() {
+        let dir = TempDir::new().unwrap();
+        let yaml = r#"
+name: No ID Check
+source: github
+steps: []
+assertions: []
+"#;
+        let path = dir.path().join("no-id.check.yaml");
+        fs::write(&path, yaml).unwrap();
+        assert!(load_check_file(&path).is_err());
+    }
+
+    #[test]
+    fn load_check_file_missing_required_name_fails() {
+        let dir = TempDir::new().unwrap();
+        let yaml = r#"
+id: NO-NAME
+source: github
+steps: []
+assertions: []
+"#;
+        let path = dir.path().join("no-name.check.yaml");
+        fs::write(&path, yaml).unwrap();
+        assert!(load_check_file(&path).is_err());
+    }
+
+    #[test]
+    fn load_check_file_wrong_type_for_steps_fails() {
+        let dir = TempDir::new().unwrap();
+        let yaml = r#"
+id: BAD-STEPS
+name: Bad Steps Type
+source: github
+steps: "not a list"
+assertions: []
+"#;
+        let path = dir.path().join("bad-steps.check.yaml");
+        fs::write(&path, yaml).unwrap();
+        assert!(load_check_file(&path).is_err());
+    }
+
+    #[test]
+    fn load_check_file_wrong_type_for_assertions_fails() {
+        let dir = TempDir::new().unwrap();
+        let yaml = r#"
+id: BAD-ASSERT
+name: Bad Assertions Type
+source: github
+steps: []
+assertions: "not a list"
+"#;
+        let path = dir.path().join("bad-assert.check.yaml");
+        fs::write(&path, yaml).unwrap();
+        assert!(load_check_file(&path).is_err());
+    }
+
+    #[test]
+    fn load_check_file_extra_unknown_fields_are_tolerated() {
+        let dir = TempDir::new().unwrap();
+        // serde_yaml with default config ignores unknown fields on structs
+        // that don't have #[serde(deny_unknown_fields)]
+        let yaml = r#"
+id: EXTRA-1
+name: Extra Fields
+source: github
+totally_unknown_field: some_value
+another_extra: 42
+steps: []
+assertions: []
+"#;
+        let path = dir.path().join("extra.check.yaml");
+        fs::write(&path, yaml).unwrap();
+        // Should succeed because CheckDefinition doesn't deny unknown fields
+        let result = load_check_file(&path);
+        assert!(result.is_ok(), "extra fields should be tolerated: {result:?}");
+    }
+
+    // ── load_definitions_from_dir tests ─────────────────────────────────────
+
+    #[test]
+    fn load_definitions_from_dir_returns_parsed_defs() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "a.check.yaml", PASSIVE_YAML);
+        write_check(dir.path(), "b.check.yaml", ACTIVE_YAML);
+
+        let defs = load_definitions_from_dir(dir.path());
+        assert_eq!(defs.len(), 2);
+        let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
+        assert!(ids.contains(&"TST-PASSIVE"));
+        assert!(ids.contains(&"TST-ACTIVE"));
+    }
+
+    #[test]
+    fn load_definitions_from_dir_nonexistent_returns_empty() {
+        let defs = load_definitions_from_dir(Path::new("/nonexistent/path"));
+        assert!(defs.is_empty());
+    }
+
+    #[test]
+    fn load_definitions_from_dir_skips_invalid_files() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "good.check.yaml", PASSIVE_YAML);
+        write_check(dir.path(), "bad.check.yaml", INVALID_YAML);
+
+        let defs = load_definitions_from_dir(dir.path());
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "TST-PASSIVE");
+    }
+
+    // ── register_check tests ────────────────────────────────────────────────
+
+    #[test]
+    fn register_check_passive_goes_to_observer_registry() {
+        let def: CheckDefinition = serde_yaml::from_str(PASSIVE_YAML).unwrap();
+        let registry = Registry::new();
+        register_check(&registry, def);
+        assert!(registry.get_observer("TST-PASSIVE").is_ok());
+        assert!(registry.get_tester("TST-PASSIVE").is_err());
+    }
+
+    #[test]
+    fn register_check_active_goes_to_tester_registry() {
+        let def: CheckDefinition = serde_yaml::from_str(ACTIVE_YAML).unwrap();
+        let registry = Registry::new();
+        register_check(&registry, def);
+        assert!(registry.get_tester("TST-ACTIVE").is_ok());
+        assert!(registry.get_observer("TST-ACTIVE").is_err());
+    }
+
+    // ── Edge cases ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn empty_directory_returns_zero() {
+        let dir = TempDir::new().unwrap();
+        let registry = Registry::new();
+        let count = load_checks_from_dir(&registry, dir.path()).unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn multiple_checks_in_one_directory() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "a.check.yaml", PASSIVE_YAML);
+        write_check(
+            dir.path(),
+            "b.check.yaml",
+            r#"
+id: TST-B
+name: Second Check
+source: github
+steps: []
+assertions: []
+"#,
+        );
+
+        let registry = Registry::new();
+        let count = load_checks_from_dir(&registry, dir.path()).unwrap();
+        assert_eq!(count, 2);
+        assert!(registry.get_observer("TST-PASSIVE").is_ok());
+        assert!(registry.get_observer("TST-B").is_ok());
+    }
+
+    #[test]
+    fn deeply_nested_subdirectories() {
+        let dir = TempDir::new().unwrap();
+        let deep = dir.path().join("a").join("b").join("c");
+        fs::create_dir_all(&deep).unwrap();
+        write_check(&deep, "deep.check.yaml", PASSIVE_YAML);
+
+        let registry = Registry::new();
+        let count = load_checks_from_dir(&registry, dir.path()).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn is_check_file_rejects_plain_yaml() {
+        assert!(!is_check_file(Path::new("something.yaml")));
+        assert!(!is_check_file(Path::new("something.yml")));
+        assert!(!is_check_file(Path::new("check.yaml")));
+    }
+
+    #[test]
+    fn is_check_file_accepts_both_extensions() {
+        assert!(is_check_file(Path::new("gh-1.01.check.yaml")));
+        assert!(is_check_file(Path::new("gh-1.01.check.yml")));
+    }
+
+    #[test]
+    fn load_check_file_empty_file_fails() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("empty.check.yaml");
+        fs::write(&path, "").unwrap();
+        assert!(load_check_file(&path).is_err());
+    }
+
+    #[test]
+    fn all_bundled_checks_pass_json_schema_validation() {
+        let checks_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("checks");
+        if !checks_dir.exists() {
+            return;
+        }
+        let schema_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("schemas/check.schema.json");
+        let schema_str = fs::read_to_string(&schema_path)
+            .expect("failed to read check.schema.json");
+        let schema_value: serde_json::Value = serde_json::from_str(&schema_str)
+            .expect("failed to parse check.schema.json");
+        let validator = jsonschema::validator_for(&schema_value)
+            .expect("failed to compile JSON Schema");
+
+        let mut failures = Vec::new();
+        for path in walk_check_files(&checks_dir) {
+            let content = fs::read_to_string(&path).unwrap();
+            let yaml_value: serde_yaml::Value = match serde_yaml::from_str(&content) {
+                Ok(v) => v,
+                Err(e) => {
+                    failures.push(format!("{}: YAML parse error: {}", path.display(), e));
+                    continue;
+                }
+            };
+            // Convert YAML value to JSON value for schema validation
+            let json_str = serde_json::to_string(&yaml_value).unwrap();
+            let json_value: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+            let errors: Vec<_> = validator.iter_errors(&json_value).collect();
+            if !errors.is_empty() {
+                for e in &errors {
+                    failures.push(format!("{}: {}", path.display(), e));
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "bundled check files failed JSON Schema validation:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    #[test]
+    fn defaults_applied_when_optional_fields_omitted() {
+        let dir = TempDir::new().unwrap();
+        let yaml = r#"
+id: MIN-1
+name: Minimal
+steps: []
+assertions: []
+"#;
+        let path = dir.path().join("min.check.yaml");
+        fs::write(&path, yaml).unwrap();
+        let def = load_check_file(&path).unwrap();
+
+        assert_eq!(def.check_type, CheckType::Passive); // default
+        assert_eq!(def.version, "1.0"); // default_version()
+        assert!(def.description.is_empty());
+        assert!(def.author.is_empty());
+        assert!(def.source.is_empty());
+        assert!(def.safety.is_empty());
+        assert!(def.tags.is_empty());
+        assert!(def.credentials.is_empty());
+        assert!(def.inputs.is_empty());
+        assert!(def.pre_flight.is_empty());
+        assert!(def.remediation.is_none());
+    }
 }

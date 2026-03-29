@@ -18,13 +18,43 @@ jobs:
   # Test
   # -------------------------------------------------------------------------
   test:
-    name: Test
+    name: Test (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain: [stable, nightly]
+      fail-fast: false
+    continue-on-error: ${{ matrix.toolchain == 'nightly' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.toolchain }}
+      - name: Unit tests
+        run: cargo test --lib --bins
+      - name: Integration tests
+        run: cargo test --test integration
+      - name: E2E tests
+        if: matrix.toolchain == 'stable'
+        run: cargo test --test e2e
+
+  # -------------------------------------------------------------------------
+  # Security audit (cargo-audit)
+  # -------------------------------------------------------------------------
+  audit:
+    name: Security Audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-features
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      - name: Run audit
+        run: cargo audit
 
   # -------------------------------------------------------------------------
   # Lint (clippy + fmt)

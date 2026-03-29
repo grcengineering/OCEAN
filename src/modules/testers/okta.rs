@@ -97,12 +97,51 @@ impl Tester for MfaBypassTester {
         let domain = config
             .get("OKTA_DOMAIN")
             .ok_or_else(|| anyhow!("OKTA_DOMAIN is required"))?;
-        let test_user = config
-            .get("OKTA_TEST_USER")
-            .ok_or_else(|| anyhow!("OKTA_TEST_USER is required for MFA bypass testing"))?;
-        let test_password = config
-            .get("OKTA_TEST_PASSWORD")
-            .ok_or_else(|| anyhow!("OKTA_TEST_PASSWORD is required for MFA bypass testing"))?;
+
+        // Graceful degradation: emit Unknown evidence when test credentials are absent
+        // rather than hard-erroring. Operators must provision OKTA_TEST_USER + OKTA_TEST_PASSWORD
+        // in the Okta dev tenant before this tester can produce a meaningful result.
+        if !config.contains_key("OKTA_TEST_USER") || !config.contains_key("OKTA_TEST_PASSWORD") {
+            let now = Utc::now();
+            return Ok(vec![Evidence {
+                id: Uuid::new_v4(),
+                control_id: "mfa.enforcement".to_string(),
+                class_uid: 1001,
+                category_uid: 1,
+                activity_id: 2,
+                time: now,
+                confidence_level: ConfidenceLevel::ActiveVerification,
+                metadata: Metadata {
+                    module: ModuleInfo {
+                        name: "okta.mfa_bypass".to_string(),
+                        version: "0.1.0".to_string(),
+                        module_type: "tester".to_string(),
+                    },
+                    source: SourceInfo {
+                        system: "okta".to_string(),
+                        api_version: "v1".to_string(),
+                        endpoint: "/api/v1/authn".to_string(),
+                    },
+                    original_time: None,
+                    processed_time: now,
+                    safety_classification: Some("safe".to_string()),
+                },
+                observables: vec![],
+                status_id: StatusId::Unknown,
+                status: "skipped: OKTA_TEST_USER and OKTA_TEST_PASSWORD must be configured to run this test".to_string(),
+                raw_data: json!({"skipped": true, "reason": "OKTA_TEST_USER not configured"}),
+                findings: vec![Finding {
+                    title: "Test Skipped — Credentials Not Configured".to_string(),
+                    description: "Set OKTA_TEST_USER and OKTA_TEST_PASSWORD to an active Okta user enrolled in MFA to enable this test.".to_string(),
+                    severity_id: 0,
+                }],
+                test_transcript: None,
+                enrichments: vec![],
+            }]);
+        }
+
+        let test_user = config.get("OKTA_TEST_USER").unwrap();
+        let test_password = config.get("OKTA_TEST_PASSWORD").unwrap();
 
         // OKTA_BASE_URL overrides the default https://{domain} (used in tests).
         let base_url = config
@@ -424,25 +463,27 @@ mod tests {
     }
 
     #[test]
-    fn missing_test_user_errors() {
+    fn missing_test_user_returns_unknown() {
         let config = HashMap::from([
             ("OKTA_API_TOKEN".to_string(), "tok".to_string()),
             ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
             ("OKTA_TEST_PASSWORD".to_string(), "p".to_string()),
         ]);
-        let err = MfaBypassTester.test(&config).unwrap_err();
-        assert!(err.to_string().contains("OKTA_TEST_USER"));
+        let ev = &MfaBypassTester.test(&config).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Unknown);
+        assert!(ev.status.contains("skipped"));
     }
 
     #[test]
-    fn missing_test_password_errors() {
+    fn missing_test_password_returns_unknown() {
         let config = HashMap::from([
             ("OKTA_API_TOKEN".to_string(), "tok".to_string()),
             ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
             ("OKTA_TEST_USER".to_string(), "u".to_string()),
         ]);
-        let err = MfaBypassTester.test(&config).unwrap_err();
-        assert!(err.to_string().contains("OKTA_TEST_PASSWORD"));
+        let ev = &MfaBypassTester.test(&config).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Unknown);
+        assert!(ev.status.contains("skipped"));
     }
 
     // ── HTTP integration ─────────────────────────────────────────────────────

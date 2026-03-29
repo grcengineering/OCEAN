@@ -339,3 +339,59 @@ impl Authorizer for DenyAuthorizer {
         Ok(false)
     }
 }
+
+// ---------------------------------------------------------------------------
+// MockHTTPServer
+// ---------------------------------------------------------------------------
+
+/// A reusable mock HTTP server for unit/integration tests.
+///
+/// Spins up a real TCP listener on an ephemeral port and serves a queue of
+/// pre-programmed `(status_code, body)` responses in order.
+pub struct MockHTTPServer {
+    pub base_url: String,
+}
+
+impl MockHTTPServer {
+    /// Create a server that will serve each `(status, body)` pair in order.
+    pub fn new(responses: Vec<(u16, String)>) -> Self {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::{Arc, Mutex};
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock HTTP server");
+        let addr = listener.local_addr().expect("local addr");
+        let queue = Arc::new(Mutex::new(responses));
+
+        std::thread::spawn(move || {
+            loop {
+                let resp = {
+                    let mut q = queue.lock().unwrap();
+                    if q.is_empty() {
+                        break;
+                    }
+                    q.remove(0)
+                };
+                if let Ok((mut stream, _)) = listener.accept() {
+                    let mut buf = [0u8; 8192];
+                    let _ = stream.read(&mut buf);
+                    let (status, body) = resp;
+                    let raw = format!(
+                        "HTTP/1.1 {status} OK\r\nContent-Length: {len}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}",
+                        len = body.len()
+                    );
+                    let _ = stream.write_all(raw.as_bytes());
+                }
+            }
+        });
+
+        Self {
+            base_url: format!("http://127.0.0.1:{}", addr.port()),
+        }
+    }
+
+    /// Returns the base URL for injecting into module configs.
+    pub fn url(&self) -> &str {
+        &self.base_url
+    }
+}

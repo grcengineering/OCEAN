@@ -158,6 +158,10 @@
           "type": "string",
           "description": "Environment variable name to read this input from."
         },
+        "default": {
+          "type": "string",
+          "description": "Default value when not provided via env var."
+        },
         "required": {
           "type": "boolean",
           "default": false
@@ -189,6 +193,10 @@
           "type": "object",
           "description": "Per HTTP status code error handling (e.g., '422': 'continue').",
           "additionalProperties": { "type": "string" }
+        },
+        "note": {
+          "type": "string",
+          "description": "Documentation note for this step."
         }
       }
     },
@@ -261,6 +269,11 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "manual": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Manual remediation steps for checks that cannot be automated."
+        },
         "api": {
           "type": "object",
           "required": ["method", "url"],
@@ -268,6 +281,10 @@
           "properties": {
             "method": { "type": "string" },
             "url": { "type": "string" },
+            "headers": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
             "body": {}
           }
         },

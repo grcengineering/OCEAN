@@ -161,6 +161,9 @@ pub struct InputDef {
     /// Environment variable name to read this input from.
     #[serde(default)]
     pub env: String,
+    /// Default value when not provided via env var.
+    #[serde(default)]
+    pub default: String,
     #[serde(default)]
     pub required: bool,
 }
@@ -188,6 +191,10 @@ pub struct CheckStep {
     /// Per-status-code error handling (e.g., `422: "continue"`).
     #[serde(default)]
     pub on_error: HashMap<String, String>,
+
+    /// Documentation note for this step.
+    #[serde(default)]
+    pub note: String,
 }
 
 fn default_action() -> String {
@@ -244,6 +251,9 @@ pub struct RemediationDef {
     pub description: String,
     #[serde(default)]
     pub steps: Vec<String>,
+    /// Manual remediation steps for checks that cannot be automated.
+    #[serde(default)]
+    pub manual: Vec<String>,
     #[serde(default)]
     pub api: Option<RemediationApi>,
     #[serde(default)]
@@ -256,6 +266,8 @@ pub struct RemediationDef {
 pub struct RemediationApi {
     pub method: String,
     pub url: String,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
     #[serde(default)]
     pub body: Option<serde_json::Value>,
 }
@@ -390,5 +402,613 @@ assertions: []
 "#;
         let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(def.check_type, CheckType::Active);
+    }
+
+    // ── Serialization round-trip ─────────────────────────────────────────────
+
+    #[test]
+    fn serde_round_trip_minimal() {
+        let def: CheckDefinition = serde_yaml::from_str(MINIMAL_CHECK).unwrap();
+        let yaml_out = serde_yaml::to_string(&def).unwrap();
+        let def2: CheckDefinition = serde_yaml::from_str(&yaml_out).unwrap();
+        assert_eq!(def.id, def2.id);
+        assert_eq!(def.name, def2.name);
+        assert_eq!(def.check_type, def2.check_type);
+    }
+
+    #[test]
+    fn serde_round_trip_full() {
+        let def: CheckDefinition = serde_yaml::from_str(PASSIVE_CHECK).unwrap();
+        let yaml_out = serde_yaml::to_string(&def).unwrap();
+        let def2: CheckDefinition = serde_yaml::from_str(&yaml_out).unwrap();
+        assert_eq!(def.id, def2.id);
+        assert_eq!(def.profile, def2.profile);
+        assert_eq!(def.references.cis.as_vec(), def2.references.cis.as_vec());
+        assert_eq!(def.references.nist.as_vec(), def2.references.nist.as_vec());
+        assert_eq!(def.steps.len(), def2.steps.len());
+        assert_eq!(def.assertions.len(), def2.assertions.len());
+    }
+
+    // ── Default values ───────────────────────────────────────────────────────
+
+    #[test]
+    fn default_version_is_1_0() {
+        let def: CheckDefinition = serde_yaml::from_str(MINIMAL_CHECK).unwrap();
+        assert_eq!(def.version, "1.0");
+    }
+
+    #[test]
+    fn default_check_type_is_passive() {
+        let def: CheckDefinition = serde_yaml::from_str(MINIMAL_CHECK).unwrap();
+        assert_eq!(def.check_type, CheckType::Passive);
+    }
+
+    #[test]
+    fn defaults_for_optional_string_fields() {
+        let def: CheckDefinition = serde_yaml::from_str(MINIMAL_CHECK).unwrap();
+        assert!(def.description.is_empty());
+        assert!(def.author.is_empty());
+        assert!(def.safety.is_empty());
+        assert!(def.environment.is_empty());
+        assert!(def.severity.is_empty());
+        assert!(def.profile.is_empty());
+        assert!(def.implementation.is_empty());
+        assert!(def.native_module.is_empty());
+    }
+
+    #[test]
+    fn defaults_for_optional_collections() {
+        let def: CheckDefinition = serde_yaml::from_str(MINIMAL_CHECK).unwrap();
+        assert!(def.tags.is_empty());
+        assert!(def.credentials.is_empty());
+        assert!(def.inputs.is_empty());
+        assert!(def.pre_flight.is_empty());
+        assert!(def.remediation.is_none());
+    }
+
+    // ── Credential definitions ───────────────────────────────────────────────
+
+    #[test]
+    fn credential_def_parsed() {
+        let def: CheckDefinition = serde_yaml::from_str(PASSIVE_CHECK).unwrap();
+        assert!(def.credentials.contains_key("GITHUB_TOKEN"));
+        let cred = &def.credentials["GITHUB_TOKEN"];
+        assert_eq!(cred.cred_type, "api_token");
+        assert!(cred.required);
+    }
+
+    #[test]
+    fn credential_with_scopes() {
+        let yaml = r#"
+id: CRED-1
+name: Cred Test
+steps: []
+assertions: []
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes:
+      - read:org
+      - admin:org
+    required: true
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let cred = &def.credentials["GITHUB_TOKEN"];
+        assert_eq!(cred.scopes, vec!["read:org", "admin:org"]);
+    }
+
+    #[test]
+    fn multiple_credentials() {
+        let yaml = r#"
+id: MULTI-CRED
+name: Multi Cred
+steps: []
+assertions: []
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    required: true
+  AWS_ACCESS_KEY:
+    type: env
+    required: false
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.credentials.len(), 2);
+        assert!(def.credentials["GITHUB_TOKEN"].required);
+        assert!(!def.credentials["AWS_ACCESS_KEY"].required);
+    }
+
+    // ── Input definitions ────────────────────────────────────────────────────
+
+    #[test]
+    fn input_def_parsed() {
+        let def: CheckDefinition = serde_yaml::from_str(PASSIVE_CHECK).unwrap();
+        assert!(def.inputs.contains_key("org"));
+        let input = &def.inputs["org"];
+        assert_eq!(input.description, "GitHub organization name");
+        assert_eq!(input.env, "GITHUB_ORG");
+        assert!(input.required);
+    }
+
+    #[test]
+    fn input_with_default_value() {
+        let yaml = r#"
+id: INPUT-DEFAULT
+name: Input Default
+steps: []
+assertions: []
+inputs:
+  branch:
+    description: Branch name
+    env: BRANCH
+    default: main
+    required: false
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let input = &def.inputs["branch"];
+        assert_eq!(input.default, "main");
+        assert!(!input.required);
+    }
+
+    // ── Steps ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn step_default_action_is_api_call() {
+        let yaml = r#"
+id: STEP-DEF
+name: Step Default
+steps:
+  - id: s1
+    request:
+      method: GET
+      url: "https://example.com"
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.steps[0].action, "api_call");
+    }
+
+    #[test]
+    fn step_with_when_guard() {
+        let yaml = r#"
+id: WHEN-1
+name: When Guard
+steps:
+  - id: conditional
+    when: "status_code == 200"
+    request:
+      method: POST
+      url: "https://example.com/cleanup"
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.steps[0].when, "status_code == 200");
+    }
+
+    #[test]
+    fn step_with_on_error() {
+        let yaml = r#"
+id: ERR-1
+name: Error Handler
+steps:
+  - id: create
+    request:
+      method: POST
+      url: "https://example.com"
+    on_error:
+      "422": continue
+      "500": abort
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.steps[0].on_error["422"], "continue");
+        assert_eq!(def.steps[0].on_error["500"], "abort");
+    }
+
+    #[test]
+    fn step_with_body() {
+        let yaml = r#"
+id: BODY-1
+name: Body Test
+steps:
+  - id: post_data
+    request:
+      method: POST
+      url: "https://example.com"
+      body:
+        key: value
+        nested:
+          inner: true
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let body = def.steps[0].request.body.as_ref().unwrap();
+        assert_eq!(body["key"], "value");
+        assert_eq!(body["nested"]["inner"], true);
+    }
+
+    #[test]
+    fn step_with_paginate() {
+        let yaml = r#"
+id: PAGE-1
+name: Paginate Test
+steps:
+  - id: list
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/acme/repos"
+      paginate: true
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert!(def.steps[0].request.paginate);
+    }
+
+    #[test]
+    fn step_note_field() {
+        let yaml = r#"
+id: NOTE-1
+name: Note Test
+steps:
+  - id: s1
+    note: "This step fetches org settings"
+    request:
+      method: GET
+      url: "https://example.com"
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.steps[0].note, "This step fetches org settings");
+    }
+
+    // ── Assertions ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn assertion_default_severity_is_medium() {
+        let yaml = r#"
+id: ASEV-1
+name: Default Severity
+steps: []
+assertions:
+  - id: a1
+    expr: "x == true"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.assertions[0].severity, "medium");
+    }
+
+    #[test]
+    fn assertion_with_finding_def() {
+        let yaml = r#"
+id: FIND-1
+name: Finding Test
+steps: []
+assertions:
+  - id: a1
+    expr: "x == true"
+    finding:
+      description: "Detailed finding description"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let finding = def.assertions[0].finding.as_ref().unwrap();
+        assert_eq!(finding.description, "Detailed finding description");
+    }
+
+    #[test]
+    fn multiple_assertions() {
+        let yaml = r#"
+id: MULTI-A
+name: Multi Assert
+steps: []
+assertions:
+  - id: a1
+    expr: "x == true"
+    severity: critical
+  - id: a2
+    expr: "y > 0"
+    severity: high
+  - id: a3
+    expr: "z != null"
+    severity: low
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.assertions.len(), 3);
+        assert_eq!(def.assertions[0].id, "a1");
+        assert_eq!(def.assertions[1].id, "a2");
+        assert_eq!(def.assertions[2].id, "a3");
+    }
+
+    // ── Remediation blocks ───────────────────────────────────────────────────
+
+    #[test]
+    fn remediation_with_api() {
+        let yaml = r#"
+id: REM-API
+name: Remediation API
+steps: []
+assertions: []
+remediation:
+  description: "Enable MFA"
+  steps:
+    - "Navigate to settings"
+  api:
+    method: PATCH
+    url: "https://api.github.com/orgs/{{org}}"
+    headers:
+      Authorization: "Bearer {{GITHUB_TOKEN}}"
+    body:
+      two_factor_requirement_enabled: true
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let rem = def.remediation.as_ref().unwrap();
+        assert_eq!(rem.description, "Enable MFA");
+        assert_eq!(rem.steps.len(), 1);
+        let api = rem.api.as_ref().unwrap();
+        assert_eq!(api.method, "PATCH");
+        assert!(api.url.contains("orgs"));
+        assert!(api.headers.contains_key("Authorization"));
+        assert!(api.body.is_some());
+    }
+
+    #[test]
+    fn remediation_with_cli() {
+        let yaml = r#"
+id: REM-CLI
+name: Remediation CLI
+steps: []
+assertions: []
+remediation:
+  description: "Fix via CLI"
+  cli:
+    command: "gh api orgs/{{org}} -X PATCH -f two_factor_requirement_enabled=true"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let cli = def.remediation.as_ref().unwrap().cli.as_ref().unwrap();
+        assert!(cli.command.contains("gh api"));
+    }
+
+    #[test]
+    fn remediation_with_terraform() {
+        let yaml = r#"
+id: REM-TF
+name: Remediation Terraform
+steps: []
+assertions: []
+remediation:
+  description: "Fix via Terraform"
+  terraform:
+    resources:
+      - type: github_organization_settings
+        name: org_settings
+        attributes:
+          two_factor_requirement_enabled: true
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let tf = def.remediation.as_ref().unwrap().terraform.as_ref().unwrap();
+        assert_eq!(tf.resources.len(), 1);
+    }
+
+    #[test]
+    fn remediation_with_manual_steps() {
+        let yaml = r#"
+id: REM-MANUAL
+name: Manual Remediation
+steps: []
+assertions: []
+remediation:
+  description: "Manual fix"
+  manual:
+    - "Go to admin console"
+    - "Enable MFA requirement"
+    - "Notify all users"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let rem = def.remediation.as_ref().unwrap();
+        assert_eq!(rem.manual.len(), 3);
+    }
+
+    // ── References edge cases ────────────────────────────────────────────────
+
+    #[test]
+    fn references_all_frameworks() {
+        let yaml = r#"
+id: REF-ALL
+name: All Refs
+steps: []
+assertions: []
+references:
+  cis: "1.1"
+  nist: ["IA-2(1)", "IA-2(2)"]
+  soc2: CC6.1
+  iso27001: "A.9.4.2"
+  pci_dss: ["8.3", "8.3.1"]
+  disa_stig: "V-123456"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.references.cis.as_vec(), vec!["1.1"]);
+        assert_eq!(def.references.nist.as_vec(), vec!["IA-2(1)", "IA-2(2)"]);
+        assert_eq!(def.references.soc2.as_vec(), vec!["CC6.1"]);
+        assert_eq!(def.references.iso27001.as_vec(), vec!["A.9.4.2"]);
+        assert_eq!(def.references.pci_dss.as_vec(), vec!["8.3", "8.3.1"]);
+        assert_eq!(def.references.disa_stig.as_vec(), vec!["V-123456"]);
+    }
+
+    #[test]
+    fn references_empty_default() {
+        let def: CheckDefinition = serde_yaml::from_str(MINIMAL_CHECK).unwrap();
+        assert!(def.references.cis.as_vec().is_empty());
+        assert!(def.references.nist.as_vec().is_empty());
+        assert!(def.references.soc2.as_vec().is_empty());
+        assert!(def.references.iso27001.as_vec().is_empty());
+        assert!(def.references.pci_dss.as_vec().is_empty());
+        assert!(def.references.disa_stig.as_vec().is_empty());
+    }
+
+    // ── Tags ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn tags_parsed() {
+        let yaml = r#"
+id: TAG-1
+name: Tags Test
+steps: []
+assertions: []
+tags:
+  - auth
+  - mfa
+  - github
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.tags, vec!["auth", "mfa", "github"]);
+    }
+
+    // ── Metadata fields ──────────────────────────────────────────────────────
+
+    #[test]
+    fn all_metadata_fields() {
+        let yaml = r#"
+id: META-1
+name: Metadata Test
+description: Full metadata check
+author: qa-bot
+version: "3.0"
+source: aws
+type: active
+safety: reversible
+environment: production
+severity: critical
+profile: L3
+steps: []
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.id, "META-1");
+        assert_eq!(def.description, "Full metadata check");
+        assert_eq!(def.author, "qa-bot");
+        assert_eq!(def.version, "3.0");
+        assert_eq!(def.source, "aws");
+        assert_eq!(def.check_type, CheckType::Active);
+        assert_eq!(def.safety, "reversible");
+        assert_eq!(def.environment, "production");
+        assert_eq!(def.severity, "critical");
+        assert_eq!(def.profile, "L3");
+    }
+
+    // ── Native implementation ────────────────────────────────────────────────
+
+    #[test]
+    fn native_implementation_fields() {
+        let yaml = r#"
+id: NAT-1
+name: Native Module
+source: github
+implementation: native
+native_module: github_secret_push
+steps: []
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.implementation, "native");
+        assert_eq!(def.native_module, "github_secret_push");
+    }
+
+    // ── Pre-flight ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn pre_flight_checks_parsed() {
+        let yaml = r#"
+id: PF-1
+name: Pre-flight
+type: active
+steps: []
+assertions: []
+pre_flight:
+  - "Ensure admin:org scope on token"
+  - "Verify org membership"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.pre_flight.len(), 2);
+        assert!(def.pre_flight[0].contains("admin:org"));
+    }
+
+    // ── CheckType equality ───────────────────────────────────────────────────
+
+    #[test]
+    fn check_type_equality() {
+        assert_eq!(CheckType::Passive, CheckType::Passive);
+        assert_eq!(CheckType::Active, CheckType::Active);
+        assert_ne!(CheckType::Passive, CheckType::Active);
+    }
+
+    // ── StringOrVec PartialEq via as_vec ─────────────────────────────────────
+
+    #[test]
+    fn string_or_vec_one_round_trip() {
+        let yaml = "cis: \"1.1\"";
+        let refs: CheckReferences = serde_yaml::from_str(&format!(
+            "{yaml}\nnist: []\nsoc2: []\niso27001: []\npci_dss: []\ndisa_stig: []"
+        ))
+        .unwrap();
+        let out = serde_yaml::to_string(&refs).unwrap();
+        let refs2: CheckReferences = serde_yaml::from_str(&out).unwrap();
+        assert_eq!(refs.cis.as_vec(), refs2.cis.as_vec());
+    }
+
+    // ── Multiple steps with extract ──────────────────────────────────────────
+
+    #[test]
+    fn multiple_steps_with_extracts() {
+        let yaml = r#"
+id: MULTI-STEP
+name: Multi Step
+steps:
+  - id: step1
+    request:
+      method: GET
+      url: "https://example.com/orgs/acme"
+    extract:
+      org_id: "$.id"
+      org_name: "$.login"
+  - id: step2
+    request:
+      method: GET
+      url: "https://example.com/orgs/acme/members"
+    extract:
+      member_count: "$length"
+assertions:
+  - id: has_members
+    expr: "member_count > 0"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(def.steps.len(), 2);
+        assert_eq!(def.steps[0].extract.len(), 2);
+        assert_eq!(def.steps[1].extract.len(), 1);
+        assert_eq!(def.steps[1].extract["member_count"], "$length");
+    }
+
+    // ── Request headers ──────────────────────────────────────────────────────
+
+    #[test]
+    fn request_headers_parsed() {
+        let yaml = r#"
+id: HDR-1
+name: Headers
+steps:
+  - id: s1
+    request:
+      method: GET
+      url: "https://example.com"
+      headers:
+        Authorization: "Bearer {{token}}"
+        Accept: "application/vnd.github+json"
+        X-Custom: "value"
+assertions: []
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let headers = &def.steps[0].request.headers;
+        assert_eq!(headers.len(), 3);
+        assert!(headers.contains_key("Authorization"));
+        assert!(headers.contains_key("Accept"));
+        assert!(headers.contains_key("X-Custom"));
     }
 }

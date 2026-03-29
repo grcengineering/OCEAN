@@ -4,7 +4,8 @@
 BINARY = ocean
 
 .PHONY: build release test test-verbose clippy fmt fmt-check \
-        coverage coverage-html clean install check
+        coverage coverage-html clean install check \
+        test-unit test-integration test-e2e test-all coverage-check
 
 # ---------------------------------------------------------------------------
 # cargo-llvm-cov: auto-detect LLVM tool paths on Windows MSVC
@@ -91,3 +92,24 @@ coverage-tarpaulin:
 
 clean:
 	cargo clean
+
+# ---------------------------------------------------------------------------
+# Targeted test tiers
+# ---------------------------------------------------------------------------
+
+test-unit:
+	cargo test --lib --bins
+
+test-integration:
+	cargo test --test integration
+
+test-e2e:
+	cargo build --release
+	cargo test --test e2e
+
+test-all: test-unit test-integration test-e2e
+
+coverage-check:
+	cargo llvm-cov \
+		--ignore-filename-regex '$(STUB_REGEX)' \
+		--fail-under-lines 80

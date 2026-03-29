@@ -723,4 +723,666 @@ mod tests {
         assert_eq!(resolved["name"], "acme");
         assert_eq!(resolved["nested"]["key"], "acme");
     }
+
+    // ── CEL assertion: != operator ───────────────────────────────────────────
+
+    #[test]
+    fn evaluate_assertion_not_equal() {
+        let assertion = CheckAssertion {
+            id: "ne_test".to_string(),
+            expr: "status != \"disabled\"".to_string(),
+            severity: "high".to_string(),
+            title: String::new(),
+            pass_message: String::new(),
+            fail_message: String::new(),
+            finding: None,
+        };
+        let mut extracted = HashMap::new();
+        extracted.insert("status".to_string(), serde_json::json!("enabled"));
+        assert!(evaluate_assertion(&assertion, &extracted).unwrap());
+
+        extracted.insert("status".to_string(), serde_json::json!("disabled"));
+        assert!(!evaluate_assertion(&assertion, &extracted).unwrap());
+    }
+
+    // ── CEL assertion: > operator ────────────────────────────────────────────
+
+    #[test]
+    fn evaluate_assertion_greater_than() {
+        let assertion = CheckAssertion {
+            id: "gt_test".to_string(),
+            expr: "member_count > 0".to_string(),
+            severity: "medium".to_string(),
+            title: String::new(),
+            pass_message: String::new(),
+            fail_message: String::new(),
+            finding: None,
+        };
+        let mut extracted = HashMap::new();
+        extracted.insert("member_count".to_string(), serde_json::json!(5));
+        assert!(evaluate_assertion(&assertion, &extracted).unwrap());
+
+        extracted.insert("member_count".to_string(), serde_json::json!(0));
+        assert!(!evaluate_assertion(&assertion, &extracted).unwrap());
+    }
+
+    // ── CEL assertion: compile error ─────────────────────────────────────────
+
+    #[test]
+    fn evaluate_assertion_cel_compile_error() {
+        let assertion = CheckAssertion {
+            id: "bad_cel".to_string(),
+            expr: "this is not valid CEL %%% !!!".to_string(),
+            severity: "medium".to_string(),
+            title: String::new(),
+            pass_message: String::new(),
+            fail_message: String::new(),
+            finding: None,
+        };
+        let extracted = HashMap::new();
+        let result = evaluate_assertion(&assertion, &extracted);
+        assert!(result.is_err());
+        let err = format!("{:#}", result.unwrap_err());
+        assert!(
+            err.contains("CEL compile error"),
+            "expected CEL compile error, got: {err}"
+        );
+    }
+
+    // ── resolve_headers ──────────────────────────────────────────────────────
+
+    #[test]
+    fn resolve_headers_substitutes_values() {
+        let mut headers = HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer {{token}}".to_string());
+        headers.insert("Accept".to_string(), "application/json".to_string());
+
+        let mut ctx = HashMap::new();
+        ctx.insert("token".to_string(), "ghp_secret".to_string());
+
+        let resolved = resolve_headers(&headers, &ctx);
+        assert_eq!(resolved["Authorization"], "Bearer ghp_secret");
+        assert_eq!(resolved["Accept"], "application/json");
+    }
+
+    // ── json_to_string ───────────────────────────────────────────────────────
+
+    #[test]
+    fn json_to_string_scalars() {
+        assert_eq!(
+            json_to_string(&serde_json::json!("hello")),
+            Some("hello".to_string())
+        );
+        assert_eq!(
+            json_to_string(&serde_json::json!(true)),
+            Some("true".to_string())
+        );
+        assert_eq!(
+            json_to_string(&serde_json::json!(42)),
+            Some("42".to_string())
+        );
+    }
+
+    #[test]
+    fn json_to_string_non_scalars_return_none() {
+        assert!(json_to_string(&serde_json::json!({"key": "val"})).is_none());
+        assert!(json_to_string(&serde_json::json!([1, 2, 3])).is_none());
+        assert!(json_to_string(&serde_json::json!(null)).is_none());
+    }
+
+    // ── jsonpath edge cases ──────────────────────────────────────────────────
+
+    #[test]
+    fn jsonpath_root_dollar_returns_whole_body() {
+        let body = serde_json::json!({"a": 1});
+        let val = jsonpath_extract("$", &body).unwrap();
+        assert_eq!(val, body);
+    }
+
+    #[test]
+    fn jsonpath_array_wildcard_no_field() {
+        let body = serde_json::json!([1, 2, 3]);
+        let val = jsonpath_extract("$[*]", &body).unwrap();
+        assert_eq!(val, serde_json::json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn jsonpath_status_code_returns_none() {
+        let body = serde_json::json!({"status": 200});
+        assert!(jsonpath_extract("$status_code", &body).is_none());
+    }
+
+    #[test]
+    fn jsonpath_length_non_array() {
+        let body = serde_json::json!({"key": "val"});
+        let val = jsonpath_extract("$length", &body).unwrap();
+        assert_eq!(val, serde_json::json!(1));
+    }
+
+    #[test]
+    fn jsonpath_nested_field_on_non_object_returns_none() {
+        let body = serde_json::json!("just a string");
+        assert!(jsonpath_extract("$.field", &body).is_none());
+    }
+
+    #[test]
+    fn jsonpath_array_wildcard_on_non_array_returns_none() {
+        let body = serde_json::json!({"not": "an_array"});
+        assert!(jsonpath_extract("$[*].field", &body).is_none());
+    }
+
+    #[test]
+    fn jsonpath_invalid_prefix_returns_none() {
+        let body = serde_json::json!({"a": 1});
+        assert!(jsonpath_extract("no_dollar_prefix", &body).is_none());
+    }
+
+    // ── resolve_json_template edge cases ─────────────────────────────────────
+
+    #[test]
+    fn resolve_json_template_array() {
+        let mut ctx = HashMap::new();
+        ctx.insert("x".to_string(), "y".to_string());
+        let body = serde_json::json!(["{{x}}", "plain"]);
+        let resolved = resolve_json_template(&body, &ctx);
+        assert_eq!(resolved, serde_json::json!(["y", "plain"]));
+    }
+
+    #[test]
+    fn resolve_json_template_non_string_passthrough() {
+        let ctx = HashMap::new();
+        let body = serde_json::json!(42);
+        let resolved = resolve_json_template(&body, &ctx);
+        assert_eq!(resolved, serde_json::json!(42));
+
+        let body_bool = serde_json::json!(true);
+        assert_eq!(resolve_json_template(&body_bool, &ctx), serde_json::json!(true));
+
+        let body_null = serde_json::json!(null);
+        assert_eq!(resolve_json_template(&body_null, &ctx), serde_json::json!(null));
+    }
+
+    // ── build_input_context ──────────────────────────────────────────────────
+
+    #[test]
+    fn build_input_context_resolves_env_alias() {
+        let def = make_minimal_def_with_inputs();
+        let mut config = HashMap::new();
+        config.insert("GITHUB_ORG".to_string(), "acme-corp".to_string());
+
+        let ctx = build_input_context(&def, &config);
+        // "org" should be resolved from GITHUB_ORG since config doesn't have "org" directly
+        assert_eq!(ctx.get("org").unwrap(), "acme-corp");
+    }
+
+    #[test]
+    fn build_input_context_direct_name_takes_precedence() {
+        let def = make_minimal_def_with_inputs();
+        let mut config = HashMap::new();
+        config.insert("org".to_string(), "direct-org".to_string());
+        config.insert("GITHUB_ORG".to_string(), "env-org".to_string());
+
+        let ctx = build_input_context(&def, &config);
+        // Direct name "org" should take precedence over env alias
+        assert_eq!(ctx.get("org").unwrap(), "direct-org");
+    }
+
+    #[test]
+    fn build_input_context_preserves_existing_config() {
+        let def = make_minimal_def_with_inputs();
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_test".to_string());
+
+        let ctx = build_input_context(&def, &config);
+        assert_eq!(ctx.get("GITHUB_TOKEN").unwrap(), "ghp_test");
+    }
+
+    // ── evaluate_all_assertions ──────────────────────────────────────────────
+
+    #[test]
+    fn evaluate_all_assertions_passing() {
+        let def = make_def_with_assertions();
+        let mut extracted = HashMap::new();
+        extracted.insert("mfa_enforced".to_string(), serde_json::json!(true));
+
+        let ctx = HashMap::new();
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].status_id, StatusId::Effective);
+        assert!(results[0].findings.is_empty());
+    }
+
+    #[test]
+    fn evaluate_all_assertions_failing_creates_finding() {
+        let def = make_def_with_assertions();
+        let mut extracted = HashMap::new();
+        extracted.insert("mfa_enforced".to_string(), serde_json::json!(false));
+
+        let ctx = HashMap::new();
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].status_id, StatusId::Ineffective);
+        assert_eq!(results[0].findings.len(), 1);
+        assert_eq!(results[0].findings[0].severity_id, 5); // critical
+    }
+
+    #[test]
+    fn evaluate_all_assertions_severity_mapping() {
+        // Test that all severity strings map to expected numeric IDs
+        let severity_map = vec![
+            ("critical", 5),
+            ("high", 4),
+            ("medium", 3),
+            ("low", 2),
+            ("info", 1),
+            ("unknown", 0),
+        ];
+
+        for (severity_str, expected_id) in severity_map {
+            let def = CheckDefinition {
+                id: "SEV-TEST".to_string(),
+                name: "Severity Test".to_string(),
+                assertions: vec![CheckAssertion {
+                    id: "sev_assert".to_string(),
+                    expr: "val == true".to_string(),
+                    severity: severity_str.to_string(),
+                    title: "Sev Test".to_string(),
+                    pass_message: String::new(),
+                    fail_message: String::new(),
+                    finding: None,
+                }],
+                ..default_check_def()
+            };
+
+            let mut extracted = HashMap::new();
+            extracted.insert("val".to_string(), serde_json::json!(false)); // force failure
+
+            let results = evaluate_all_assertions(
+                &def,
+                &extracted,
+                &HashMap::new(),
+                ConfidenceLevel::PassiveObservation,
+            );
+            assert_eq!(
+                results[0].findings[0].severity_id, expected_id,
+                "severity '{}' should map to {}",
+                severity_str, expected_id
+            );
+        }
+    }
+
+    #[test]
+    fn evaluate_all_assertions_active_verification_confidence() {
+        let def = make_def_with_assertions();
+        let mut extracted = HashMap::new();
+        extracted.insert("mfa_enforced".to_string(), serde_json::json!(true));
+
+        let results = evaluate_all_assertions(
+            &def,
+            &extracted,
+            &HashMap::new(),
+            ConfidenceLevel::ActiveVerification,
+        );
+
+        assert_eq!(
+            results[0].confidence_level,
+            ConfidenceLevel::ActiveVerification
+        );
+        assert_eq!(results[0].metadata.module.module_type, "tester");
+    }
+
+    #[test]
+    fn evaluate_all_assertions_passive_observation_confidence() {
+        let def = make_def_with_assertions();
+        let mut extracted = HashMap::new();
+        extracted.insert("mfa_enforced".to_string(), serde_json::json!(true));
+
+        let results = evaluate_all_assertions(
+            &def,
+            &extracted,
+            &HashMap::new(),
+            ConfidenceLevel::PassiveObservation,
+        );
+
+        assert_eq!(
+            results[0].confidence_level,
+            ConfidenceLevel::PassiveObservation
+        );
+        assert_eq!(results[0].metadata.module.module_type, "observer");
+    }
+
+    #[test]
+    fn evaluate_all_assertions_observables_populated() {
+        let def = make_def_with_assertions();
+        let mut extracted = HashMap::new();
+        extracted.insert("mfa_enforced".to_string(), serde_json::json!(true));
+        extracted.insert("org_name".to_string(), serde_json::json!("acme"));
+
+        let results = evaluate_all_assertions(
+            &def,
+            &extracted,
+            &HashMap::new(),
+            ConfidenceLevel::PassiveObservation,
+        );
+
+        // Should have observables for scalar values
+        assert!(results[0].observables.len() >= 2);
+    }
+
+    #[test]
+    fn evaluate_all_assertions_endpoint_from_org() {
+        let def = make_def_with_assertions();
+        let extracted = HashMap::new();
+        let mut ctx = HashMap::new();
+        ctx.insert("org".to_string(), "my-org".to_string());
+
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+
+        assert_eq!(results[0].metadata.source.endpoint, "my-org");
+    }
+
+    #[test]
+    fn evaluate_all_assertions_finding_description_from_finding_def() {
+        let def = CheckDefinition {
+            id: "FIND-TEST".to_string(),
+            name: "Finding Test".to_string(),
+            assertions: vec![CheckAssertion {
+                id: "with_finding".to_string(),
+                expr: "val == true".to_string(),
+                severity: "high".to_string(),
+                title: "Test Finding".to_string(),
+                pass_message: String::new(),
+                fail_message: "default fail message".to_string(),
+                finding: Some(super::super::definition::FindingDef {
+                    description: "custom finding description".to_string(),
+                }),
+            }],
+            ..default_check_def()
+        };
+
+        let mut extracted = HashMap::new();
+        extracted.insert("val".to_string(), serde_json::json!(false));
+
+        let results = evaluate_all_assertions(
+            &def,
+            &extracted,
+            &HashMap::new(),
+            ConfidenceLevel::PassiveObservation,
+        );
+
+        assert_eq!(
+            results[0].findings[0].description,
+            "custom finding description"
+        );
+    }
+
+    // ── YamlObserver Module trait ─────────────────────────────────────────────
+
+    #[test]
+    fn yaml_observer_module_trait() {
+        let def = CheckDefinition {
+            id: "OBS-1".to_string(),
+            name: "Test Observer".to_string(),
+            version: "2.0".to_string(),
+            source: "github".to_string(),
+            credentials: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "GITHUB_TOKEN".to_string(),
+                    super::super::definition::CredentialDef {
+                        cred_type: "api_token".to_string(),
+                        scopes: vec!["read:org".to_string()],
+                        required: true,
+                    },
+                );
+                m
+            },
+            ..default_check_def()
+        };
+
+        let observer = YamlObserver::new(def);
+        assert_eq!(observer.id(), "OBS-1");
+        assert_eq!(observer.name(), "Test Observer");
+        assert_eq!(observer.version(), "2.0");
+        assert_eq!(observer.source_system(), "github");
+        assert!(observer.evidence_types().is_empty());
+
+        let creds = observer.credential_requirements();
+        assert_eq!(creds.len(), 1);
+        assert_eq!(creds[0].name, "GITHUB_TOKEN");
+        assert_eq!(creds[0].cred_type, "api_token");
+        assert!(creds[0].required);
+    }
+
+    // ── YamlTester Module + Tester traits ────────────────────────────────────
+
+    #[test]
+    fn yaml_tester_module_trait() {
+        let def = CheckDefinition {
+            id: "TST-1".to_string(),
+            name: "Test Tester".to_string(),
+            version: "1.0".to_string(),
+            source: "github".to_string(),
+            check_type: super::super::definition::CheckType::Active,
+            safety: "observable".to_string(),
+            environment: "staging".to_string(),
+            pre_flight: vec!["Check token scopes".to_string()],
+            ..default_check_def()
+        };
+
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.id(), "TST-1");
+        assert_eq!(tester.name(), "Test Tester");
+        assert_eq!(tester.source_system(), "github");
+    }
+
+    #[test]
+    fn yaml_tester_safety_classification_observable() {
+        let def = CheckDefinition {
+            safety: "observable".to_string(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.safety_class(), SafetyClassification::Observable);
+    }
+
+    #[test]
+    fn yaml_tester_safety_classification_reversible() {
+        let def = CheckDefinition {
+            safety: "reversible".to_string(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.safety_class(), SafetyClassification::Reversible);
+    }
+
+    #[test]
+    fn yaml_tester_safety_classification_default() {
+        let def = CheckDefinition {
+            safety: String::new(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        // Default should be Observable
+        assert_eq!(tester.safety_class(), SafetyClassification::Observable);
+    }
+
+    #[test]
+    fn yaml_tester_environment_scope_production() {
+        let def = CheckDefinition {
+            environment: "production".to_string(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.environment_scope(), EnvironmentScope::Production);
+    }
+
+    #[test]
+    fn yaml_tester_environment_scope_prod_alias() {
+        let def = CheckDefinition {
+            environment: "prod".to_string(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.environment_scope(), EnvironmentScope::Production);
+    }
+
+    #[test]
+    fn yaml_tester_environment_scope_staging() {
+        let def = CheckDefinition {
+            environment: "staging".to_string(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.environment_scope(), EnvironmentScope::Staging);
+    }
+
+    #[test]
+    fn yaml_tester_environment_scope_default_isolated() {
+        let def = CheckDefinition {
+            environment: String::new(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.environment_scope(), EnvironmentScope::Isolated);
+    }
+
+    #[test]
+    fn yaml_tester_pre_flight_checks() {
+        let def = CheckDefinition {
+            pre_flight: vec![
+                "Ensure admin scope".to_string(),
+                "Verify org membership".to_string(),
+            ],
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        let checks = tester.pre_flight_checks();
+        assert_eq!(checks.len(), 2);
+        assert_eq!(checks[0], "Ensure admin scope");
+    }
+
+    #[test]
+    fn yaml_tester_cleanup_procedures() {
+        let def = default_check_def();
+        let tester = YamlTester::new(def);
+        let cleanup = tester.cleanup_procedures();
+        assert_eq!(cleanup.len(), 1);
+        assert!(cleanup[0].contains("Cleanup steps"));
+    }
+
+    // ── resolve_template edge cases ──────────────────────────────────────────
+
+    #[test]
+    fn resolve_template_empty_string() {
+        let ctx = HashMap::new();
+        assert_eq!(resolve_template("", &ctx), "");
+    }
+
+    #[test]
+    fn resolve_template_no_placeholders() {
+        let ctx = HashMap::new();
+        assert_eq!(
+            resolve_template("plain text here", &ctx),
+            "plain text here"
+        );
+    }
+
+    #[test]
+    fn resolve_template_adjacent_placeholders() {
+        let mut ctx = HashMap::new();
+        ctx.insert("a".to_string(), "X".to_string());
+        ctx.insert("b".to_string(), "Y".to_string());
+        assert_eq!(resolve_template("{{a}}{{b}}", &ctx), "XY");
+    }
+
+    // ── navigate_fields ──────────────────────────────────────────────────────
+
+    #[test]
+    fn jsonpath_deeply_nested() {
+        let body = serde_json::json!({"a": {"b": {"c": 42}}});
+        let val = jsonpath_extract("$.a.b.c", &body).unwrap();
+        assert_eq!(val, serde_json::json!(42));
+    }
+
+    #[test]
+    fn jsonpath_array_wildcard_nested_field() {
+        let body = serde_json::json!([
+            {"user": {"name": "alice"}},
+            {"user": {"name": "bob"}}
+        ]);
+        let val = jsonpath_extract("$[*].user.name", &body).unwrap();
+        assert_eq!(
+            val,
+            serde_json::json!(["alice", "bob"])
+        );
+    }
+
+    // ── Helper functions ─────────────────────────────────────────────────────
+
+    fn default_check_def() -> CheckDefinition {
+        CheckDefinition {
+            id: "TEST-1".to_string(),
+            name: "Test Check".to_string(),
+            description: String::new(),
+            author: String::new(),
+            version: "1.0".to_string(),
+            source: "github".to_string(),
+            check_type: super::super::definition::CheckType::Passive,
+            safety: String::new(),
+            environment: String::new(),
+            severity: String::new(),
+            profile: String::new(),
+            tags: vec![],
+            references: super::super::definition::CheckReferences::default(),
+            credentials: HashMap::new(),
+            inputs: HashMap::new(),
+            pre_flight: vec![],
+            steps: vec![],
+            assertions: vec![],
+            remediation: None,
+            implementation: String::new(),
+            native_module: String::new(),
+        }
+    }
+
+    fn make_minimal_def_with_inputs() -> CheckDefinition {
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "org".to_string(),
+            super::super::definition::InputDef {
+                description: "GitHub org".to_string(),
+                env: "GITHUB_ORG".to_string(),
+                default: String::new(),
+                required: true,
+            },
+        );
+        CheckDefinition {
+            inputs,
+            ..default_check_def()
+        }
+    }
+
+    fn make_def_with_assertions() -> CheckDefinition {
+        CheckDefinition {
+            id: "GH-1.01".to_string(),
+            name: "MFA Check".to_string(),
+            source: "github".to_string(),
+            assertions: vec![CheckAssertion {
+                id: "mfa_enforcement".to_string(),
+                expr: "mfa_enforced == true".to_string(),
+                severity: "critical".to_string(),
+                title: "MFA Enforcement".to_string(),
+                pass_message: "MFA is enforced".to_string(),
+                fail_message: "MFA is NOT enforced".to_string(),
+                finding: None,
+            }],
+            ..default_check_def()
+        }
+    }
 }

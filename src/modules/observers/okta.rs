@@ -13,7 +13,7 @@ use crate::module::{observer::Observer, CredentialReq, Module};
 // ─── Factor taxonomy ─────────────────────────────────────────────────────────
 
 /// Phishing-resistant factor IDs (FIDO2/WebAuthn, SmartCard).
-const PR_FACTORS: [&str; 2] = ["fido_webauthn", "smart_card_idp"];
+const PR_FACTORS: [&str; 3] = ["fido_webauthn", "smart_card_idp", "webauthn"];
 
 // ─── Okta HTTP client ─────────────────────────────────────────────────────────
 
@@ -165,8 +165,10 @@ impl Observer for MfaPolicyObserver {
             }
 
             // Check whether any factor has REQUIRED enrollment.
-            let has_required_factor = policy
-                .get("settings")
+            // Supports both legacy `settings.factors` (object) and newer
+            // `settings.authenticators` (array) formats.
+            let settings = policy.get("settings");
+            let has_required_factor = settings
                 .and_then(|s| s.get("factors"))
                 .and_then(|f| f.as_object())
                 .map(|factors| {
@@ -178,7 +180,26 @@ impl Observer for MfaPolicyObserver {
                             == Some("REQUIRED")
                     })
                 })
-                .unwrap_or(false);
+                .unwrap_or(false)
+                || settings
+                    .and_then(|s| s.get("authenticators"))
+                    .and_then(|a| a.as_array())
+                    .map(|auths| {
+                        auths.iter().any(|auth| {
+                            let key = auth
+                                .get("key")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            // Only count non-password authenticators as MFA factors
+                            key != "okta_password"
+                                && auth
+                                    .get("enroll")
+                                    .and_then(|e| e.get("self"))
+                                    .and_then(|v| v.as_str())
+                                    == Some("REQUIRED")
+                        })
+                    })
+                    .unwrap_or(false);
 
             if !has_required_factor {
                 policies_without_required_factors += 1;
@@ -215,8 +236,10 @@ impl Observer for MfaPolicyObserver {
                 .unwrap_or("")
                 .to_string();
 
-            if let Some(factors_obj) = active_policy
-                .get("settings")
+            let active_settings = active_policy.get("settings");
+
+            // Legacy `settings.factors` (object keyed by factor ID)
+            if let Some(factors_obj) = active_settings
                 .and_then(|s| s.get("factors"))
                 .and_then(|f| f.as_object())
             {
@@ -231,6 +254,37 @@ impl Observer for MfaPolicyObserver {
                         "REQUIRED" => required_factors.push(factor_id.clone()),
                         "OPTIONAL" => optional_factors.push(factor_id.clone()),
                         _ => not_allowed_factors.push(factor_id.clone()),
+                    }
+                }
+            }
+
+            // Newer `settings.authenticators` (array of {key, enroll} objects)
+            if let Some(auths_arr) = active_settings
+                .and_then(|s| s.get("authenticators"))
+                .and_then(|a| a.as_array())
+            {
+                // Only process if factors didn't populate (avoid double-counting)
+                if required_factors.is_empty()
+                    && optional_factors.is_empty()
+                    && not_allowed_factors.is_empty()
+                {
+                    for auth in auths_arr {
+                        let key = auth
+                            .get("key")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let enroll_state = auth
+                            .get("enroll")
+                            .and_then(|e| e.get("self"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("NOT_ALLOWED");
+
+                        match enroll_state {
+                            "REQUIRED" => required_factors.push(key),
+                            "OPTIONAL" => optional_factors.push(key),
+                            _ => not_allowed_factors.push(key),
+                        }
                     }
                 }
             }

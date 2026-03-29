@@ -16,13 +16,11 @@ COPY src ./src
 RUN touch src/main.rs src/lib.rs && \
     cargo build --release
 
-# Stage 2: Minimal production image
-FROM debian:bookworm-slim
-
-# CA certs for HTTPS API calls
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+# Stage 2: Distroless production image
+# gcr.io/distroless/cc-debian12 includes glibc + libgcc for dynamically-linked
+# Rust binaries, plus CA certificates for outbound HTTPS API calls.
+# No shell, no package manager, no OS utilities — minimal attack surface.
+FROM gcr.io/distroless/cc-debian12
 
 LABEL org.opencontainers.image.title="OCEAN" \
       org.opencontainers.image.description="Open Control Evidence Assessment Normalizer" \
@@ -34,9 +32,6 @@ COPY --from=builder /build/target/release/ocean /usr/local/bin/ocean
 
 VOLUME ["/data"]
 EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/usr/local/bin/ocean", "version"]
 
 ENTRYPOINT ["/usr/local/bin/ocean"]
 CMD ["serve", "--port", "8080"]
