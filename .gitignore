@@ -36,3 +36,8 @@ coverage.out
 
 # Temp/misc
 *.png
+
+# Tooling artifacts
+.gsd/
+MEMORY/
+.zerg/

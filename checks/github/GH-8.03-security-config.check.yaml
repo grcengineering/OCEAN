@@ -1,0 +1,84 @@
+id: GH-8.03
+name: Apply Security Configuration
+description: |
+  Verifies that the organization has defined at least one code security
+  configuration. Security configurations allow organizations to define
+  and apply standardized security settings across repositories at scale.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L1
+tags: [code-security, configuration, organization]
+
+references:
+  cis: "8.3"
+  nist: ["CM-2", "CM-6", "SA-11"]
+  soc2: ["CC7.1", "CC8.1"]
+  iso27001: ["A.12.1.1", "A.14.2.1"]
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_security_configurations
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}/code-security/configurations"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    on_error:
+      404: continue
+    extract:
+      config_count: "$length"
+
+assertions:
+  - id: security_config_exists
+    expr: "config_count >= 1"
+    severity: high
+    title: Security Configuration Defined
+    pass_message: "{{config_count}} security configuration(s) defined for the organization"
+    fail_message: "No security configurations are defined for the organization"
+    finding:
+      description: |
+        No code security configurations are defined for this organization.
+        Security configurations enable consistent enforcement of security
+        settings such as secret scanning, Dependabot, code scanning, and
+        private vulnerability reporting across all repositories. Without
+        a defined configuration, security settings must be managed
+        individually per repository. This feature requires GitHub Enterprise
+        Cloud or GitHub Advanced Security.
+
+remediation:
+  description: |
+    Create a code security configuration that defines the baseline security
+    settings for organization repositories. Apply the configuration to all
+    or selected repositories for consistent enforcement.
+  steps:
+    - "Navigate to github.com/orgs/{{org}}/settings/security_products"
+    - "Click 'New configuration'"
+    - "Enable desired security features (secret scanning, Dependabot, code scanning)"
+    - "Name the configuration and set it as default if appropriate"
+    - "Apply the configuration to target repositories"
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/{{org}}/code-security/configurations"
+    body:
+      name: "organization-baseline"
+      description: "Baseline security configuration for all repositories"
+      secret_scanning: "enabled"
+      dependabot_alerts: "enabled"
+      code_scanning_default_setup: "enabled"
+  cli:
+    command: "gh api orgs/{{org}}/code-security/configurations --jq '.[].name'"

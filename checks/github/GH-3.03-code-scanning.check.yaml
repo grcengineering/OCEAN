@@ -1,0 +1,81 @@
+id: GH-3.03
+name: Enable Code Scanning
+description: |
+  Verifies that GitHub code scanning is enabled on the repository and that
+  there are no open critical-severity alerts requiring immediate remediation.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L1
+tags: [code-scanning, codeql, repository]
+
+references:
+  cis: "3.5"
+  nist: SA-11
+  soc2: CC7.2
+  iso27001: A.14.2.8
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [repo, security_events]
+    required: true
+
+inputs:
+  owner:
+    description: Repository owner (user or organization)
+    env: GITHUB_OWNER
+    required: true
+  repo:
+    description: Repository name
+    env: GITHUB_REPO
+    required: true
+
+steps:
+  - id: get_critical_alerts
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/repos/{{owner}}/{{repo}}/code-scanning/alerts?state=open&severity=critical&per_page=1"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    on_error:
+      404: continue
+    extract:
+      critical_alert_count: "$length"
+
+assertions:
+  - id: no_critical_alerts
+    expr: "critical_alert_count == 0"
+    severity: critical
+    title: No Open Critical Code Scanning Alerts
+    pass_message: "No open critical code scanning alerts found"
+    fail_message: "Open critical code scanning alerts detected — immediate remediation required"
+    finding:
+      description: |
+        The repository has open critical-severity code scanning alerts. Critical
+        alerts typically indicate exploitable vulnerabilities such as SQL injection,
+        remote code execution, or authentication bypass. These must be triaged and
+        remediated immediately. If code scanning returns a 404, it is not configured
+        for this repository and should be enabled.
+
+remediation:
+  description: |
+    Enable GitHub code scanning with CodeQL and remediate all critical findings.
+    Code scanning automatically detects security vulnerabilities and coding errors
+    in your codebase using static analysis.
+  steps:
+    - "Navigate to github.com/{owner}/{repo}/settings/security_analysis"
+    - "Under 'Code scanning', click 'Set up' next to CodeQL analysis"
+    - "Select the default configuration or create a custom workflow"
+    - "Review and remediate all critical alerts in the Security tab"
+  api:
+    method: POST
+    url: "https://api.github.com/repos/{{owner}}/{{repo}}/code-scanning/default-setup"
+    body:
+      state: "configured"
+      languages: ["javascript", "python", "go", "ruby", "java", "csharp"]
+  cli:
+    command: "gh api repos/{{owner}}/{{repo}}/code-scanning/default-setup -X PATCH -f state=configured"

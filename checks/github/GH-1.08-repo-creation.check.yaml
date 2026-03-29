@@ -1,0 +1,87 @@
+id: GH-1.08
+name: Restrict Repository Creation
+description: |
+  Verifies that organization members cannot create public repositories.
+  Unrestricted public repo creation can lead to accidental exposure of
+  proprietary code and sensitive data.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L1
+tags: [access-control, repository, organization]
+
+references:
+  nist: AC-6
+  soc2: CC6.2
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org, read:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_org_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    extract:
+      can_create_public: "$.members_can_create_public_repositories"
+      can_create_private: "$.members_can_create_private_repositories"
+      org_name: "$.login"
+
+assertions:
+  - id: no_public_repo_creation
+    expr: "can_create_public == false"
+    severity: medium
+    title: Public Repository Creation Restricted
+    pass_message: "Members cannot create public repositories"
+    fail_message: "Members can create public repositories — risk of accidental code exposure"
+    finding:
+      description: |
+        Organization members are permitted to create public repositories.
+        This increases the risk of accidental exposure of proprietary source
+        code, credentials, and internal documentation. Restrict public repo
+        creation to organization owners and grant exceptions on a case-by-case
+        basis.
+
+  - id: private_repo_creation_note
+    expr: "can_create_private == false"
+    severity: low
+    title: Private Repository Creation Restricted
+    pass_message: "Members cannot create private repositories — centralized repo governance"
+    fail_message: "Members can create private repositories — consider restricting for tighter governance"
+    finding:
+      description: |
+        Organization members are permitted to create private repositories.
+        While less risky than public repo creation, unrestricted private repo
+        creation can lead to sprawl and ungoverned repositories. Consider
+        restricting creation to owners or designated teams.
+
+remediation:
+  description: |
+    Restrict repository creation to prevent members from creating public
+    repositories. Optionally restrict private repository creation as well.
+  steps:
+    - "Navigate to github.com/orgs/{org}/settings/member_privileges"
+    - "Under 'Repository creation', uncheck 'Public'"
+    - "Optionally uncheck 'Private' for stricter governance"
+    - "Click Save"
+  api:
+    method: PATCH
+    url: "https://api.github.com/orgs/{{org}}"
+    body:
+      members_can_create_public_repositories: false
+  cli:
+    command: "gh api orgs/{{org}} -X PATCH -f members_can_create_public_repositories=false"

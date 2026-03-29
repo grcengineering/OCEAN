@@ -1,0 +1,75 @@
+id: GH-4.01
+name: Audit OAuth App Access
+description: |
+  Reviews OAuth application authorizations granted to the organization.
+  Identifies third-party OAuth tokens that have been authorized to access
+  organization resources, which may represent supply-chain risk.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L1
+tags: [oauth, third-party, supply-chain]
+
+references:
+  cis: "4.1"
+  nist: AC-6
+  soc2: ["CC6.2", "CC9.2"]
+  iso27001: A.9.2.1
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_credential_authorizations
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}/credential-authorizations?per_page=1"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    on_error:
+      404: continue
+    extract:
+      authorization_count: "$length"
+
+assertions:
+  - id: oauth_authorizations_exist
+    expr: "authorization_count == 0"
+    severity: medium
+    title: OAuth App Authorizations
+    pass_message: "No OAuth application authorizations found"
+    fail_message: "OAuth application authorizations exist and should be reviewed"
+    finding:
+      description: |
+        OAuth application authorizations were found for this organization.
+        Each authorized OAuth app has access to organization resources based
+        on the scopes granted. Review authorized applications regularly to
+        ensure only trusted apps retain access. This endpoint is only
+        available for organizations using GitHub Enterprise Cloud with SAML SSO.
+
+remediation:
+  description: |
+    Review and revoke unnecessary OAuth application authorizations.
+    Navigate to the organization's Third-party access settings to audit
+    which applications have been granted access to organization resources.
+  steps:
+    - "Navigate to github.com/orgs/{{org}}/settings/oauth_application_policy"
+    - "Review each authorized OAuth application"
+    - "Revoke access for any applications that are no longer needed"
+    - "Consider enabling OAuth app access restrictions"
+  api:
+    method: DELETE
+    url: "https://api.github.com/orgs/{{org}}/credential-authorizations/{credential_id}"
+  cli:
+    command: "gh api orgs/{{org}}/credential-authorizations --paginate --jq '.[].login'"

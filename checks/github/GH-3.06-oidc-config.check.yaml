@@ -1,0 +1,80 @@
+id: GH-3.06
+name: Harden Actions OIDC Subject Claims
+description: |
+  Verifies that the organization has customized OIDC subject claims for GitHub
+  Actions, preventing overly broad cloud provider trust policies.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L2
+tags: [oidc, actions, cloud-credentials]
+
+references:
+  cis: "3.6"
+  nist: ["IA-2", "IA-8"]
+  soc2: CC6.1
+  iso27001: A.9.4.2
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_oidc_config
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}/actions/oidc/customization/sub"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    on_error:
+      404: continue
+    extract:
+      include_claim_keys: "$.include_claim_keys"
+
+assertions:
+  - id: oidc_claims_customized
+    expr: "size(include_claim_keys) > 0"
+    severity: high
+    title: OIDC Subject Claims Customized
+    pass_message: "OIDC subject claims are customized with {{include_claim_keys}}"
+    fail_message: "OIDC subject claims are not customized — default claims may be too broad"
+    finding:
+      description: |
+        The organization has not customized the OIDC subject claims for GitHub
+        Actions. The default subject claim format (repo:<owner>/<repo>:ref:<ref>)
+        may be too broad for cloud provider trust policies, potentially allowing
+        unintended workflows to assume cloud roles. Customize the subject claims
+        to include additional context such as repository_owner, repository,
+        job_workflow_ref, or environment to create more granular trust boundaries.
+
+remediation:
+  description: |
+    Customize the OIDC subject claims to include additional context fields.
+    This creates more precise trust policies in your cloud provider, reducing
+    the risk of unauthorized role assumption by unintended workflows.
+  steps:
+    - "Navigate to github.com/orgs/{org}/settings/actions"
+    - "Under 'OpenID Connect', configure subject claim customization"
+    - "Add claim keys such as 'repository', 'repository_owner', 'job_workflow_ref', and 'environment'"
+    - "Update corresponding cloud provider trust policies to match the new claim format"
+  api:
+    method: PUT
+    url: "https://api.github.com/orgs/{{org}}/actions/oidc/customization/sub"
+    body:
+      include_claim_keys:
+        - "repo"
+        - "context"
+        - "repository_owner"
+  cli:
+    command: "gh api orgs/{{org}}/actions/oidc/customization/sub -X PUT --input - <<< '{\"include_claim_keys\":[\"repo\",\"context\",\"repository_owner\"]}'"

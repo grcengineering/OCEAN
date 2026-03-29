@@ -1,0 +1,93 @@
+id: GH-3.02
+name: Use Least-Privilege Workflow Permissions
+description: |
+  Verifies that repository workflow permissions default to read-only and that
+  workflows cannot approve pull request reviews, enforcing least-privilege access.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L1
+tags: [actions, permissions, least-privilege]
+
+references:
+  cis: "3.2"
+  nist: AC-6
+  soc2: CC6.2
+  iso27001: A.9.4.1
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [repo, admin:org]
+    required: true
+
+inputs:
+  owner:
+    description: Repository owner (user or organization)
+    env: GITHUB_OWNER
+    required: true
+  repo:
+    description: Repository name
+    env: GITHUB_REPO
+    required: true
+
+steps:
+  - id: get_workflow_permissions
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/repos/{{owner}}/{{repo}}/actions/permissions/workflow"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    extract:
+      default_workflow_permissions: "$.default_workflow_permissions"
+      can_approve_pull_request_reviews: "$.can_approve_pull_request_reviews"
+
+assertions:
+  - id: workflow_read_only
+    expr: 'default_workflow_permissions == "read"'
+    severity: high
+    title: Default Workflow Permissions
+    pass_message: "Default workflow permissions are set to 'read'"
+    fail_message: "Default workflow permissions are '{{default_workflow_permissions}}' — should be 'read'"
+    finding:
+      description: |
+        The repository grants write permissions to the GITHUB_TOKEN by default in
+        all workflows. This allows any workflow to push code, create releases, or
+        modify repository settings without explicit permission grants. Set default
+        permissions to 'read' and grant write access only where needed using the
+        'permissions' key in workflow YAML files.
+
+  - id: no_pr_approval
+    expr: "can_approve_pull_request_reviews == false"
+    severity: medium
+    title: Workflow PR Approval Disabled
+    pass_message: "Workflows cannot approve pull request reviews"
+    fail_message: "Workflows can approve pull request reviews — should be disabled"
+    finding:
+      description: |
+        GitHub Actions workflows are allowed to approve pull request reviews.
+        This could allow a compromised or misconfigured workflow to bypass code
+        review requirements by auto-approving its own changes. Disable this
+        setting to ensure human review is always required.
+
+remediation:
+  description: |
+    Set default workflow permissions to read-only and disable workflow PR approvals.
+    Individual workflows can request elevated permissions using the 'permissions'
+    key, which provides explicit and auditable privilege escalation.
+  steps:
+    - "Navigate to github.com/{owner}/{repo}/settings/actions"
+    - "Under 'Workflow permissions', select 'Read repository contents and packages permissions'"
+    - "Uncheck 'Allow GitHub Actions to create and approve pull requests'"
+    - "Click Save"
+  api:
+    method: PUT
+    url: "https://api.github.com/repos/{{owner}}/{{repo}}/actions/permissions/workflow"
+    body:
+      default_workflow_permissions: "read"
+      can_approve_pull_request_reviews: false
+  cli:
+    command: "gh api repos/{{owner}}/{{repo}}/actions/permissions/workflow -X PUT -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false"

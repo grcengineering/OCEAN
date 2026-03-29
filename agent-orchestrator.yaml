@@ -1,0 +1,49 @@
+dataDir: ~/.agent-orchestrator
+worktreeDir: ~/.worktrees
+port: 3000
+
+defaults:
+  runtime: tmux
+  agent: claude-code
+  workspace: worktree
+  notifiers: [desktop]
+
+projects:
+  ocean:
+    name: OCEAN
+    repo: grcengineering/OCEAN
+    path: ~/Code/OCEAN
+    defaultBranch: main
+    sessionPrefix: ocean
+
+    agentRules: |
+      You are working on OCEAN — the "Metasploit for GRC", an open-source Rust CLI tool for evidence acquisition, active control testing, and normalization.
+
+      Key patterns:
+      - Modules implement Observer or Tester traits (src/module/observer.rs, src/module/tester.rs)
+      - Evidence is the core data entity (src/evidence/mod.rs)
+      - Storage via Store trait with SQLite backend (src/storage/)
+      - CLI uses clap 4 derive (src/cli/mod.rs)
+      - Controls defined in YAML (controls/)
+      - Tests use #[cfg(test)] mod tests in same file
+      - Use testutil::make_evidence() for test evidence records
+
+      Build/test commands:
+      - export PATH="$HOME/.cargo/bin:$PATH"
+      - cargo build
+      - cargo test
+      - cargo clippy -- -D warnings
+
+      Rules:
+      - All tests must pass before committing
+      - Zero clippy warnings required
+      - Follow existing code patterns (sync-first, async only for ocean serve)
+      - Use ureq for HTTP, rusqlite for storage, serde for serialization
+      - Test with mock/httptest patterns, never call real APIs
+      - Each new module needs: observer/tester struct, Observer/Tester trait impl, register in modules/mod.rs, unit tests
+
+    reactions:
+      ci-failed:
+        auto: true
+        action: send-to-agent
+        retries: 2

@@ -1,0 +1,88 @@
+id: GH-1.04
+name: Audit Admin Access
+description: |
+  Enumerates all organization owners (admins) and verifies the count is
+  within acceptable limits. Excessive admin access increases the blast
+  radius of compromised credentials and insider threats.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L1
+tags: [admin, least-privilege, owners]
+
+references:
+  cis: "1.4"
+  nist: AC-6(1)
+  soc2: CC6.2
+  iso27001: A.9.2.3
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org, read:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_org_admins
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}/members?role=admin"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+      paginate: true
+    extract:
+      admin_logins: "$[*].login"
+      admin_count: "$length"
+
+assertions:
+  - id: admin_count_upper_bound
+    expr: "admin_count <= 5"
+    severity: medium
+    title: Organization Admin Count
+    pass_message: "Organization has {{admin_count}} admin(s) — within acceptable limit"
+    fail_message: "Organization has {{admin_count}} admin(s) — exceeds the recommended maximum of 5"
+    finding:
+      description: |
+        The organization has {{admin_count}} members with the Owner role.
+        A high number of admins increases the attack surface and the risk of
+        accidental or malicious configuration changes. Review admin membership
+        and demote accounts that do not require full administrative privileges.
+
+  - id: admin_count_ideal
+    expr: "admin_count <= 3"
+    severity: low
+    title: Organization Admin Count (Ideal)
+    pass_message: "Organization has {{admin_count}} admin(s) — meets ideal threshold"
+    fail_message: "Organization has {{admin_count}} admin(s) — consider reducing to 3 or fewer"
+    finding:
+      description: |
+        Best practice is to maintain 2-3 organization owners for continuity
+        while minimizing privileged access. Review whether all current admins
+        require the Owner role or can be transitioned to Member with
+        team-level maintainer permissions.
+
+remediation:
+  description: |
+    Review the list of organization owners and remove the Owner role from
+    accounts that do not require full administrative privileges. Maintain
+    at least 2 owners for business continuity.
+  steps:
+    - "Navigate to github.com/orgs/{org}/people"
+    - "Filter by role: Owner"
+    - "For each unnecessary admin, click the member and change role to 'Member'"
+    - "Ensure at least 2 owners remain for continuity"
+  manual:
+    - "Review the admin list quarterly as part of access recertification"
+    - "Document justification for each organization owner"
+    - "Consider using GitHub Enterprise Managed Users for centralized role assignment"
+  cli:
+    command: "gh api orgs/{{org}}/memberships/{username} -X PUT -f role=member"

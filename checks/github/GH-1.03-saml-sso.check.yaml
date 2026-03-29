@@ -1,0 +1,75 @@
+id: GH-1.03
+name: Enable SAML SSO
+description: |
+  Checks the organization's plan to determine if SAML SSO can be configured.
+  SAML SSO status is not available via the GitHub REST API and must be
+  verified through the GitHub Enterprise Cloud admin console.
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L2
+tags: [sso, saml, scim, enterprise]
+
+references:
+  cis: "1.3"
+  nist: ["IA-2", "IA-4", "IA-8"]
+  soc2: CC6.1
+  iso27001: A.9.2.1
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org, read:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_org_plan
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    extract:
+      plan_name: "$.plan.name"
+      org_name: "$.login"
+
+assertions:
+  - id: saml_sso_availability
+    expr: 'plan_name == "enterprise"'
+    severity: info
+    title: SAML SSO Availability
+    pass_message: "Organization is on the Enterprise plan — SAML SSO is available"
+    fail_message: "Organization is on the '{{plan_name}}' plan — SAML SSO requires GitHub Enterprise Cloud"
+    finding:
+      description: |
+        SAML single sign-on centralizes authentication through an identity provider
+        and enables SCIM provisioning for automated user lifecycle management.
+        SAML SSO configuration cannot be verified via the GitHub REST API.
+        Verify SAML SSO status manually in the organization's authentication
+        security settings if the organization is on a GitHub Enterprise Cloud plan.
+
+remediation:
+  description: |
+    SAML SSO must be configured through the GitHub Enterprise Cloud admin console.
+    This requires an Enterprise Cloud plan and a compatible identity provider
+    (Entra ID, Okta, OneLogin, PingOne, etc.).
+  steps:
+    - "Upgrade to GitHub Enterprise Cloud if not already on that plan"
+    - "Navigate to github.com/orgs/{org}/settings/security"
+    - "Under 'SAML single sign-on', click 'Enable SAML authentication'"
+    - "Configure the identity provider sign-on URL and certificate"
+    - "Test the SAML configuration before enforcing"
+    - "Optionally enable SCIM provisioning for automated user management"
+  manual:
+    - "Review SAML SSO configuration in Organization Settings → Authentication security"
+    - "Verify that SAML enforcement is enabled (not just configured)"
+    - "Confirm SCIM provisioning is active if automated user lifecycle management is required"

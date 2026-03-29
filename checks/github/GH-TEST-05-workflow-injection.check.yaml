@@ -1,0 +1,80 @@
+id: GH-TEST-05
+name: Workflow Injection Detection
+description: |
+  Performs static analysis of GitHub Actions workflow files to detect injection
+  vulnerabilities. Scans for unsafe uses of expression contexts (e.g.,
+  github.event.pull_request.title, github.event.issue.body) in run: blocks
+  and other injectable fields that could allow arbitrary code execution via
+  crafted pull request titles, branch names, or issue bodies.
+author: grc-engineering
+version: "1.0"
+source: github
+type: active
+safety: observable
+environment: production
+implementation: native
+native_module: github_workflow_injection
+profile: L1
+tags: [actions, injection, active-test]
+
+references:
+  nist: SA-11
+  soc2: CC7.2
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [repo]
+    required: true
+
+inputs:
+  owner:
+    description: Repository owner
+    env: GITHUB_OWNER
+    required: true
+  repo:
+    description: Repository name
+    env: GITHUB_REPO
+    required: true
+
+  # Execution delegated to native module: github_workflow_injection
+  # The native module will:
+  #   1. Fetch all workflow files from .github/workflows/
+  #   2. Parse YAML to identify run: blocks and other injectable fields
+  #   3. Detect use of untrusted expression contexts in injectable positions:
+  #      - github.event.issue.title / body
+  #      - github.event.pull_request.title / body / head.ref
+  #      - github.event.comment.body
+  #      - github.event.review.body
+  #      - github.event.discussion.title / body
+  #      - github.head_ref
+  #   4. Report each finding with file, line number, and injection context
+
+assertions:
+  - id: no_injection_vulnerabilities
+    expr: "injection_count == 0"
+    severity: critical
+    title: No Workflow Injection Vulnerabilities
+    pass_message: "No workflow injection vulnerabilities detected in Actions workflow files"
+    fail_message: "{{injection_count}} workflow injection vulnerability(ies) detected"
+    finding:
+      description: |
+        One or more GitHub Actions workflow files contain injection
+        vulnerabilities where untrusted user input (e.g., PR titles, branch
+        names, issue bodies) flows into run: blocks or other executable
+        contexts without sanitization. An attacker can craft a malicious
+        PR title or branch name to execute arbitrary commands in the CI/CD
+        environment, potentially exfiltrating secrets or compromising the
+        repository.
+
+remediation:
+  description: |
+    Eliminate workflow injection vulnerabilities by avoiding direct use of
+    untrusted expression contexts in run: blocks. Use intermediate environment
+    variables or input parameters instead.
+  steps:
+    - "Identify all run: blocks that use ${{ github.event.* }} or ${{ github.head_ref }} expressions"
+    - "Replace direct expression interpolation with environment variables"
+    - "Example: Instead of 'run: echo ${{ github.event.pull_request.title }}'"
+    - "Use: 'env: PR_TITLE: ${{ github.event.pull_request.title }}' then 'run: echo \"$PR_TITLE\"'"
+    - "For actions that accept untrusted input, use actions/github-script with proper escaping"
