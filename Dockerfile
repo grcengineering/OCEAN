@@ -16,11 +16,11 @@ COPY src ./src
 RUN touch src/main.rs src/lib.rs && \
     cargo build --release
 
-# Stage 2: Distroless production image
-# gcr.io/distroless/cc-debian12 includes glibc + libgcc for dynamically-linked
+# Stage 2: Chainguard zero-CVE production image
+# cgr.dev/chainguard/cc-dynamic provides glibc + libgcc for dynamically-linked
 # Rust binaries, plus CA certificates for outbound HTTPS API calls.
 # No shell, no package manager, no OS utilities — minimal attack surface.
-FROM gcr.io/distroless/cc-debian12
+FROM cgr.dev/chainguard/cc-dynamic:latest
 
 LABEL org.opencontainers.image.title="OCEAN" \
       org.opencontainers.image.description="Open Control Evidence Assessment Normalizer" \
