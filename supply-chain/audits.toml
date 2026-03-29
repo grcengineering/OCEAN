@@ -131,6 +131,12 @@ end = "2027-03-29"
 
 [[trusted.rustls-webpki]]
 criteria = "safe-to-deploy"
+user-id = 2751 # Joe Birr-Pixton (ctz)
+start = "2023-01-09"
+end = "2027-03-29"
+
+[[trusted.rustls-webpki]]
+criteria = "safe-to-deploy"
 user-id = 4556 # Dirkjan Ochtman (djc)
 start = "2023-09-01"
 end = "2027-03-29"
