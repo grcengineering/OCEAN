@@ -1,0 +1,40 @@
+projectIgnorePaths:
+  - "target/**"
+  - "tests/**"
+  - "benches/**"
+  - "examples/**"
+
+issueRules:
+  # Block on high-severity behavioral threats
+  envVars:
+    action: error
+  networkAccess:
+    action: error
+  shellAccess:
+    action: error
+  installScripts:
+    action: error
+  obfuscatedCode:
+    action: error
+  malware:
+    action: error
+
+  # Warn on medium-severity signals
+  newAuthor:
+    action: warn
+  filesystemAccess:
+    action: warn
+  unmaintained:
+    action: warn
+  unstableOwnership:
+    action: warn
+  unresolved:
+    action: warn
+
+  # Info-level for tracking
+  deprecated:
+    action: warn
+  hasNativeCode:
+    action: monitor
+  telemetry:
+    action: warn

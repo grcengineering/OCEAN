@@ -84,6 +84,21 @@ jobs:
           command: check all
 
   # -------------------------------------------------------------------------
+  # Behavioral dependency analysis (Socket.dev)
+  # Activates only when SOCKET_SECURITY_API_KEY secret is configured.
+  # -------------------------------------------------------------------------
+  socket:
+    name: Behavioral Analysis (Socket.dev)
+    runs-on: ubuntu-latest
+    if: ${{ vars.SOCKET_ENABLED == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Socket.dev scan
+        uses: SocketDev/socket-sdk-js@v1
+        with:
+          api_key: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+
+  # -------------------------------------------------------------------------
   # Lint (clippy + fmt)
   # -------------------------------------------------------------------------
   lint:
