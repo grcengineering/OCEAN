@@ -1,0 +1,75 @@
+name: Fuzz Testing
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 3 AM UTC daily
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: "Fuzz ${{ matrix.target }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_yaml_manifest
+          - fuzz_check_loader
+          - fuzz_cel_eval
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+
+      - name: Run fuzzer
+        working-directory: fuzz
+        env:
+          FUZZ_TARGET: ${{ matrix.target }}
+          # Dummy credentials so manifest fuzzer can explore deeper paths
+          GITHUB_TOKEN: fuzz_tok
+          GITHUB_ORG: fuzz_org
+          OKTA_API_TOKEN: fuzz_tok
+          OKTA_DOMAIN: fuzz.okta.com
+          AWS_ACCESS_KEY_ID: AKIAFUZZ
+          AWS_SECRET_ACCESS_KEY: fuzz_secret
+          AWS_REGION: us-east-1
+          AZURE_CLIENT_ID: fuzz_client
+          AZURE_CLIENT_SECRET: fuzz_secret
+          AZURE_TENANT_ID: fuzz_tenant
+          AZURE_SUBSCRIPTION_ID: fuzz_sub
+        run: |
+          # Validate target name against allowlist to prevent injection
+          case "$FUZZ_TARGET" in
+            fuzz_yaml_manifest|fuzz_check_loader|fuzz_cel_eval)
+              cargo +nightly fuzz run "$FUZZ_TARGET" -- -max_total_time=60
+              ;;
+            *)
+              echo "::error::Unknown fuzz target: $FUZZ_TARGET"
+              exit 1
+              ;;
+          esac
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 30
