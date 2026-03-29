@@ -169,7 +169,7 @@ pub struct FrameworkMapping {
 
 /// The evaluated state of a control at a point in time.
 /// Derived from one or more evidence records by the evaluation pipeline.
-/// Note: EvaluationAttestationRef removed — Corsair handles provenance.
+/// Note: Provenance/signing is handled by Corsair, not OCEAN.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlStatus {
     pub id: Uuid,

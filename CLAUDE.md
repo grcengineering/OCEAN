@@ -10,7 +10,7 @@ OCEAN operates across four pillars:
 1. **Passive Control Monitoring** — Query system APIs to observe configuration state, store as evidence
 2. **Active Control Testing** — Attempt what controls should prevent (like Atomic Red Team for GRC)
 3. **Flexible Evaluation Logic** — CEL expressions + YAML presets for user-defined compliance conditions
-4. **Cryptographic Provenance** — in-toto DSSE attestations proving the full chain from data to verdict
+4. **Evidence Integrity** — Structured JSON evidence output consumed by downstream tools (e.g., Corsair for signing/provenance)
 
 OCEAN is **NOT** a full GRC platform. It is the specialized evidence and verification layer that GRC platforms consume.
 
@@ -25,7 +25,7 @@ OCEAN is **NOT** a full GRC platform. It is the specialized evidence and verific
 7. **Radical Transparency**: Show failures alongside successes
 8. **Security & Privacy by Design**: Mandatory signing, test authorization, no credential storage
 9. **Active Control Verification**: Safety classifications (safe/observable/reversible/destructive), pre-flight validation, cleanup, test transcripts
-10. **Cryptographic Provenance Chain**: Two-layer attestation (Collection + Evaluation), in-toto DSSE, content-addressable references
+10. **Evidence Integrity**: Structured JSON evidence output; cryptographic signing deferred to Corsair (ADR-001 addendum)
 
 ## Spec-Kit Artifacts Location
 
@@ -56,7 +56,7 @@ All specification work is in `.specify/`:
 - **Storage**: SQLite (default), PostgreSQL (enterprise), ClickHouse (analytics)
 - **Schema**: JSON with JSON Schema validation
 - **Expression Engine**: CEL (Common Expression Language) via `github.com/google/cel-go`
-- **Attestation Format**: in-toto DSSE (Dead Simple Signing Envelope)
+- **Signing/Provenance**: Deferred to Corsair (ADR-001 addendum)
 - **License**: Apache 2.0
 
 ## Important Research Sources
@@ -78,7 +78,7 @@ The project uses GitHub Spec-Kit. Key commands:
 
 ## Current Status
 
-- [x] Research complete (v2.0.0 — CEL, DSSE, active testing)
+- [x] Research complete (v2.0.0 — CEL, active testing)
 - [x] Constitution created (v2.0.0 — 10 principles)
 - [x] Specification written (v2.0.0 — 11 user stories across 4 pillars)
 - [x] Implementation plan (v2.0.0 — 8 phases, 7 technical decisions)

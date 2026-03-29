@@ -26,21 +26,7 @@ This produces the `ocean` binary in the current directory.
 # ocean <commit> (built <timestamp>)
 ```
 
-## Step 1: Generate Signing Keys
-
-OCEAN uses Ed25519 keys for in-toto DSSE attestation signing. Generate a keypair:
-
-```bash
-./ocean keys generate
-# Keypair generated successfully.
-#   Public key:  ~/.ocean/keys/ocean-ed25519.pub
-#   Private key: ~/.ocean/keys/ocean-ed25519.key
-#   Key ID:      <hex-key-id>
-```
-
-Without a signing key, evidence is still observed and stored but will not have cryptographic attestation.
-
-## Step 2: List Available Modules
+## Step 1: List Available Modules
 
 ```bash
 ./ocean modules list
@@ -100,16 +86,10 @@ Output (JSON):
       "severity_id": 0
     }
   ],
-  "attestation": {
-    "type": "collection",
-    "dsse_envelope_ref": "sha256:<hash>",
-    "digest": "sha256:<hash>",
-    "signer": "<key-id>"
-  }
 }
 ```
 
-Evidence is automatically stored in SQLite at `~/.ocean/ocean.db` and signed with your Ed25519 key.
+Evidence is automatically stored in SQLite at `~/.ocean/ocean.db`.
 
 Use `--format yaml` for YAML output:
 
@@ -178,31 +158,7 @@ This runs the control's configured observers and testers, then evaluates using C
 
 When passive observation and active verification agree, confidence is `high`.
 
-## Step 7: Verify Cryptographic Provenance
-
-Any party with the public key can independently verify evidence integrity:
-
-```bash
-./ocean verify-provenance run --evidence <evidence-uuid>
-```
-
-Output:
-
-```
-Provenance Verification for Evidence <uuid>
-=========================================
-
-  [PASS] evidence_content_digest
-        content digest matches: sha256:<hash>
-  [PASS] envelope_signature
-        DSSE envelope signature verified successfully
-  [PASS] signer_identity
-        signer identity verified: keyID <key-id>
-
-Overall: PASSED - provenance chain is intact
-```
-
-## Step 8: Start the API Server
+## Step 7: Start the API Server
 
 Run the REST API for integration with external GRC platforms:
 

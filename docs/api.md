@@ -1,10 +1,10 @@
 # OCEAN REST API
 
-The OCEAN REST API is exposed when running in server mode (`ocean serve`). It enables external GRC platforms to query evidence, inspect control effectiveness, and independently verify cryptographic provenance.
+The OCEAN REST API is exposed when running in server mode (`ocean serve`). It enables external GRC platforms to query evidence and inspect control effectiveness.
 
 Full OpenAPI specification: [contracts/api.yaml](../.specify/specs/ocean-core/contracts/api.yaml)
 
-10 endpoints across evidence, controls, attestations, modules, and health.
+Endpoints across evidence, controls, modules, and health.
 
 ## Base URL
 
@@ -95,12 +95,6 @@ curl -H "Authorization: Bearer $TOKEN" \
         "module": { "name": "mock.test", "version": "0.1.0", "type": "observer" },
         "source": { "system": "mock", "api_version": "v1", "endpoint": "/api/v1/policies" }
       },
-      "attestation": {
-        "type": "collection",
-        "dsse_envelope_ref": "sha256:abc123",
-        "digest": "sha256:def456",
-        "signer": "ocean-key"
-      }
     }
   ],
   "meta": { "cursor": "", "limit": 10, "has_more": false }
@@ -133,43 +127,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 }
 ```
 
-### 3. Get Evidence Provenance
-
-**`GET /api/v1/evidence/{id}/provenance`**
-
-Returns the full provenance chain: evidence metadata, collection attestation, and the DSSE envelope.
-
-**Example:**
-
-```bash
-curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8080/api/v1/evidence/550e8400-e29b-41d4-a716-446655440000/provenance"
-```
-
-**Response (200):**
-
-```json
-{
-  "data": {
-    "evidence_id": "550e8400-e29b-41d4-a716-446655440000",
-    "control_id": "iam.mfa_enforcement",
-    "observed_at": "2026-01-15T10:30:00Z",
-    "attestation": {
-      "type": "collection",
-      "dsse_envelope_ref": "sha256:abc123",
-      "digest": "sha256:def456",
-      "signer": "ocean-key"
-    },
-    "envelope": {
-      "payloadType": "application/vnd.in-toto+json",
-      "payload": "base64-encoded-statement",
-      "signatures": [{ "keyid": "ocean-key", "sig": "base64-sig" }]
-    }
-  }
-}
-```
-
-### 4. List Controls
+### 3. List Controls
 
 **`GET /api/v1/controls`**
 
@@ -298,20 +256,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 }
 ```
 
-### 8. Get Attestation
-
-**`GET /api/v1/attestations/{id}`**
-
-Returns the full DSSE envelope for a cryptographic attestation.
-
-**Example:**
-
-```bash
-curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8080/api/v1/attestations/sha256:abc123"
-```
-
-### 9. List Modules
+### 8. List Modules
 
 **`GET /api/v1/modules`**
 
