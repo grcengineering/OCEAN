@@ -554,7 +554,7 @@ Migrate OCEAN's core evidence types: `Evidence`, `StatusId`, `ConfidenceLevel`, 
 **Files:**
 - Create: `grc-controls-models/src/evidence.rs`
 
-**Source reference:** `/Users/p4gs/Code/OCEAN/src/evidence/mod.rs`
+**Source reference:** `OCEAN/src/evidence/mod.rs`
 
 **Step 1: Write tests + implementation**
 
@@ -601,7 +601,7 @@ Migrate transcript types from OCEAN's `evidence/transcript.rs`.
 **Files:**
 - Create: `grc-controls-models/src/transcript.rs`
 
-**Source reference:** `/Users/p4gs/Code/OCEAN/src/evidence/transcript.rs`
+**Source reference:** `OCEAN/src/evidence/transcript.rs`
 
 Types to migrate:
 - `TestTranscript`: actions_attempted, observations, cleanup_actions
@@ -943,8 +943,8 @@ Unify OCEAN's `github_common::github_get` and HTH's `GitHubApiClient` into a sin
 - Create: `grc-controls-apis/src/github.rs`
 
 **Source references:**
-- `/Users/p4gs/Code/OCEAN/src/modules/github_common.rs` — `github_get()`, `DEFAULT_GITHUB_API`, `GITHUB_API_VERSION`
-- `/Users/p4gs/Code/how-to-harden/cli/crates/hth-github/src/api.rs` — `GitHubApiClient` (rate limiting, pagination, 404 handling)
+- `OCEAN/src/modules/github_common.rs` — `github_get()`, `DEFAULT_GITHUB_API`, `GITHUB_API_VERSION`
+- `how-to-harden/cli/crates/hth-github/src/api.rs` — `GitHubApiClient` (rate limiting, pagination, 404 handling)
 
 **Step 1: Implement sync client**
 
@@ -1153,10 +1153,10 @@ git commit -m "feat(apis): wire up lib.rs exports, clippy clean"
 - Create: `grc-controls-observers/src/github/workflow_permissions.rs`
 
 **Source references:**
-- Observer trait: `/Users/p4gs/Code/OCEAN/src/module/observer.rs`
-- Module trait: `/Users/p4gs/Code/OCEAN/src/module/mod.rs`
-- GitHub observers: `/Users/p4gs/Code/OCEAN/src/modules/observers/github*.rs`
-- GitHub common: `/Users/p4gs/Code/OCEAN/src/modules/github_common.rs`
+- Observer trait: `OCEAN/src/module/observer.rs`
+- Module trait: `OCEAN/src/module/mod.rs`
+- GitHub observers: `OCEAN/src/modules/observers/github*.rs`
+- GitHub common: `OCEAN/src/modules/github_common.rs`
 
 **Step 1: Define Observer trait**
 
@@ -1308,10 +1308,10 @@ git commit -m "feat(observers): migrate all GitHub observers to shared crate"
 - Create: `grc-controls-testers/src/github/secret_push.rs`
 
 **Source references:**
-- Tester trait: `/Users/p4gs/Code/OCEAN/src/module/tester.rs`
-- Safety: `/Users/p4gs/Code/OCEAN/src/module/safety.rs`
-- Transcript: `/Users/p4gs/Code/OCEAN/src/evidence/transcript.rs`
-- GitHub testers: `/Users/p4gs/Code/OCEAN/src/modules/testers/github*.rs`
+- Tester trait: `OCEAN/src/module/tester.rs`
+- Safety: `OCEAN/src/module/safety.rs`
+- Transcript: `OCEAN/src/evidence/transcript.rs`
+- GitHub testers: `OCEAN/src/modules/testers/github*.rs`
 
 **Step 1: Define Tester trait + safety types**
 
@@ -1368,10 +1368,10 @@ git commit -m "feat(testers): migrate GitHub testers to shared crate"
 **Goal:** Make OCEAN depend on the shared crates and delegate to them for GitHub/Okta observations and tests.
 
 **Files:**
-- Modify: `/Users/p4gs/Code/OCEAN/Cargo.toml` — add path deps
-- Modify: `/Users/p4gs/Code/OCEAN/src/modules/observers/mod.rs` — register shared observers
-- Modify: `/Users/p4gs/Code/OCEAN/src/modules/testers/mod.rs` — register shared testers
-- Modify: `/Users/p4gs/Code/OCEAN/src/modules/observers/github*.rs` — replace with thin wrappers
+- Modify: `OCEAN/Cargo.toml` — add path deps
+- Modify: `OCEAN/src/modules/observers/mod.rs` — register shared observers
+- Modify: `OCEAN/src/modules/testers/mod.rs` — register shared testers
+- Modify: `OCEAN/src/modules/observers/github*.rs` — replace with thin wrappers
 
 **Approach:** OCEAN keeps its own `Observer` and `Tester` traits (they return `Evidence`, not `ControlResult`). Each OCEAN observer wraps a shared `grc-controls-observers` observer, calling `observe_as_evidence()` to get normalized Evidence directly.
 
@@ -1425,10 +1425,10 @@ cargo clippy -- -D warnings
 **Goal:** Make HTH depend on the shared crates, replacing `hth-github` and `hth-okta` with `grc-controls-apis`.
 
 **Files:**
-- Modify: `/Users/p4gs/Code/how-to-harden/cli/Cargo.toml` — add workspace members or path deps
-- Modify: `/Users/p4gs/Code/how-to-harden/cli/crates/hth/Cargo.toml` — depend on shared crates
-- Modify: `/Users/p4gs/Code/how-to-harden/cli/crates/hth-github/src/lib.rs` — delegate to shared client
-- Modify: `/Users/p4gs/Code/how-to-harden/cli/crates/hth/src/main.rs` — wire vendor registry
+- Modify: `how-to-harden/cli/Cargo.toml` — add workspace members or path deps
+- Modify: `how-to-harden/cli/crates/hth/Cargo.toml` — depend on shared crates
+- Modify: `how-to-harden/cli/crates/hth-github/src/lib.rs` — delegate to shared client
+- Modify: `how-to-harden/cli/crates/hth/src/main.rs` — wire vendor registry
 
 **Approach:** HTH's `VendorProvider` trait is async; `grc-controls-apis` provides sync clients. Two options:
 
