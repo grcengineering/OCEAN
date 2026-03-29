@@ -57,6 +57,18 @@ jobs:
         run: cargo audit
 
   # -------------------------------------------------------------------------
+  # Supply chain (cargo-deny: licenses + advisories + bans + sources)
+  # -------------------------------------------------------------------------
+  deny:
+    name: Supply Chain (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check all
+
+  # -------------------------------------------------------------------------
   # Lint (clippy + fmt)
   # -------------------------------------------------------------------------
   lint:
@@ -72,11 +84,45 @@ jobs:
       - run: cargo fmt --check
 
   # -------------------------------------------------------------------------
+  # Secrets detection (TruffleHog)
+  # -------------------------------------------------------------------------
+  secrets:
+    name: Secret Scanning (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: TruffleHog scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  # -------------------------------------------------------------------------
+  # SAST (Semgrep)
+  # -------------------------------------------------------------------------
+  semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Semgrep
+        run: semgrep scan --config auto --config p/rust --config p/owasp-top-ten --error --sarif --output semgrep.sarif .
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        continue-on-error: true
+
+  # -------------------------------------------------------------------------
   # Build matrix (Linux, macOS, Windows)
   # -------------------------------------------------------------------------
   build-linux:
     name: Build (ubuntu-latest)
-    needs: [test, lint]
+    needs: [test, lint, audit, deny]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,7 +134,7 @@ jobs:
 
   build-macos:
     name: Build (macos-latest)
-    needs: [test, lint]
+    needs: [test, lint, audit, deny]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +146,7 @@ jobs:
 
   build-windows:
     name: Build (windows-latest)
-    needs: [test, lint]
+    needs: [test, lint, audit, deny]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
