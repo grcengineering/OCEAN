@@ -1,0 +1,89 @@
+id: OKTA-1.08
+name: Detect Inactive Admin Accounts
+description: |
+  Identifies admin accounts that have not logged in within the past 90 days.
+  Inactive admin accounts represent a significant security risk as they may be
+  targeted for credential compromise without being noticed. Dormant privileged
+  accounts should be deactivated or have their admin roles removed to reduce
+  the attack surface.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [governance, admin, hygiene]
+
+references:
+  nist: AC-2(3)
+  soc2: CC6.1
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.roles.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+  inactivity_threshold_days:
+    description: Number of days of inactivity before an admin is flagged
+    default: "90"
+    required: false
+
+steps:
+  - id: get_admin_role_assignments
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/iam/roles?type=SUPER_ADMIN,ORG_ADMIN,APP_ADMIN,USER_ADMIN,GROUP_ADMIN,READ_ONLY_ADMIN,API_ACCESS_MANAGEMENT_ADMIN"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      admin_roles: "$[*]"
+      admin_user_ids: "$[*].assignee.id"
+
+  - id: get_admin_user_details
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/users?search=status eq \"ACTIVE\"&filter=id eq {{admin_user_ids}}&limit=200"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      admin_users: "$[*]"
+      inactive_admins: "$[?(@.lastLogin < '{{ninety_days_ago}}')]"
+      inactive_admin_count: "$[?(@.lastLogin < '{{ninety_days_ago}}')].length"
+
+assertions:
+  - id: no_inactive_admins
+    expr: "inactive_admin_count == 0"
+    severity: medium
+    title: No Inactive Admin Accounts
+    pass_message: "All admin accounts have been active within the last {{inactivity_threshold_days}} days"
+    fail_message: "Found {{inactive_admin_count}} admin account(s) inactive for more than {{inactivity_threshold_days}} days"
+    finding:
+      description: |
+        One or more Okta admin accounts have not logged in within the past
+        {{inactivity_threshold_days}} days. Inactive admin accounts are a common
+        target for attackers because compromised credentials may go unnoticed.
+        These accounts retain full administrative privileges and could be used
+        to modify security policies, create backdoor accounts, or exfiltrate
+        data if compromised.
+
+remediation:
+  description: |
+    Review and deactivate admin accounts that have been inactive for more than
+    90 days. If the account is still needed, remove the admin role and reassign
+    it only when required.
+  steps:
+    - "Navigate to Okta Admin Console → Directory → People"
+    - "Filter for admin users and sort by 'Last Login'"
+    - "Identify accounts with no login activity in the past 90 days"
+    - "Deactivate the user or remove their admin role assignment"
+    - "Document the action and notify the account owner"
+  api:
+    method: POST
+    url: "https://{{okta_domain}}/api/v1/users/{{user_id}}/lifecycle/deactivate"
+    body: {}

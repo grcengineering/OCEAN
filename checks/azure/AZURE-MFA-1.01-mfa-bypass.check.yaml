@@ -1,0 +1,92 @@
+id: AZURE-MFA-1.01
+name: Test MFA Bypass
+description: |
+  Tests whether MFA can be bypassed via Conditional Access gaps. Checks for
+  policies that exclude users or applications from MFA requirements, which
+  could allow attackers to authenticate without a second factor.
+source: azure
+type: active
+safety: observable
+environment: staging
+profile: L1
+severity: critical
+
+credentials:
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  nist: IA-2(1)
+  soc2: CC6.1
+
+steps:
+  - id: get_conditional_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+    extract:
+      policies: "$.value"
+
+  - id: get_security_defaults
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/policies/identitySecurityDefaultsEnforcementPolicy"
+    extract:
+      security_defaults_enabled: "$.isEnabled"
+
+assertions:
+  - id: mfa_enforcement_exists
+    expr: "security_defaults_enabled == true or (policies | selectattr('grantControls.builtInControls', 'contains', 'mfa') | selectattr('state', 'equalto', 'enabled') | list | length > 0)"
+    severity: critical
+    title: MFA Enforcement Exists
+    pass_message: "MFA is enforced via security defaults or conditional access"
+    fail_message: "No MFA enforcement found via security defaults or conditional access"
+    finding:
+      description: |
+        Neither security defaults nor any enabled Conditional Access policy
+        enforces MFA. This means users can authenticate with only a password,
+        leaving accounts vulnerable to credential stuffing, phishing, and
+        brute force attacks. MFA blocks over 99.9% of account compromise.
+
+  - id: no_broad_mfa_exclusions
+    expr: "policies | selectattr('grantControls.builtInControls', 'contains', 'mfa') | selectattr('conditions.users.excludeUsers', 'defined') | list | length == 0"
+    severity: critical
+    title: No Broad MFA Exclusions
+    pass_message: "No MFA policies have user exclusions configured"
+    fail_message: "One or more MFA policies have user exclusions that may create bypass paths"
+    finding:
+      description: |
+        One or more Conditional Access policies requiring MFA have user
+        exclusions configured. Excluded users can bypass MFA requirements,
+        creating a potential attack path. Review all exclusions and ensure
+        they are necessary and documented.
+
+remediation:
+  steps:
+    - "Review all Conditional Access policies for MFA exclusions"
+    - "Remove unnecessary user and group exclusions from MFA policies"
+    - "Ensure service accounts use managed identities instead of MFA exclusions"
+    - "Enable security defaults if no conditional access policies are in place"
+  api:
+    url: https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
+    method: GET
+
+tags:
+  - mfa
+  - active-test
+  - azure

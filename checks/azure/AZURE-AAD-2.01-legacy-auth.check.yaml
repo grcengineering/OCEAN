@@ -1,0 +1,84 @@
+id: AZURE-AAD-2.01
+name: Audit Legacy Authentication Blocking
+description: |
+  Verifies that legacy authentication protocols are blocked to prevent
+  credential-based attacks. Legacy protocols like IMAP, SMTP, and POP3
+  do not support MFA and are commonly exploited in password spray attacks.
+source: azure
+profile: L1
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+  azure_subscription_id:
+    description: Azure subscription ID
+    required: true
+    env: AZURE_SUBSCRIPTION_ID
+
+references:
+  nist: AC-17
+  soc2: CC6.6
+
+steps:
+  - id: get_conditional_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+    extract:
+      policies: "$.value"
+
+assertions:
+  - id: legacy_auth_blocked
+    expr: "policies | selectattr('conditions.clientAppTypes', 'contains', 'exchangeActiveSync') | selectattr('grantControls.builtInControls', 'contains', 'block') | selectattr('state', 'equalto', 'enabled') | list | length > 0"
+    severity: high
+    title: Legacy Authentication Blocked
+    pass_message: "A conditional access policy blocks legacy authentication"
+    fail_message: "No conditional access policy blocks legacy authentication"
+    finding:
+      description: |
+        No enabled conditional access policy was found that blocks legacy
+        authentication protocols. Legacy protocols (IMAP, SMTP, POP3,
+        Exchange ActiveSync) do not support modern authentication or MFA,
+        making them a common vector for password spray and brute force attacks.
+
+remediation:
+  steps:
+    - "Navigate to Azure AD > Security > Conditional Access"
+    - "Create a policy targeting all users and all cloud apps"
+    - "Under Conditions > Client apps, select Exchange ActiveSync clients and Other clients"
+    - "Set Grant to Block access"
+    - "Enable the policy"
+  api:
+    url: https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
+    method: POST
+    body:
+      displayName: "Block Legacy Authentication"
+      state: "enabled"
+      conditions:
+        clientAppTypes:
+          - "exchangeActiveSync"
+          - "other"
+      grantControls:
+        operator: "OR"
+        builtInControls:
+          - "block"
+
+tags:
+  - identity
+  - legacy-auth
+  - azure

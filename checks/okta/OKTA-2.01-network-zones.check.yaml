@@ -1,0 +1,70 @@
+id: OKTA-2.01
+name: Configure Network Zones
+description: |
+  Verifies that at least one network zone is configured in the Okta
+  organization. Network zones enable location-based access policies,
+  allowing administrators to restrict or allow access based on IP
+  ranges, geographic regions, or ASN.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [network, zones, access-control]
+
+references:
+  nist: ["AC-17", "SC-7"]
+  soc2: CC6.6
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_network_zones
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/zones"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      zone_count: "$length"
+      zones: "$[*]"
+
+assertions:
+  - id: network_zones_configured
+    expr: "zone_count > 0"
+    severity: medium
+    title: Network Zones Configured
+    pass_message: "{{zone_count}} network zone(s) configured"
+    fail_message: "No network zones are configured"
+    finding:
+      description: |
+        No network zones are configured in the Okta organization. Network
+        zones are used to define trusted and untrusted network locations,
+        enabling location-based access policies. Without network zones,
+        sign-on policies cannot enforce location-aware controls such as
+        blocking access from high-risk regions or requiring step-up
+        authentication from untrusted networks.
+
+remediation:
+  description: |
+    Configure network zones to define trusted and untrusted network
+    locations for use in sign-on and authentication policies.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Networks"
+    - "Click 'Add Zone'"
+    - "Define IP ranges for trusted corporate networks"
+    - "Optionally create block-list zones for high-risk regions"
+    - "Reference zones in sign-on policies for conditional access"
+  manual:
+    - "Review network zones quarterly as network topology changes"
+    - "Ensure VPN and office IP ranges are included in trusted zones"

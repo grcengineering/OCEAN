@@ -1,0 +1,94 @@
+id: AZURE-NSG-1.01
+name: Audit Unrestricted Inbound on SSH and RDP
+description: |
+  Verifies that no network security groups allow unrestricted inbound access
+  on SSH (22) or RDP (3389) ports. Open management ports are a top attack
+  vector for brute force and credential stuffing attacks.
+source: azure
+profile: L1
+severity: critical
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+  azure_subscription_id:
+    description: Azure subscription ID
+    required: true
+    env: AZURE_SUBSCRIPTION_ID
+
+references:
+  nist: SC-7(5)
+  soc2: CC6.6
+
+steps:
+  - id: list_nsgs
+    action: api_call
+    request:
+      method: GET
+      url: "https://management.azure.com/subscriptions/{{azure_subscription_id}}/providers/Microsoft.Network/networkSecurityGroups?api-version=2023-11-01"
+    extract:
+      nsgs: "$.value"
+
+assertions:
+  - id: no_unrestricted_ssh
+    expr: "nsgs | map(attribute='properties.securityRules') | flatten | selectattr('properties.direction', 'equalto', 'Inbound') | selectattr('properties.access', 'equalto', 'Allow') | selectattr('properties.destinationPortRange', 'in', ['22', '*']) | selectattr('properties.sourceAddressPrefix', 'in', ['*', '0.0.0.0/0', 'Internet']) | list | length == 0"
+    severity: critical
+    title: No Unrestricted SSH Inbound Rules
+    pass_message: "No NSG rules allow unrestricted inbound SSH (port 22)"
+    fail_message: "One or more NSG rules allow unrestricted inbound SSH (port 22)"
+    finding:
+      description: |
+        One or more Network Security Group rules allow unrestricted inbound
+        access on port 22 (SSH) from any source (0.0.0.0/0 or Internet).
+        This exposes virtual machines to brute force attacks from the entire
+        internet. Restrict SSH access to known IP ranges or use Azure Bastion.
+
+  - id: no_unrestricted_rdp
+    expr: "nsgs | map(attribute='properties.securityRules') | flatten | selectattr('properties.direction', 'equalto', 'Inbound') | selectattr('properties.access', 'equalto', 'Allow') | selectattr('properties.destinationPortRange', 'in', ['3389', '*']) | selectattr('properties.sourceAddressPrefix', 'in', ['*', '0.0.0.0/0', 'Internet']) | list | length == 0"
+    severity: critical
+    title: No Unrestricted RDP Inbound Rules
+    pass_message: "No NSG rules allow unrestricted inbound RDP (port 3389)"
+    fail_message: "One or more NSG rules allow unrestricted inbound RDP (port 3389)"
+    finding:
+      description: |
+        One or more Network Security Group rules allow unrestricted inbound
+        access on port 3389 (RDP) from any source. RDP is a high-value target
+        for attackers and should never be exposed to the internet. Use Azure
+        Bastion, VPN, or Just-In-Time VM access instead.
+
+remediation:
+  steps:
+    - "Navigate to the Network Security Group in the Azure portal"
+    - "Review inbound security rules for ports 22 (SSH) and 3389 (RDP)"
+    - "Remove or modify any rules with source 0.0.0.0/0 or Any on these ports"
+    - "Restrict source IP ranges to known CIDR blocks or use Azure Bastion for remote access"
+    - "Consider using Just-In-Time VM access via Microsoft Defender for Cloud"
+  api:
+    url: https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/networkSecurityGroups/{nsgName}/securityRules/{ruleName}?api-version=2023-11-01
+    method: PUT
+    body:
+      properties:
+        protocol: "Tcp"
+        sourceAddressPrefix: "{restrictedCIDR}"
+        destinationPortRange: "22"
+        access: "Allow"
+        direction: "Inbound"
+        priority: 100
+
+tags:
+  - network
+  - nsg
+  - azure

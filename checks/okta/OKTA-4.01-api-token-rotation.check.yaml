@@ -1,0 +1,80 @@
+id: OKTA-4.01
+name: API Token Rotation Compliance
+description: |
+  Verifies that all Okta API tokens have been rotated within the past 90 days.
+  Stale API tokens that are not regularly rotated pose a significant credential
+  compromise risk. Long-lived tokens may have been exposed in logs, code
+  repositories, or third-party integrations without detection. Regular rotation
+  limits the window of exposure for compromised tokens.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [credentials, api-tokens, hygiene]
+
+references:
+  nist: IA-5(1)
+  soc2: CC6.1
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+  rotation_threshold_days:
+    description: Maximum age in days before a token is considered stale
+    default: "90"
+    required: false
+
+steps:
+  - id: get_api_tokens
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/api-tokens"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      tokens: "$[*]"
+      token_count: "$.length"
+
+assertions:
+  - id: no_stale_tokens
+    expr: "size(tokens.filter(t, timestamp(t.created) < now - duration('2160h'))) == 0"
+    severity: high
+    title: API Tokens Rotated Within Policy
+    pass_message: "All {{token_count}} API token(s) have been created or rotated within the last {{rotation_threshold_days}} days"
+    fail_message: "Found {{stale_token_count}} API token(s) older than {{rotation_threshold_days}} days"
+    finding:
+      description: |
+        One or more Okta API tokens have not been rotated within the required
+        {{rotation_threshold_days}}-day period. Stale API tokens are a high-risk
+        credential hygiene issue. Tokens that remain active for extended periods
+        may have been inadvertently exposed through code commits, log files,
+        shared configuration, or compromised third-party systems. An attacker
+        with a valid API token can perform administrative actions against the
+        Okta tenant including user management, policy changes, and data
+        exfiltration.
+
+remediation:
+  description: |
+    Rotate all API tokens that are older than 90 days. Create a new token,
+    update all integrations that use the old token, then revoke the old token.
+    Establish a recurring rotation schedule.
+  steps:
+    - "Navigate to Okta Admin Console → Security → API → Tokens"
+    - "Identify tokens with a creation date older than 90 days"
+    - "Create a new API token with the same scopes and permissions"
+    - "Update all integrations and services that reference the old token"
+    - "Verify the new token is working in all integrations"
+    - "Revoke the old token"
+  api:
+    method: DELETE
+    url: "https://{{okta_domain}}/api/v1/api-tokens/{{token_id}}"
+    body: {}

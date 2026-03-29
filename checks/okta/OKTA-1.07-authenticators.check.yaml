@@ -1,0 +1,71 @@
+id: OKTA-1.07
+name: Audit Authenticators
+description: |
+  Enumerates configured authenticators in the Okta organization and verifies
+  that phishing-resistant authenticators (FIDO2/WebAuthn) are available.
+  Phishing-resistant MFA significantly reduces the risk of credential theft
+  through social engineering attacks.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [mfa, authenticators, phishing-resistant]
+
+references:
+  nist: ["IA-2(1)", "IA-2(6)"]
+  soc2: CC6.1
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_authenticators
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/authenticators"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      authenticators: "$[*]"
+      authenticator_types: "$[*].type"
+      has_webauthn: "$[?(@.type=='security_key' || @.key=='webauthn')]"
+
+assertions:
+  - id: phishing_resistant_authenticator
+    expr: "has_webauthn | length > 0"
+    severity: high
+    title: Phishing-Resistant Authenticator Available
+    pass_message: "Phishing-resistant authenticator (FIDO2/WebAuthn) is configured"
+    fail_message: "No phishing-resistant authenticator (FIDO2/WebAuthn) is configured"
+    finding:
+      description: |
+        No phishing-resistant authenticator such as FIDO2 or WebAuthn is
+        configured. Phishing-resistant MFA methods are critical for preventing
+        credential theft through social engineering and adversary-in-the-middle
+        attacks. Configure FIDO2/WebAuthn as an authenticator in the Okta Admin
+        Console.
+
+remediation:
+  description: |
+    Enable FIDO2/WebAuthn as an authenticator to provide phishing-resistant
+    MFA for your organization.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authenticators"
+    - "Click 'Add Authenticator'"
+    - "Select 'FIDO2 (WebAuthn)'"
+    - "Configure settings and click 'Add'"
+    - "Update authentication policies to require or prefer FIDO2"
+  manual:
+    - "Distribute hardware security keys or enable platform authenticators"
+    - "Create an enrollment policy that encourages FIDO2 adoption"
+    - "Plan phased rollout starting with high-privilege users"

@@ -1,0 +1,80 @@
+id: AWS-S3-2.01
+name: Verify S3 Bucket Encryption at Rest
+description: |
+  Verifies that all S3 buckets have default server-side encryption enabled.
+  Encryption at rest protects data from unauthorized access to the underlying
+  storage infrastructure. AWS supports SSE-S3, SSE-KMS, and SSE-C encryption
+  modes. At minimum, SSE-S3 (AES-256) should be enabled on every bucket.
+author: grc-engineering
+version: "1.0"
+source: aws
+profile: L1
+severity: high
+tags: [s3, encryption, data-protection, aws]
+
+references:
+  nist: SC-28
+  soc2: CC6.1
+
+credentials:
+  AWS_ACCESS_KEY_ID:
+    type: api_token
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    type: api_token
+    required: true
+  AWS_SESSION_TOKEN:
+    type: api_token
+    required: false
+
+inputs:
+  aws_region:
+    description: AWS region for API calls
+    env: AWS_REGION
+    required: true
+
+steps:
+  - id: list_buckets
+    action: api_call
+    request:
+      method: GET
+      url: "https://s3.{{aws_region}}.amazonaws.com/"
+    extract:
+      buckets: "$.ListAllMyBucketsResult.Buckets.Bucket"
+
+  - id: get_bucket_encryption
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{buckets[*].Name}}.s3.{{aws_region}}.amazonaws.com/?encryption"
+    extract:
+      unencrypted_buckets: "$.Buckets[?(@.ServerSideEncryptionConfiguration == null)]"
+
+assertions:
+  - id: all_buckets_encrypted
+    expr: "unencrypted_buckets | length == 0"
+    severity: high
+    title: All S3 Buckets Encrypted at Rest
+    pass_message: "All {{buckets | length}} S3 bucket(s) have default encryption enabled"
+    fail_message: "{{unencrypted_buckets | length}} S3 bucket(s) do not have default encryption"
+    finding:
+      description: |
+        One or more S3 buckets do not have default server-side encryption enabled.
+        Data stored in these buckets is not encrypted at rest, exposing it to
+        unauthorized access if the storage layer is compromised. While S3 now
+        encrypts new buckets by default (Jan 2023), older buckets may lack this
+        configuration. CIS AWS Benchmark 2.1.1 requires encryption on all buckets.
+
+remediation:
+  description: |
+    Enable default server-side encryption on all S3 buckets. Use SSE-KMS for
+    sensitive workloads that require key management control and audit trails.
+  steps:
+    - "Navigate to S3 > Select the unencrypted bucket > Properties"
+    - "Under 'Default encryption', click 'Edit'"
+    - "Select 'Server-side encryption with Amazon S3 managed keys (SSE-S3)' at minimum"
+    - "For sensitive data, select 'Server-side encryption with AWS KMS keys (SSE-KMS)'"
+    - "If using SSE-KMS, select or create a KMS key"
+    - "Enable 'Bucket Key' to reduce KMS API costs"
+    - "Click 'Save changes'"
+    - "Note: Existing objects are not retroactively encrypted; use S3 Batch Operations to re-encrypt"

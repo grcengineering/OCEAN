@@ -1,0 +1,76 @@
+id: OKTA-8.01
+name: ThreatInsight Action Mode Is Block
+description: |
+  Verifies that Okta ThreatInsight is configured in "block" mode, not just
+  "audit" or "none". While audit mode logs malicious IP activity, only block
+  mode actively prevents credential-based attacks such as credential stuffing,
+  password spraying, and brute force attempts. Organizations that have validated
+  ThreatInsight in audit mode should escalate to block mode for active protection.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [threat-detection, security]
+
+references:
+  nist: SI-4
+  soc2: CC7.2
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_threat_insight_config
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/threats/configuration"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      action: "$.action"
+
+assertions:
+  - id: threat_insight_block_mode
+    expr: "action == 'block'"
+    severity: high
+    title: ThreatInsight Set to Block Mode
+    pass_message: "ThreatInsight is configured in block mode, actively preventing credential-based attacks"
+    fail_message: "ThreatInsight action is '{{action}}' — expected 'block' for active threat prevention"
+    finding:
+      description: |
+        Okta ThreatInsight is not configured in block mode. The current action
+        is set to "{{action}}". In audit mode, ThreatInsight only logs malicious
+        IP activity without taking preventive action. In none mode, ThreatInsight
+        is fully disabled. Only block mode actively denies authentication attempts
+        from known malicious IPs identified by Okta's threat intelligence network.
+        Without block mode enabled, the organization remains vulnerable to
+        credential stuffing, password spraying, and brute force attacks from
+        known-bad IP addresses.
+
+remediation:
+  description: |
+    Upgrade ThreatInsight from audit or none mode to block mode. If currently
+    in none mode, consider enabling audit mode first to validate there are no
+    false positives before switching to block.
+  steps:
+    - "Navigate to Okta Admin Console → Security → General"
+    - "Scroll to 'Okta ThreatInsight Settings'"
+    - "Select 'Log and enforce security' to enable block mode"
+    - "Optionally add trusted proxy IPs to the exclusion list to prevent false positives"
+    - "Click 'Save'"
+    - "Monitor the System Log for ThreatInsight events to verify correct operation"
+  api:
+    method: POST
+    url: "https://{{okta_domain}}/api/v1/threats/configuration"
+    body:
+      action: "block"

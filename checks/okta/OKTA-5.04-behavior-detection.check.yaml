@@ -1,0 +1,69 @@
+id: OKTA-5.04
+name: Enable Behavior Detection
+description: |
+  Verifies that behavior detection rules are configured and active in
+  the Okta organization. Behavior detection identifies anomalous user
+  activity such as new device, new location, or velocity anomalies,
+  enabling risk-based authentication policies.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [behavior-detection, anomaly, security]
+
+references:
+  nist: SI-4
+  soc2: CC7.2
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_behaviors
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/behaviors"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      behaviors: "$[*]"
+      active_behaviors: "$[?(@.status=='ACTIVE')]"
+
+assertions:
+  - id: active_behavior_detection
+    expr: "active_behaviors | length > 0"
+    severity: medium
+    title: Behavior Detection Rules Active
+    pass_message: "Active behavior detection rules are configured"
+    fail_message: "No active behavior detection rules found"
+    finding:
+      description: |
+        No active behavior detection rules are configured in the Okta
+        organization. Behavior detection identifies anomalous user activity
+        such as sign-ins from new devices, new locations, or impossible
+        travel scenarios. Without behavior detection, risk-based authentication
+        policies cannot evaluate user context for step-up authentication.
+
+remediation:
+  description: |
+    Configure and activate behavior detection rules to enable risk-based
+    authentication policies.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Behavior Detection"
+    - "Review default behavior detection rules"
+    - "Activate rules for new device, new location, and velocity anomalies"
+    - "Reference behavior rules in authentication policies for step-up MFA"
+  manual:
+    - "Review behavior detection rules quarterly"
+    - "Tune rules based on false positive rates"
+    - "Integrate behavior signals with sign-on policies"

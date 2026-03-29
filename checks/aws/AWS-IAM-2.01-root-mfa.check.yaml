@@ -1,0 +1,96 @@
+id: AWS-IAM-2.01
+name: Verify Root Account MFA
+description: |
+  Verifies that the AWS root account has multi-factor authentication (MFA)
+  enabled. The root account has unrestricted access to all resources and
+  services in the AWS account, making it a critical target for attackers.
+  MFA adds a second layer of authentication to protect against compromised
+  credentials.
+author: grc-engineering
+version: "1.0"
+source: aws
+profile: L1
+severity: critical
+tags: [iam, root-account, mfa, identity, aws]
+
+references:
+  nist: IA-2(1)
+  soc2: CC6.1
+
+credentials:
+  AWS_ACCESS_KEY_ID:
+    type: api_token
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    type: api_token
+    required: true
+  AWS_SESSION_TOKEN:
+    type: api_token
+    required: false
+
+inputs:
+  aws_region:
+    description: AWS region for API calls
+    env: AWS_REGION
+    required: true
+
+steps:
+  - id: get_account_summary
+    action: api_call
+    request:
+      method: POST
+      url: "https://iam.amazonaws.com/"
+      headers:
+        Content-Type: "application/x-www-form-urlencoded"
+      body: "Action=GetAccountSummary&Version=2010-05-08"
+    extract:
+      mfa_enabled: "$.GetAccountSummaryResult.SummaryMap.AccountMFAEnabled"
+
+  - id: list_mfa_devices
+    action: api_call
+    request:
+      method: POST
+      url: "https://iam.amazonaws.com/"
+      headers:
+        Content-Type: "application/x-www-form-urlencoded"
+      body: "Action=ListMFADevices&Version=2010-05-08"
+    extract:
+      mfa_devices: "$.ListMFADevicesResult.MFADevices"
+
+assertions:
+  - id: root_mfa_enabled
+    expr: "mfa_enabled == 1"
+    severity: critical
+    title: Root Account MFA Enabled
+    pass_message: "Root account has MFA enabled"
+    fail_message: "Root account does not have MFA enabled"
+    finding:
+      description: |
+        The AWS root account does not have multi-factor authentication enabled.
+        The root account has unrestricted access to all AWS services and resources.
+        Without MFA, the account is vulnerable to credential compromise via phishing,
+        credential stuffing, or key leakage. This is a critical security gap.
+
+  - id: root_hardware_mfa
+    expr: "mfa_devices | length > 0"
+    severity: critical
+    title: Root Account Has MFA Device
+    pass_message: "Root account has at least one MFA device configured"
+    fail_message: "Root account has no MFA devices configured"
+    finding:
+      description: |
+        No MFA device is associated with the root account. Configure a hardware
+        MFA device (preferred) or virtual MFA device for the root account to
+        satisfy CIS AWS Benchmark 1.5 and 1.6.
+
+remediation:
+  description: |
+    Enable MFA on the root account using a hardware TOTP token (preferred)
+    or a virtual MFA application such as Google Authenticator or Authy.
+  steps:
+    - "Sign in to the AWS Management Console as root"
+    - "Navigate to IAM > Dashboard > Security Status"
+    - "Click 'Activate MFA on your root account'"
+    - "Choose 'Hardware MFA device' or 'Virtual MFA device'"
+    - "Follow the enrollment prompts and scan the QR code"
+    - "Enter two consecutive MFA codes to confirm activation"

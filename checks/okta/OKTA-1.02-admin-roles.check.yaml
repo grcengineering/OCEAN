@@ -1,0 +1,66 @@
+id: OKTA-1.02
+name: Audit Admin Roles
+description: |
+  Enumerates all admin roles configured in the Okta organization and provides
+  an informational audit of role assignments. Excessive or unused admin roles
+  increase the blast radius of compromised credentials.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [admin, roles, least-privilege]
+
+references:
+  nist: AC-6(1)
+  soc2: CC6.2
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_admin_roles
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/iam/roles"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      role_count: "$length"
+      roles: "$[*]"
+
+assertions:
+  - id: admin_roles_audit
+    expr: "role_count >= 0"
+    severity: medium
+    title: Admin Roles Audit
+    pass_message: "{{role_count}} admin role(s) found — review for least-privilege compliance"
+    fail_message: "Unable to retrieve admin roles"
+    finding:
+      description: |
+        This is an informational audit of admin roles configured in Okta.
+        Review each role to ensure it follows least-privilege principles.
+        Remove or reduce scope of roles that are no longer needed or are
+        overly permissive.
+
+remediation:
+  description: |
+    Review all admin roles and ensure each follows least-privilege principles.
+    Remove unused roles and reduce scope of overly permissive assignments.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Administrators"
+    - "Review each admin role assignment"
+    - "Remove or downgrade roles that are no longer needed"
+    - "Document justification for each admin role"
+  manual:
+    - "Review admin roles quarterly as part of access recertification"
+    - "Ensure no single account holds multiple high-privilege roles"

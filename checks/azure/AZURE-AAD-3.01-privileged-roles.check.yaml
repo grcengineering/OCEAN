@@ -1,0 +1,95 @@
+id: AZURE-AAD-3.01
+name: Audit Privileged Role Assignments
+description: |
+  Verifies that privileged role assignments are reviewed and limited to
+  authorized personnel. Excessive Global Administrator or Privileged Role
+  Administrator assignments increase the blast radius of account compromise.
+source: azure
+profile: L2
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+  azure_subscription_id:
+    description: Azure subscription ID
+    required: true
+    env: AZURE_SUBSCRIPTION_ID
+
+references:
+  nist: AC-6(7)
+  soc2: CC6.3
+
+steps:
+  - id: get_directory_roles
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/directoryRoles"
+    extract:
+      roles: "$.value"
+
+  - id: get_global_admin_members
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/directoryRoles/roleTemplateId=62e90394-69f5-4237-9190-012177145e10/members"
+    extract:
+      global_admins: "$.value"
+
+assertions:
+  - id: limited_global_admins
+    expr: "global_admins | length <= 5"
+    severity: high
+    title: Global Administrator Count Within Limits
+    pass_message: "Global Administrator role has 5 or fewer members"
+    fail_message: "Global Administrator role has more than 5 members"
+    finding:
+      description: |
+        The Global Administrator role has more than 5 members assigned. Microsoft
+        recommends limiting Global Administrator assignments to fewer than 5 users.
+        Excessive privileged access increases the attack surface and risk of
+        unauthorized tenant-wide changes. Use least-privilege roles and consider
+        Privileged Identity Management (PIM) for just-in-time access.
+
+  - id: global_admins_exist
+    expr: "global_admins | length >= 2"
+    severity: high
+    title: Multiple Global Administrators Exist
+    pass_message: "At least 2 Global Administrators are configured for redundancy"
+    fail_message: "Fewer than 2 Global Administrators configured"
+    finding:
+      description: |
+        Fewer than 2 Global Administrator accounts exist. Having at least 2 Global
+        Administrators ensures account recovery is possible if one account is
+        compromised or locked out. Microsoft recommends maintaining 2-4 Global
+        Administrator accounts.
+
+remediation:
+  steps:
+    - "Navigate to Azure AD > Roles and administrators"
+    - "Review Global Administrator, Privileged Role Administrator, and other high-privilege roles"
+    - "Remove unnecessary permanent assignments"
+    - "Enable Privileged Identity Management (PIM) for just-in-time access"
+    - "Require approval workflows for privileged role activation"
+  api:
+    url: https://graph.microsoft.com/v1.0/directoryRoles
+    method: GET
+
+tags:
+  - governance
+  - privileged-roles
+  - azure

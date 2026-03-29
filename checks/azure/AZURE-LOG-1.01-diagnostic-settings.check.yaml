@@ -1,0 +1,94 @@
+id: AZURE-LOG-1.01
+name: Audit Diagnostic Settings on Subscription
+description: |
+  Verifies that diagnostic settings are configured on the Azure subscription
+  to capture activity logs. Activity logs record control-plane operations and
+  are critical for security monitoring and compliance.
+source: azure
+profile: L1
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+  azure_subscription_id:
+    description: Azure subscription ID
+    required: true
+    env: AZURE_SUBSCRIPTION_ID
+
+references:
+  nist: AU-2
+  soc2: CC7.2
+
+steps:
+  - id: get_diagnostic_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://management.azure.com/subscriptions/{{azure_subscription_id}}/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
+    extract:
+      diagnostic_settings: "$.value"
+
+assertions:
+  - id: diagnostic_settings_exist
+    expr: "diagnostic_settings | length > 0"
+    severity: high
+    title: Diagnostic Settings Configured
+    pass_message: "At least one diagnostic setting is configured on the subscription"
+    fail_message: "No diagnostic settings are configured on the subscription"
+    finding:
+      description: |
+        No diagnostic settings are configured on this Azure subscription.
+        Without diagnostic settings, activity log events (administrative,
+        security, service health, alert) are not forwarded to a Log Analytics
+        workspace, Storage Account, or Event Hub. This creates a gap in
+        security monitoring and audit trail retention.
+
+  - id: diagnostic_settings_capture_security
+    expr: "diagnostic_settings | selectattr('properties.logs', 'defined') | list | length > 0"
+    severity: high
+    title: Diagnostic Settings Capture Log Categories
+    pass_message: "Diagnostic settings are configured to capture log categories"
+    fail_message: "No diagnostic settings are configured with log categories"
+    finding:
+      description: |
+        Diagnostic settings exist but no log categories are configured for
+        capture. Ensure that at minimum Administrative and Security log
+        categories are enabled to maintain visibility into control-plane
+        operations and security-relevant events.
+
+remediation:
+  steps:
+    - "Navigate to Azure Monitor > Activity log > Diagnostic settings"
+    - "Add a diagnostic setting for the subscription"
+    - "Enable all log categories (Administrative, Security, ServiceHealth, Alert, Recommendation, Policy, Autoscale, ResourceHealth)"
+    - "Send logs to a Log Analytics workspace, Storage Account, or Event Hub"
+  api:
+    url: https://management.azure.com/subscriptions/{subscriptionId}/providers/microsoft.insights/diagnosticSettings/{name}?api-version=2021-05-01-preview
+    method: PUT
+    body:
+      properties:
+        logs:
+          - category: "Administrative"
+            enabled: true
+          - category: "Security"
+            enabled: true
+        workspaceId: "/subscriptions/{subscriptionId}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{workspace}"
+
+tags:
+  - logging
+  - diagnostic-settings
+  - azure

@@ -1,0 +1,92 @@
+id: AWS-KMS-1.01
+name: Verify KMS Key Rotation Enabled
+description: |
+  Verifies that automatic key rotation is enabled for all customer-managed
+  AWS KMS symmetric encryption keys. Key rotation limits the amount of data
+  encrypted under a single key version, reducing the blast radius if a key
+  is compromised. AWS rotates the cryptographic material annually while
+  retaining old material for decryption.
+author: grc-engineering
+version: "1.0"
+source: aws
+profile: L2
+severity: high
+tags: [kms, encryption, key-rotation, cryptography, aws]
+
+references:
+  nist: SC-12
+  soc2: CC6.1
+
+credentials:
+  AWS_ACCESS_KEY_ID:
+    type: api_token
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    type: api_token
+    required: true
+  AWS_SESSION_TOKEN:
+    type: api_token
+    required: false
+
+inputs:
+  aws_region:
+    description: AWS region for API calls
+    env: AWS_REGION
+    required: true
+
+steps:
+  - id: list_keys
+    action: api_call
+    request:
+      method: POST
+      url: "https://kms.{{aws_region}}.amazonaws.com/"
+      headers:
+        X-Amz-Target: "TrentService.ListKeys"
+        Content-Type: "application/x-amz-json-1.1"
+      body: {}
+    extract:
+      keys: "$.Keys"
+      customer_managed_keys: "$.Keys"
+
+  - id: get_key_rotation_status
+    action: api_call
+    request:
+      method: POST
+      url: "https://kms.{{aws_region}}.amazonaws.com/"
+      headers:
+        X-Amz-Target: "TrentService.GetKeyRotationStatus"
+        Content-Type: "application/x-amz-json-1.1"
+      body:
+        KeyId: "{{keys[*].KeyId}}"
+    extract:
+      keys_without_rotation: "$.Keys[?(@.KeyRotationEnabled == false)]"
+
+assertions:
+  - id: all_keys_rotated
+    expr: "keys_without_rotation | length == 0"
+    severity: high
+    title: All KMS Keys Have Rotation Enabled
+    pass_message: "All {{customer_managed_keys | length}} customer-managed KMS key(s) have automatic rotation enabled"
+    fail_message: "{{keys_without_rotation | length}} customer-managed KMS key(s) do not have automatic rotation enabled"
+    finding:
+      description: |
+        One or more customer-managed KMS keys do not have automatic key rotation
+        enabled. Without rotation, a single compromised key version could decrypt
+        all data ever encrypted with that key. AWS automatic rotation creates new
+        cryptographic material annually while preserving the ability to decrypt
+        data encrypted with previous versions. CIS AWS Benchmark 3.8 requires
+        rotation for all customer-managed symmetric keys.
+
+remediation:
+  description: |
+    Enable automatic key rotation on all customer-managed symmetric KMS keys.
+    Note: automatic rotation is not supported for asymmetric keys, HMAC keys,
+    or keys in custom key stores.
+  steps:
+    - "Navigate to KMS > Customer managed keys"
+    - "Select each key without rotation enabled"
+    - "Click the 'Key rotation' tab"
+    - "Enable 'Automatically rotate this KMS key every year'"
+    - "Click 'Save'"
+    - "For keys that cannot use automatic rotation, establish a manual rotation procedure"
+    - "Document the rotation schedule and ownership in your key management policy"

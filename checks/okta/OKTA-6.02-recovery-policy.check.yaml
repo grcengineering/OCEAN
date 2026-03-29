@@ -1,0 +1,71 @@
+id: OKTA-6.02
+name: Review Recovery Policy
+description: |
+  Reviews the Okta password recovery policy to verify that self-service
+  password recovery requires MFA verification. Recovery flows without
+  MFA requirements are vulnerable to account takeover through social
+  engineering or email compromise.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [recovery, password, authentication]
+
+references:
+  nist: IA-5(1)
+  soc2: CC6.1
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_password_policy
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/policies?type=PASSWORD"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      policies: "$[*]"
+      recovery_settings: "$[0].settings.recovery"
+
+assertions:
+  - id: recovery_requires_mfa
+    expr: "recovery_settings.factors.okta_email.status == 'ACTIVE' && recovery_settings.factors.okta_sms || recovery_settings.factors.okta_call"
+    severity: medium
+    title: Self-Service Recovery Requires MFA
+    pass_message: "Self-service recovery has MFA requirement configured"
+    fail_message: "Self-service recovery does not require MFA verification"
+    finding:
+      description: |
+        Self-service password recovery does not require multi-factor
+        authentication. Without MFA during recovery, an attacker who
+        compromises a user's email account can reset their Okta password
+        and gain access to all SSO-protected applications. Configure the
+        recovery policy to require an additional authentication factor
+        beyond email verification.
+
+remediation:
+  description: |
+    Update the password recovery policy to require MFA verification
+    during self-service password recovery flows.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authentication → Password"
+    - "Select the default password policy"
+    - "Under 'Recovery', configure additional factors (SMS, voice call, or Okta Verify)"
+    - "Ensure recovery requires at least two factors"
+    - "Click 'Update Policy'"
+  manual:
+    - "Test recovery flow to verify MFA is required"
+    - "Consider disabling email-only recovery for high-privilege users"
+    - "Review recovery policy as part of annual authentication review"

@@ -1,0 +1,98 @@
+id: AZURE-CA-1.01
+name: Audit Conditional Access Policies
+description: |
+  Verifies MFA is required via Conditional Access policies. Conditional Access
+  is Azure AD's policy engine that enforces access decisions based on signals
+  such as user, device, location, and risk level.
+source: azure
+profile: L1
+severity: high
+
+credentials:
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  nist:
+    - AC-3
+    - IA-2
+  soc2: CC6.1
+
+steps:
+  - id: get_conditional_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+    extract:
+      policies: "$.value"
+
+assertions:
+  - id: ca_policies_exist
+    expr: "policies | length > 0"
+    severity: high
+    title: Conditional Access Policies Exist
+    pass_message: "At least one Conditional Access policy is configured"
+    fail_message: "No Conditional Access policies are configured"
+    finding:
+      description: |
+        No Conditional Access policies were found in this Azure AD tenant.
+        Conditional Access policies are required to enforce MFA, restrict
+        access by location or device, and block risky sign-ins. Without
+        these policies, users may access resources without adequate
+        identity verification.
+
+  - id: mfa_policy_enabled
+    expr: "policies | selectattr('grantControls.builtInControls', 'contains', 'mfa') | selectattr('state', 'equalto', 'enabled') | list | length > 0"
+    severity: high
+    title: MFA Required via Conditional Access
+    pass_message: "At least one enabled policy requires MFA"
+    fail_message: "No enabled Conditional Access policy requires MFA"
+    finding:
+      description: |
+        No enabled Conditional Access policy was found that requires MFA.
+        MFA is one of the most effective controls against credential-based
+        attacks. Microsoft reports that MFA blocks over 99.9% of account
+        compromise attacks.
+
+remediation:
+  steps:
+    - "Navigate to Azure AD > Security > Conditional Access"
+    - "Create a new policy requiring MFA for all users on all cloud apps"
+    - "Under Grant, select Require multi-factor authentication"
+    - "Set the policy state to Enabled (test in Report-only mode first)"
+  api:
+    url: https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
+    method: POST
+    body:
+      displayName: "Require MFA for All Users"
+      state: "enabled"
+      conditions:
+        applications:
+          includeApplications:
+            - "All"
+        users:
+          includeUsers:
+            - "All"
+      grantControls:
+        operator: "OR"
+        builtInControls:
+          - "mfa"
+
+tags:
+  - conditional-access
+  - mfa
+  - azure

@@ -1,0 +1,93 @@
+id: AZURE-KV-1.01
+name: Audit Key Vault Soft Delete
+description: |
+  Verifies that soft delete is enabled on all Azure Key Vaults to prevent
+  permanent data loss. Soft delete allows recovery of deleted vaults and
+  vault objects for a configurable retention period.
+source: azure
+profile: L2
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+  azure_subscription_id:
+    description: Azure subscription ID
+    required: true
+    env: AZURE_SUBSCRIPTION_ID
+
+references:
+  nist: SC-28
+  soc2: CC6.1
+
+steps:
+  - id: list_key_vaults
+    action: api_call
+    request:
+      method: GET
+      url: "https://management.azure.com/subscriptions/{{azure_subscription_id}}/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01"
+    extract:
+      vaults: "$.value"
+
+assertions:
+  - id: key_vaults_have_soft_delete
+    expr: "vaults | rejectattr('properties.enableSoftDelete', 'equalto', true) | list | length == 0"
+    severity: high
+    title: All Key Vaults Have Soft Delete Enabled
+    pass_message: "All Key Vaults have soft delete enabled"
+    fail_message: "One or more Key Vaults do not have soft delete enabled"
+    finding:
+      description: |
+        One or more Azure Key Vaults do not have soft delete enabled. Without
+        soft delete, deleted keys, secrets, and certificates are permanently
+        lost and cannot be recovered. Soft delete is now enabled by default
+        on new vaults and cannot be disabled, but older vaults may not have
+        it configured.
+
+  - id: key_vaults_have_purge_protection
+    expr: "vaults | rejectattr('properties.enablePurgeProtection', 'equalto', true) | list | length == 0"
+    severity: high
+    title: All Key Vaults Have Purge Protection Enabled
+    pass_message: "All Key Vaults have purge protection enabled"
+    fail_message: "One or more Key Vaults do not have purge protection enabled"
+    finding:
+      description: |
+        One or more Azure Key Vaults do not have purge protection enabled.
+        Purge protection prevents permanent deletion of a vault or vault
+        object even by a privileged user during the retention period. This
+        provides an additional layer of protection against malicious or
+        accidental data destruction.
+
+remediation:
+  steps:
+    - "Navigate to the Key Vault in the Azure portal"
+    - "Go to Properties"
+    - "Enable Soft-delete if not already enabled (note: soft delete is now enabled by default on new vaults and cannot be disabled)"
+    - "Set the retention period to at least 90 days"
+    - "Consider enabling Purge Protection for additional safety"
+  api:
+    url: https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.KeyVault/vaults/{vaultName}?api-version=2023-07-01
+    method: PATCH
+    body:
+      properties:
+        enableSoftDelete: true
+        softDeleteRetentionInDays: 90
+        enablePurgeProtection: true
+
+tags:
+  - data-protection
+  - keyvault
+  - azure

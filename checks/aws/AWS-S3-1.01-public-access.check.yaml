@@ -1,0 +1,25 @@
+id: AWS-S3-1.01
+name: Audit S3 Public Access
+description: Tests S3 bucket public access settings and block public access configuration
+source: aws
+implementation: native
+native_module: aws_s3_public
+profile: L1
+severity: critical
+
+credentials:
+  AWS_ACCESS_KEY_ID:
+    type: api_token
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    type: api_token
+    required: true
+
+references:
+  nist: AC-3
+  soc2: CC6.1
+
+tags:
+  - s3
+  - public-access
+  - aws

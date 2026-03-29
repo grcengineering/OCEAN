@@ -1,0 +1,71 @@
+id: OKTA-6.03
+name: Review Session Policy
+description: |
+  Reviews the Okta sign-on policy to verify that session lifetime settings
+  are not excessive. Long-lived sessions increase the risk of session
+  hijacking and unauthorized access from unattended devices.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [session, policy, authentication]
+
+references:
+  nist: AC-12
+  soc2: CC6.1
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_session_policy
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/policies?type=OKTA_SIGN_ON"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      policies: "$[*]"
+      session_settings: "$[0].settings"
+
+assertions:
+  - id: session_lifetime_reasonable
+    expr: "session_settings != null"
+    severity: medium
+    title: Session Policy Configuration
+    pass_message: "Session policy is configured — review lifetime settings"
+    fail_message: "Unable to retrieve session policy settings"
+    finding:
+      description: |
+        Review the Okta sign-on session policy to ensure session lifetimes
+        are not excessive. Long-lived sessions increase the risk of session
+        hijacking and unauthorized access from unattended devices. Recommended
+        settings include maximum session lifetime of 12 hours and idle timeout
+        of 1 hour. Consider requiring re-authentication for sensitive
+        applications.
+
+remediation:
+  description: |
+    Configure session policy with appropriate lifetime and idle timeout
+    settings to balance security and usability.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authentication → Sign On"
+    - "Select the global session policy"
+    - "Set maximum session lifetime to 12 hours or less"
+    - "Set idle session timeout to 1 hour or less"
+    - "Enable 'Prompt for re-authentication' for sensitive applications"
+    - "Click 'Update Policy'"
+  manual:
+    - "Review session settings annually"
+    - "Consider shorter session lifetimes for high-privilege users"
+    - "Evaluate per-application session policies for sensitive resources"

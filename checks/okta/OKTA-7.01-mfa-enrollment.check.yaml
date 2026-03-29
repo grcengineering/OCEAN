@@ -1,0 +1,77 @@
+id: OKTA-7.01
+name: Audit MFA Enrollment
+description: |
+  Audits MFA enrollment status across all active users in the Okta
+  organization. Full MFA enrollment verification requires per-user factor
+  checks and is delegated to the native OCEAN module for efficient
+  processing.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [mfa, enrollment, audit]
+implementation: native
+native_module: okta_mfa_enrollment
+
+references:
+  nist: ["IA-2(1)", "IA-2(2)"]
+  soc2: CC6.1
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_active_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/users?filter=status+eq+%22ACTIVE%22&limit=200"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+      paginate: true
+    extract:
+      user_count: "$length"
+      users: "$[*].profile.login"
+    note: |
+      Full MFA enrollment audit requires per-user factor check via
+      GET /api/v1/users/{userId}/factors for each active user.
+      This is delegated to the native module for efficient batch processing.
+
+assertions:
+  - id: mfa_enrollment_audit
+    expr: "user_count >= 0"
+    severity: high
+    title: MFA Enrollment Audit
+    pass_message: "{{user_count}} active user(s) found — delegating MFA enrollment check to native module"
+    fail_message: "Unable to retrieve active users for MFA enrollment audit"
+    finding:
+      description: |
+        This check identifies all active users for MFA enrollment verification.
+        The full audit requires checking each user's enrolled factors via the
+        Okta API. Users without MFA enrolled are vulnerable to credential-based
+        attacks. This check is executed by the native OCEAN module
+        okta_mfa_enrollment for efficient batch processing.
+
+remediation:
+  description: |
+    Ensure all active users have at least one MFA factor enrolled.
+    Configure MFA enrollment policies to require factor enrollment
+    at first sign-in.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Multifactor"
+    - "Review factor enrollment policies"
+    - "Set enrollment policy to 'Required' for all users"
+    - "Monitor enrollment status through the System Log"
+  manual:
+    - "Generate MFA enrollment report monthly"
+    - "Follow up with users who have not enrolled MFA"
+    - "Consider enforcing MFA enrollment deadlines"

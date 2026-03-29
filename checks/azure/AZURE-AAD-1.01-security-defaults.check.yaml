@@ -1,0 +1,74 @@
+id: AZURE-AAD-1.01
+name: Audit Security Defaults Configuration
+description: |
+  Verifies that security defaults or conditional access policies are enabled
+  to enforce baseline identity protections. Security defaults provide a set of
+  basic identity security mechanisms recommended by Microsoft.
+source: azure
+profile: L1
+severity: critical
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+  azure_subscription_id:
+    description: Azure subscription ID
+    required: true
+    env: AZURE_SUBSCRIPTION_ID
+
+references:
+  nist: AC-2
+  soc2: CC6.1
+
+steps:
+  - id: get_security_defaults
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/policies/identitySecurityDefaultsEnforcementPolicy"
+    extract:
+      security_defaults_enabled: "$.isEnabled"
+
+assertions:
+  - id: security_defaults_enabled
+    expr: "security_defaults_enabled == true"
+    severity: critical
+    title: Security Defaults Enabled
+    pass_message: "Security defaults are enabled on the tenant"
+    fail_message: "Security defaults are not enabled on the tenant"
+    finding:
+      description: |
+        Security defaults are not enabled on this Azure AD tenant. Security
+        defaults enforce baseline protections including MFA for all users,
+        blocking legacy authentication, and protecting privileged actions.
+        If conditional access policies are used instead, ensure equivalent
+        protections are in place.
+
+remediation:
+  steps:
+    - "Navigate to Azure AD > Properties > Manage Security defaults"
+    - "Enable security defaults if no conditional access policies are in place"
+    - "If using conditional access, ensure equivalent protections (MFA, block legacy auth) are configured"
+  api:
+    url: https://graph.microsoft.com/v1.0/policies/identitySecurityDefaultsEnforcementPolicy
+    method: PATCH
+    body:
+      isEnabled: true
+
+tags:
+  - identity
+  - security-defaults
+  - azure

@@ -1,0 +1,71 @@
+id: OKTA-5.01
+name: Enable System Log Streaming
+description: |
+  Verifies that at least one log stream is configured in the Okta
+  organization. Log streaming sends system log events to an external
+  SIEM or log management system for long-term retention, alerting,
+  and compliance analysis.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [logging, siem, monitoring]
+
+references:
+  nist: ["AU-2", "AU-6"]
+  soc2: CC7.2
+  iso27001: A.12.4.1
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_log_streams
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/logStreams"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      stream_count: "$length"
+
+assertions:
+  - id: log_streaming_enabled
+    expr: "stream_count >= 1"
+    severity: high
+    title: System Log Streaming Configured
+    pass_message: "{{stream_count}} log stream(s) configured"
+    fail_message: "No log streams are configured"
+    finding:
+      description: |
+        No log streaming is configured for this Okta organization. Without
+        log streaming, system log events are only available through the Okta
+        Admin Console and API with limited retention (90 days). Configure log
+        streaming to send events to a SIEM or log management system for
+        long-term retention, real-time alerting, and compliance analysis.
+
+remediation:
+  description: |
+    Configure log streaming to an external SIEM or log management system.
+    Supported destinations include Splunk Cloud, Amazon EventBridge, and
+    custom HTTP endpoints.
+  steps:
+    - "Navigate to Okta Admin Console → Reports → Log Streaming"
+    - "Click 'Add Log Stream'"
+    - "Select your destination provider (Splunk Cloud or AWS EventBridge)"
+    - "Configure the connection credentials"
+    - "Click 'Save' and verify events are flowing"
+  manual:
+    - "Verify log stream health regularly"
+    - "Ensure SIEM retention meets compliance requirements"
+    - "Configure alerting rules for critical security events"

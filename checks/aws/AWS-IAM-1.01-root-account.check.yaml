@@ -1,0 +1,25 @@
+id: AWS-IAM-1.01
+name: Audit IAM Root Account Usage
+description: Verifies root account has MFA enabled and no active access keys
+source: aws
+implementation: native
+native_module: aws_iam
+profile: L1
+severity: critical
+
+credentials:
+  AWS_ACCESS_KEY_ID:
+    type: api_token
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    type: api_token
+    required: true
+
+references:
+  nist: AC-6(1)
+  soc2: CC6.1
+
+tags:
+  - iam
+  - root-account
+  - aws

@@ -1,0 +1,113 @@
+id: AWS-CT-1.01
+name: Verify CloudTrail Enabled in All Regions
+description: |
+  Verifies that AWS CloudTrail is enabled and configured to log management
+  events in all AWS regions. CloudTrail provides a record of API calls made
+  in your account, which is essential for security monitoring, incident
+  investigation, and compliance auditing.
+author: grc-engineering
+version: "1.0"
+source: aws
+profile: L1
+severity: critical
+tags: [cloudtrail, logging, monitoring, aws]
+
+references:
+  nist: AU-2
+  soc2: CC7.2
+
+credentials:
+  AWS_ACCESS_KEY_ID:
+    type: api_token
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    type: api_token
+    required: true
+  AWS_SESSION_TOKEN:
+    type: api_token
+    required: false
+
+inputs:
+  aws_region:
+    description: AWS region for API calls
+    env: AWS_REGION
+    required: true
+
+steps:
+  - id: describe_trails
+    action: api_call
+    request:
+      method: POST
+      url: "https://cloudtrail.{{aws_region}}.amazonaws.com/"
+      headers:
+        X-Amz-Target: "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.DescribeTrails"
+        Content-Type: "application/x-amz-json-1.1"
+      body: {}
+    extract:
+      trails: "$.trailList"
+
+  - id: get_trail_status
+    action: api_call
+    request:
+      method: POST
+      url: "https://cloudtrail.{{aws_region}}.amazonaws.com/"
+      headers:
+        X-Amz-Target: "com.amazonaws.cloudtrail.v20131101.CloudTrail_20131101.GetTrailStatus"
+        Content-Type: "application/x-amz-json-1.1"
+      body:
+        Name: "{{trails[0].TrailARN}}"
+    extract:
+      is_logging: "$.IsLogging"
+
+assertions:
+  - id: trail_exists
+    expr: "trails | length > 0"
+    severity: critical
+    title: CloudTrail Trail Exists
+    pass_message: "At least one CloudTrail trail is configured"
+    fail_message: "No CloudTrail trails are configured in this account"
+    finding:
+      description: |
+        No CloudTrail trail exists in this AWS account. Without CloudTrail, there
+        is no record of API activity, making it impossible to detect unauthorized
+        access, investigate security incidents, or demonstrate audit compliance.
+        This is a critical gap in security visibility.
+
+  - id: multi_region_enabled
+    expr: "trails | selectattr('IsMultiRegionTrail', 'equalto', true) | list | length > 0"
+    severity: critical
+    title: Multi-Region Trail Enabled
+    pass_message: "At least one trail is configured for all regions"
+    fail_message: "No trail is configured to capture events across all regions"
+    finding:
+      description: |
+        No CloudTrail trail is configured as multi-region. Without multi-region
+        logging, API activity in regions outside the trail's home region will not
+        be captured. An attacker could operate in an unmonitored region to avoid
+        detection. CIS AWS Benchmark 3.1 requires multi-region trails.
+
+  - id: trail_is_logging
+    expr: "is_logging == true"
+    severity: critical
+    title: CloudTrail Is Actively Logging
+    pass_message: "CloudTrail is actively logging events"
+    fail_message: "CloudTrail logging is stopped"
+    finding:
+      description: |
+        CloudTrail exists but logging is currently stopped. This may indicate
+        an attacker disabled logging to cover their tracks, or an operational
+        misconfiguration. Re-enable logging immediately.
+
+remediation:
+  description: |
+    Create or update a CloudTrail trail to log management events in all regions
+    and deliver logs to a secured S3 bucket.
+  steps:
+    - "Navigate to CloudTrail > Trails > Create trail"
+    - "Name the trail (e.g., 'organization-trail')"
+    - "Enable 'Apply trail to all regions'"
+    - "Configure an S3 bucket for log delivery with versioning and encryption"
+    - "Enable CloudWatch Logs integration for real-time alerting"
+    - "Enable management events for both Read and Write"
+    - "Click 'Create trail'"
+    - "Verify trail status shows 'Logging' as active"

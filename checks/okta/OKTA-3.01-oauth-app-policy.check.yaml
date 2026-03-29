@@ -1,0 +1,70 @@
+id: OKTA-3.01
+name: Audit OAuth App Policy
+description: |
+  Enumerates all active applications in the Okta organization and provides
+  an informational audit for reviewing OAuth scopes. Applications with
+  excessive scopes increase the risk of data exposure through compromised
+  integrations.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [oauth, apps, audit]
+
+references:
+  nist: AC-6
+  soc2: CC6.2
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.users.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_active_apps
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/apps?filter=status+eq+%22ACTIVE%22"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+      paginate: true
+    extract:
+      app_count: "$length"
+      apps: "$[*]"
+
+assertions:
+  - id: oauth_app_audit
+    expr: "app_count >= 0"
+    severity: medium
+    title: Active OAuth Applications Audit
+    pass_message: "{{app_count}} active application(s) found — review for excessive OAuth scopes"
+    fail_message: "Unable to retrieve active applications"
+    finding:
+      description: |
+        This is an informational audit of active applications in Okta.
+        Review each application to ensure OAuth scopes follow least-privilege
+        principles. Applications with excessive scopes increase the risk of
+        data exposure if the application or its credentials are compromised.
+
+remediation:
+  description: |
+    Review all active applications and their OAuth scopes. Remove unused
+    applications and reduce scope grants to the minimum required.
+  steps:
+    - "Navigate to Okta Admin Console → Applications → Applications"
+    - "Filter by status: Active"
+    - "Review each application's OAuth scope grants"
+    - "Remove or reduce scopes that are not required"
+    - "Deactivate applications that are no longer in use"
+  manual:
+    - "Review active applications quarterly as part of access recertification"
+    - "Document business justification for each application's scope grants"
+    - "Establish an application onboarding process that includes scope review"
