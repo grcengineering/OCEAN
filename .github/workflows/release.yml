@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  packages: write
+  attestations: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -145,6 +148,31 @@ jobs:
           if-no-files-found: error
 
   # -------------------------------------------------------------------------
+  # SBOM Generation (GRC-79)
+  # -------------------------------------------------------------------------
+  sbom:
+    name: Generate SBOM
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx
+
+      - name: Generate CycloneDX SBOM
+        run: cargo cyclonedx --format json --output-file ocean-sbom.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: ocean-sbom.cdx.json
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
   # Docker image
   # -------------------------------------------------------------------------
   docker:
@@ -192,8 +220,12 @@ jobs:
   # -------------------------------------------------------------------------
   release:
     name: Create Release
-    needs: [build, docker]
+    needs: [build, sbom, docker]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -209,3 +241,55 @@ jobs:
           files: artifacts/**
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+      # ----- Cosign Signing (GRC-81) -----
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.0
+
+      - name: Sign release artifacts
+        shell: bash
+        run: |
+          for file in artifacts/*; do
+            if [ -f "$file" ] && [[ ! "$file" == *.sig ]]; then
+              cosign sign-blob --yes --output-signature "${file}.sig" "$file"
+            fi
+          done
+
+      - name: Upload signatures to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.sig
+          fail_on_unmatched_files: false
+
+      - name: Sign Docker image
+        env:
+          REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: cosign sign --yes "ghcr.io/${REPO}:${TAG_NAME#v}"
+
+      # ----- Compute artifact hashes for provenance -----
+      - name: Compute artifact hashes
+        id: hash
+        shell: bash
+        run: |
+          cd artifacts
+          sha256sum * | grep -v '\.sig$' > ../hashes.txt
+          HASHES=$(cat ../hashes.txt | base64 -w0)
+          echo "hashes=${HASHES}" >> "$GITHUB_OUTPUT"
+
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+
+  # -------------------------------------------------------------------------
+  # SLSA Provenance (GRC-82)
+  # -------------------------------------------------------------------------
+  provenance:
+    name: SLSA Provenance
+    needs: [release]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.release.outputs.hashes }}
