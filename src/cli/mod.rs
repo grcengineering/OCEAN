@@ -216,6 +216,7 @@ pub enum Commands {
     /// Remediate failing controls using API calls or Terraform.
     Harden {
         /// Check ID (e.g., GH-1.08) or source system (e.g., github). If omitted, runs all checks.
+        #[arg(conflicts_with = "fleet")]
         target: Option<String>,
 
         /// Remediation mode: api (default), terraform, cli, all.
@@ -253,6 +254,26 @@ pub enum Commands {
         /// Filter checks by profile tier (L1, L2, L3). Includes the tier and below.
         #[arg(long)]
         profile: Option<String>,
+
+        /// Path to fleet target manifest (YAML) for multi-target hardening.
+        #[arg(long, value_name = "PATH")]
+        fleet: Option<std::path::PathBuf>,
+
+        /// Max parallel targets for fleet mode (1-16, default: 4).
+        #[arg(long, default_value = "4", value_parser = clap::value_parser!(u8).range(1..=16))]
+        concurrency: u8,
+
+        /// Continue fleet execution if a target fails.
+        #[arg(long)]
+        continue_on_error: bool,
+
+        /// Output directory for fleet per-target results.
+        #[arg(long, default_value = "fleet-results")]
+        output: std::path::PathBuf,
+
+        /// Validate fleet file and show execution plan without running.
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Generate standalone code packs from .check.yaml files.
@@ -539,23 +560,49 @@ pub fn run() -> Result<()> {
             tags,
             severity,
             profile,
+            fleet,
+            concurrency,
+            continue_on_error,
+            output,
+            dry_run,
         } => {
             let check_filter = filter::CheckFilter {
                 tags: tags.map(|t| filter::parse_csv(&t)).unwrap_or_default(),
                 severities: severity.map(|s| filter::parse_csv(&s)).unwrap_or_default(),
                 profile,
             };
-            cmd_harden(
-                &mut out,
-                &checks_dir,
-                &mode,
-                apply,
-                confirm,
-                target.as_deref(),
-                &terraform_dir,
-                &harden_fmt,
-                &check_filter,
-            )
+
+            if let Some(fleet_path) = fleet {
+                // Fleet mode: multi-target hardening
+                cmd_harden_fleet(
+                    &mut out,
+                    &fleet_path,
+                    &checks_dir,
+                    &mode,
+                    apply,
+                    confirm,
+                    &terraform_dir,
+                    &harden_fmt,
+                    &check_filter,
+                    concurrency,
+                    continue_on_error,
+                    &output,
+                    dry_run,
+                )
+            } else {
+                // Single-target mode (existing behavior)
+                cmd_harden(
+                    &mut out,
+                    &checks_dir,
+                    &mode,
+                    apply,
+                    confirm,
+                    target.as_deref(),
+                    &terraform_dir,
+                    &harden_fmt,
+                    &check_filter,
+                )
+            }
         }
         Commands::Build {
             target,
@@ -1664,6 +1711,158 @@ fn cmd_harden<W: Write>(
     if failures > 0 {
         return Err(anyhow!("{failures} remediation(s) failed"));
     }
+    Ok(())
+}
+
+// ─── ocean harden --fleet ─────────────────────────────────────────────────────
+
+fn cmd_harden_fleet<W: Write>(
+    out: &mut W,
+    fleet_path: &std::path::Path,
+    checks_dir: &str,
+    mode: &str,
+    apply: bool,
+    confirm: bool,
+    terraform_dir: &str,
+    _format: &str,
+    _check_filter: &filter::CheckFilter,
+    concurrency: u8,
+    continue_on_error: bool,
+    output_dir: &std::path::Path,
+    dry_run: bool,
+) -> Result<()> {
+    let rem_mode = RemediationMode::from_str(mode)?;
+
+    // Load and validate the fleet manifest (F9, F10, F5, F7, F2, F1)
+    eprintln!("Loading fleet manifest: {}", fleet_path.display());
+    let manifest = ocean::fleet::FleetManifest::from_file(fleet_path)?;
+
+    eprintln!(
+        "Fleet \"{}\" — {} target(s), concurrency {}",
+        manifest.fleet.name,
+        manifest.targets.len(),
+        concurrency,
+    );
+
+    // Dry-run: show the execution plan and exit (AC-13)
+    if dry_run {
+        writeln!(out, "Fleet: {}", manifest.fleet.name)?;
+        if let Some(desc) = &manifest.fleet.description {
+            writeln!(out, "Description: {desc}")?;
+        }
+        writeln!(out, "Targets: {}", manifest.targets.len())?;
+        writeln!(out, "Concurrency: {concurrency}")?;
+        writeln!(out, "Mode: {mode}")?;
+        writeln!(out)?;
+        for target in &manifest.targets {
+            writeln!(
+                out,
+                "  - {} (source: {}, credentials: {} keys)",
+                target.id,
+                target.source,
+                target.credentials.len()
+            )?;
+        }
+        writeln!(out)?;
+        writeln!(out, "Dry run — no checks executed, no credentials resolved beyond manifest validation.")?;
+        return Ok(());
+    }
+
+    // Require --apply for fleet execution (same as single-target)
+    if !apply {
+        writeln!(out, "Fleet dry-run plan (use --apply to execute):")?;
+        writeln!(out)?;
+        for target in &manifest.targets {
+            writeln!(out, "  Target: {} ({})", target.id, target.source)?;
+        }
+        writeln!(out)?;
+        writeln!(
+            out,
+            "Run with --apply to execute fleet hardening across {} target(s).",
+            manifest.targets.len()
+        )?;
+        return Ok(());
+    }
+
+    // Confirmation prompt for fleet mode (TH-2a)
+    if !confirm {
+        write!(
+            out,
+            "About to execute fleet hardening across {} target(s). Continue? [y/N] ",
+            manifest.targets.len()
+        )?;
+        std::io::Write::flush(out)?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            writeln!(out, "Aborted.")?;
+            return Ok(());
+        }
+    }
+
+    // Execute fleet via tokio runtime
+    let opts = ocean::fleet::FleetExecOptions {
+        checks_dir: checks_dir.to_string(),
+        mode: rem_mode,
+        apply,
+        concurrency,
+        continue_on_error,
+        output_dir: output_dir.to_path_buf(),
+        terraform_dir: terraform_dir.to_string(),
+    };
+
+    let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
+    let fleet_result = rt.block_on(ocean::fleet::execute_fleet(&manifest, &opts))?;
+
+    // Print fleet summary
+    writeln!(out)?;
+    writeln!(out, "═══ Fleet Summary ═══")?;
+    writeln!(out, "Fleet: {}", fleet_result.fleet_name)?;
+    writeln!(
+        out,
+        "Duration: {}s",
+        (fleet_result.completed_at - fleet_result.started_at).num_seconds()
+    )?;
+    writeln!(
+        out,
+        "Targets: {} total, {} succeeded, {} failed",
+        fleet_result.total_targets, fleet_result.succeeded, fleet_result.failed
+    )?;
+    writeln!(
+        out,
+        "Checks: {} run, {} findings",
+        fleet_result.checks_run, fleet_result.findings
+    )?;
+    writeln!(out)?;
+
+    for tr in &fleet_result.targets {
+        let status_icon = match tr.status {
+            ocean::fleet::TargetStatus::Completed => "OK",
+            ocean::fleet::TargetStatus::Failed => "FAIL",
+            ocean::fleet::TargetStatus::Skipped => "SKIP",
+        };
+        writeln!(
+            out,
+            "  [{status_icon}] {} ({}) — {} checks, {} findings, {} applied",
+            tr.id, tr.source, tr.checks_run, tr.findings, tr.changes_applied
+        )?;
+        if let Some(err) = &tr.error {
+            writeln!(out, "       Error: {err}")?;
+        }
+    }
+
+    writeln!(out)?;
+    writeln!(out, "Results: {}", output_dir.display())?;
+
+    // Exit code is handled by the caller via fleet_exit_code
+    let exit_code = ocean::fleet::fleet_exit_code(&fleet_result);
+    if exit_code != 0 {
+        return Err(anyhow!(
+            "{} target(s) failed during fleet execution",
+            fleet_result.failed
+        ));
+    }
+
     Ok(())
 }
 

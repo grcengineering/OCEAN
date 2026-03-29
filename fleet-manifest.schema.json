@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grc.engineering/schemas/fleet-manifest.schema.json",
+  "title": "OCEAN Fleet Manifest",
+  "description": "Defines multiple targets for fleet-wide hardening with ocean harden --fleet.",
+  "type": "object",
+  "required": ["fleet", "targets"],
+  "additionalProperties": false,
+  "properties": {
+    "fleet": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable fleet name for reporting."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of the fleet operation."
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "description": "List of targets to harden. Each target has its own credential context.",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "credentials"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$",
+            "description": "Unique target identifier. Used in output filenames and reporting."
+          },
+          "source": {
+            "type": "string",
+            "enum": ["github", "okta", "aws", "azure"],
+            "description": "Source system type. Determines which checks and credential allowlist apply."
+          },
+          "credentials": {
+            "type": "object",
+            "description": "Credential mappings. Values must use ${ENV_VAR_NAME} syntax for env var interpolation. Plaintext secrets are rejected.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

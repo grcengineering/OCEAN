@@ -3,7 +3,7 @@
 use ocean::check::definition::CheckDefinition;
 
 /// Filter criteria for check selection.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CheckFilter {
     /// Include only checks with at least one of these tags.
     pub tags: Vec<String>,

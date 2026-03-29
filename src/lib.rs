@@ -10,6 +10,7 @@ pub mod control;
 pub mod dashboard;
 pub mod eval;
 pub mod evidence;
+pub mod fleet;
 pub mod harden;
 pub mod module;
 pub mod report;
