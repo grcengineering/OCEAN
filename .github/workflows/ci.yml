@@ -57,6 +57,21 @@ jobs:
         run: cargo audit
 
   # -------------------------------------------------------------------------
+  # Supply chain audit (cargo-vet: dependency vetting)
+  # -------------------------------------------------------------------------
+  vet:
+    name: Supply Chain (cargo-vet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-vet
+        run: cargo install cargo-vet --locked
+      - name: Run cargo-vet check
+        run: cargo vet check --locked
+
+  # -------------------------------------------------------------------------
   # Supply chain (cargo-deny: licenses + advisories + bans + sources)
   # -------------------------------------------------------------------------
   deny:
@@ -122,7 +137,7 @@ jobs:
   # -------------------------------------------------------------------------
   build-linux:
     name: Build (ubuntu-latest)
-    needs: [test, lint, audit, deny]
+    needs: [test, lint, audit, deny, vet]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +149,7 @@ jobs:
 
   build-macos:
     name: Build (macos-latest)
-    needs: [test, lint, audit, deny]
+    needs: [test, lint, audit, deny, vet]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -146,7 +161,7 @@ jobs:
 
   build-windows:
     name: Build (windows-latest)
-    needs: [test, lint, audit, deny]
+    needs: [test, lint, audit, deny, vet]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
