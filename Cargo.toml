@@ -66,11 +66,11 @@ tokio = { version = "1", features = ["full"] }
 axum = "0.7"
 
 # CEL evaluation
-cel-interpreter = "0.8"
+cel-interpreter = "0.10"
 
 # TUI dashboard
-ratatui = "0.29"
-crossterm = "0.28"
+ratatui = "0.30"
+crossterm = "0.29"
 
 # Code pack generation (ocean build)
 handlebars = "6"
