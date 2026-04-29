@@ -5,7 +5,18 @@ exclude = ["grc-controls-apis", "grc-controls-models"]
 
 [advisories]
 ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "paste is a stable, widely-used proc-macro by dtolnay; unmaintained but functionally complete" },
+    # RISK ACCEPTANCE: RUSTSEC-2024-0436 (paste v1.0.15 — unmaintained)
+    # Advisory type: unmaintained (warning, not a vulnerability)
+    # Impact: paste is a compile-time proc-macro only; it generates code at build time and
+    #   ships no runtime code in the final binary. No attack surface in production.
+    # Root cause: paste is a transitive dependency of cel-interpreter v0.10.0 (latest available).
+    #   We cannot eliminate it without replacing our CEL engine.
+    # Mitigation: paste v1.0.15 by dtolnay is functionally complete and widely depended upon
+    #   (14k+ dependents on crates.io). The "unmaintained" status reflects the author stepping
+    #   back, not a known defect. No CVEs or security issues have been filed against paste.
+    # Review cadence: Re-evaluate when cel-interpreter publishes a new major version.
+    # Accepted: 2026-04-29 by CTO
+    { id = "RUSTSEC-2024-0436", reason = "compile-time proc-macro only, no runtime attack surface; transitive via cel-interpreter 0.10.0 (latest). Functionally complete, no known CVEs." },
 ]
 
 [licenses]
