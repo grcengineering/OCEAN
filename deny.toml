@@ -4,8 +4,49 @@ all-features = true
 exclude = ["grc-controls-apis", "grc-controls-models"]
 
 [advisories]
+# ─── Advisory Triage (GRC-138, 2026-04-29) ───────────────────────────────────
+#
+# All 6 RUSTSECs referenced in GRC-138 are triaged below.
+# Methodology: cargo audit + cargo deny against RustSec advisory-db (1060
+# advisories scanned). cargo update applied to bring all deps to latest
+# semver-compatible versions.
+#
+# RUSTSEC-2024-0421 (idna — privilege escalation via Punycode)
+#   Status: NOT VULNERABLE. We have idna 1.1.0; patched >= 1.0.0.
+#   No action required.
+#
+# RUSTSEC-2026-0097 (rand — unsound aliased mutable reference in ThreadRng)
+#   Status: NOT VULNERABLE. We have rand 0.8.6; advisory affects >= 0.9.0.
+#   rand 0.8.6 is only a build-time transitive dep via phf_generator.
+#   No action required.
+#
+# RUSTSEC-2025-0057 (fxhash — unmaintained)
+#   Status: NOT IN DEPENDENCY TREE. Not present in Cargo.lock.
+#   No action required.
+#
+# RUSTSEC-2025-0119 (number_prefix — unmaintained)
+#   Status: NOT IN DEPENDENCY TREE. Not present in Cargo.lock.
+#   No action required.
+#
+# RUSTSEC-2025-0134 (rustls-pemfile — unmaintained)
+#   Status: NOT IN DEPENDENCY TREE. Not present in Cargo.lock.
+#   No action required.
+#
+# RUSTSEC-2024-0436 (paste — unmaintained) → SUPPRESSED, see ignore below.
+# ──────────────────────────────────────────────────────────────────────────────
 ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "paste is a stable, widely-used proc-macro by dtolnay; unmaintained but functionally complete" },
+    # RISK ACCEPTANCE: RUSTSEC-2024-0436 (paste v1.0.15)
+    # Advisory type: unmaintained (informational warning, not a vulnerability)
+    # Impact: paste is a compile-time proc-macro; generates code at build time,
+    #   ships no runtime code in the binary. Zero production attack surface.
+    # Root cause: transitive dep of cel-interpreter 0.10.0 (latest on crates.io).
+    #   Cannot eliminate without replacing our CEL evaluation engine.
+    # Mitigation: paste v1.0.15 by dtolnay is functionally complete with 14k+
+    #   reverse dependents. "Unmaintained" reflects author stepping back, not a
+    #   known defect. No CVEs or security issues filed against paste.
+    # Review cadence: re-evaluate when cel-interpreter releases a new version.
+    # Accepted: 2026-04-29 by Founding Engineer (agent e8a18920)
+    { id = "RUSTSEC-2024-0436", reason = "compile-time proc-macro only, no runtime attack surface; transitive via cel-interpreter 0.10.0 (latest). Functionally complete, no known CVEs." },
 ]
 
 [licenses]
