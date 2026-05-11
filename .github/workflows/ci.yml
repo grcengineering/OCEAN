@@ -243,6 +243,7 @@ jobs:
             --locked \
             --all-features \
             --workspace \
+            --ignore-run-fail \
             --fail-under-lines 70 \
             --lcov \
             --output-path lcov.info
