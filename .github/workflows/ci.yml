@@ -223,7 +223,7 @@ jobs:
   # Coverage gate (cargo-llvm-cov, Linux only)
   # -------------------------------------------------------------------------
   coverage:
-    name: Coverage (70% gate)
+    name: Coverage (100% gate)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -237,14 +237,15 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
-      - name: Run coverage with 70% gate
+      - name: Run coverage with 100% gate
         run: |
           cargo llvm-cov \
             --locked \
             --all-features \
             --workspace \
             --ignore-run-fail \
-            --fail-under-lines 70 \
+            --fail-under-lines 100 \
+            --fail-under-functions 100 \
             --lcov \
             --output-path lcov.info
       - name: Upload coverage to Codecov
