@@ -3215,4 +3215,258 @@ classification:
         let result = cmd_schedule_remove(&db, "removable");
         assert!(result.is_ok());
     }
+
+    // --- cmd_report ---
+    #[test]
+    fn cmd_report_invalid_period_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_report(&mut out, &db, "not-a-period", "json", None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_report_json_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_report(&mut out, &db, "2024-01-01:2024-12-31", "json", None);
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("evidence_count"));
+    }
+
+    #[test]
+    fn cmd_report_markdown_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_report(&mut out, &db, "2024-01-01:2024-12-31", "markdown", Some("iam.test"));
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("# OCEAN Compliance Report"));
+        assert!(s.contains("iam.test"));
+    }
+
+    #[test]
+    fn cmd_report_csv_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_report(&mut out, &db, "2024-01-01:2024-12-31", "csv", None);
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("id,module,status,time"));
+    }
+
+    #[test]
+    fn cmd_report_invalid_date_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_report(&mut out, &db, "garbage:also-garbage", "json", None);
+        assert!(result.is_err());
+    }
+
+    // --- cmd_compliance ---
+    #[test]
+    fn cmd_compliance_missing_framework_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let mut out = Vec::new();
+        // No framework file, no frameworks dir → should error.
+        let result = cmd_compliance(&mut out, &db, None, cdir.to_str().unwrap(), "json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_compliance_bad_framework_path_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_compliance(
+            &mut out,
+            &db,
+            Some("/definitely/does/not/exist.yaml"),
+            dir.path().to_str().unwrap(),
+            "json",
+        );
+        assert!(result.is_err());
+    }
+
+    // --- cmd_harden ---
+    #[test]
+    fn cmd_harden_dry_run_no_checks_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            false, // apply = false → dry-run
+            false,
+            None,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_harden_unknown_id_filter_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            false,
+            false,
+            Some("does.not.exist"),
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_harden_invalid_mode_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "definitely-not-a-mode",
+            false,
+            false,
+            None,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        assert!(result.is_err());
+    }
+
+    // --- cmd_report_framework ---
+    #[test]
+    fn cmd_report_framework_invalid_framework_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["not-a-real-framework".to_string()],
+            false,
+            "json",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_report_framework_empty_dir_soc2_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true, // include_passing so we still print
+            "json",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_report_framework_sarif_empty_dir_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("No checks found") || s.contains("sarif") || s.contains("$schema") || s.contains("version"));
+    }
+
+    #[test]
+    fn cmd_report_framework_all_keyword_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["all".to_string()],
+            false, // don't include passing — empty dir → no print
+            "json",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_report_framework_pci_dss_hyphen_normalizes() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["pci-dss".to_string()],
+            true,
+            "json",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+    }
 }
