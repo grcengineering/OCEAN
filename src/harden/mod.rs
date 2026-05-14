@@ -2752,6 +2752,82 @@ remediation:
     }
 
     #[test]
+    fn plan_harden_cli_only_mode_omits_api_action() {
+        // Mode=Cli: api_action should be None (covers L334-338).
+        let tmp = TempDir::new().unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        write_failing_passive_check_with_remediation(tmp.path(), &srv.base_url);
+        let plans = plan_harden(
+            tmp.path(),
+            &RemediationMode::Cli,
+            &empty_config(),
+            None,
+        )
+        .unwrap();
+        assert!(!plans.is_empty());
+        assert!(plans.iter().all(|p| p.api_action.is_none()));
+        assert!(plans.iter().any(|p| p.cli_action.is_some()));
+    }
+
+    #[test]
+    fn plan_harden_terraform_only_mode() {
+        let tmp = TempDir::new().unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            tmp.path().join("TF-ONLY.check.yaml"),
+            format!(
+                r#"
+id: TF-ONLY
+name: TF Only
+description: t
+source: aws
+profile: L1
+severity: high
+tags: [test]
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: []
+  terraform:
+    resources:
+      - type: aws_iam_account_password_policy
+        name: pp
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let plans = plan_harden(
+            tmp.path(),
+            &RemediationMode::Terraform,
+            &empty_config(),
+            None,
+        )
+        .unwrap();
+        assert!(!plans.is_empty(), "TF-ONLY should produce a plan");
+        let p = &plans[0];
+        assert!(p.api_action.is_none());
+        assert!(p.cli_action.is_none());
+        assert!(!p.terraform_resources.is_empty());
+    }
+
+    #[test]
     fn plan_harden_skips_active_checks() {
         // Active checks should be skipped (only Passive run via observer).
         let tmp = TempDir::new().unwrap();
