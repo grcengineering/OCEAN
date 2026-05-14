@@ -178,4 +178,118 @@ mod tests {
         assert!(s.contains("1"));
         assert!(s.contains("2"));
     }
+
+    // --- print_evaluation_table ---
+    fn make_module_run(id: &str, status: &str, err: Option<&str>) -> ModuleRunResult {
+        ModuleRunResult {
+            module_id: id.to_string(),
+            module_type: "observe",
+            status: status.to_string(),
+            error: err.map(String::from),
+        }
+    }
+
+    #[test]
+    fn print_evaluation_table_empty() {
+        let mut buf = Vec::new();
+        print_evaluation_table(&mut buf, &[]).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("Control"));
+        assert!(s.contains("Status"));
+    }
+
+    #[test]
+    fn print_evaluation_table_with_named_control() {
+        let mut buf = Vec::new();
+        let results = vec![EvaluationResult {
+            control_id: "iam.test".to_string(),
+            control_name: "Test Control".to_string(),
+            target: "github".to_string(),
+            status: "effective".to_string(),
+            confidence: "high".to_string(),
+            framework: "soc2 CC6.1".to_string(),
+            module_runs: vec![make_module_run("mock.test", "OK", None)],
+            findings: vec![],
+        }];
+        print_evaluation_table(&mut buf, &results).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("iam.test"));
+        assert!(s.contains("Test Control"));
+        assert!(s.contains("EFFECTIVE"));
+        assert!(s.contains("HIGH"));
+        assert!(s.contains("soc2 CC6.1"));
+        assert!(s.contains("mock.test"));
+    }
+
+    #[test]
+    fn print_evaluation_table_empty_control_name() {
+        let mut buf = Vec::new();
+        let results = vec![EvaluationResult {
+            control_id: "iam.bare".to_string(),
+            control_name: String::new(),
+            target: "okta".to_string(),
+            status: "ineffective".to_string(),
+            confidence: "medium".to_string(),
+            framework: String::new(),
+            module_runs: vec![],
+            findings: vec![],
+        }];
+        print_evaluation_table(&mut buf, &results).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("iam.bare"));
+        assert!(s.contains("INEFFECTIVE"));
+    }
+
+    #[test]
+    fn print_evaluation_table_with_findings() {
+        let mut buf = Vec::new();
+        let results = vec![EvaluationResult {
+            control_id: "iam.audit".to_string(),
+            control_name: "Audit".to_string(),
+            target: "aws".to_string(),
+            status: "ineffective".to_string(),
+            confidence: "high".to_string(),
+            framework: "iso27001 A.9.2".to_string(),
+            module_runs: vec![make_module_run(
+                "aws.iam_users",
+                "FAIL",
+                Some("token expired"),
+            )],
+            findings: vec![
+                "user alice has admin without MFA".to_string(),
+                "policy too permissive".to_string(),
+            ],
+        }];
+        print_evaluation_table(&mut buf, &results).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("FINDINGS for iam.audit"));
+        assert!(s.contains("user alice has admin"));
+        assert!(s.contains("policy too permissive"));
+        assert!(s.contains("token expired"));
+    }
+
+    #[test]
+    fn print_evaluation_table_module_status_passes_through() {
+        let mut buf = Vec::new();
+        let results = vec![EvaluationResult {
+            control_id: "iam.pass".to_string(),
+            control_name: "X".to_string(),
+            target: "*".to_string(),
+            status: "effective".to_string(),
+            confidence: "high".to_string(),
+            framework: String::new(),
+            module_runs: vec![
+                make_module_run("a.ok", "OK", None),
+                make_module_run("b.pass", "PASS", None),
+                make_module_run("c.weird", "WEIRD", None),
+            ],
+            findings: vec![],
+        }];
+        print_evaluation_table(&mut buf, &results).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("a.ok"));
+        assert!(s.contains("b.pass"));
+        assert!(s.contains("c.weird"));
+        assert!(s.contains("WEIRD"));
+    }
 }
