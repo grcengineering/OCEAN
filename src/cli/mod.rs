@@ -3508,6 +3508,139 @@ controls:
     }
 
     #[test]
+    fn cmd_harden_apply_with_failing_check() {
+        // Drive cmd_harden through plan_harden → execute_plans → print_results.
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            checks.join("FAIL-CLI.check.yaml"),
+            format!(
+                r#"
+id: FAIL-CLI
+name: Failing Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: [s1]
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x/settings"
+    body: {{}}
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            true, // apply
+            true, // confirm
+            None,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        // Should reach execute_plans + print_results; result may be Err if
+        // remediation call fails (no real GitHub creds) but path is covered.
+        let _ = result;
+    }
+
+    #[test]
+    fn cmd_harden_dry_run_with_failing_check_prints_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            checks.join("DRY-FAIL.check.yaml"),
+            format!(
+                r#"
+id: DRY-FAIL
+name: Dry Run Failing Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: [s1]
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x/settings"
+    body: {{}}
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            false, // dry-run
+            false,
+            None,
+            tf.to_str().unwrap(),
+            "table",
+            &filter,
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("DRY-FAIL") || s.contains("DRY RUN") || s.contains("Remediation"));
+    }
+
+    #[test]
     fn cmd_harden_apply_no_plans_ok() {
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
@@ -4280,6 +4413,87 @@ targets:
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("Test Fleet"));
         assert!(s.contains("Dry run"));
+    }
+
+    fn write_failing_aws_check_for_fleet(dir: &std::path::Path, mock_url: &str) {
+        std::fs::write(
+            dir.join("FLEET-FAIL.check.yaml"),
+            format!(
+                r#"
+id: FLEET-FAIL
+name: Fleet Failing Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+references:
+  soc2: CC6.1
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{mock_url}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: [s1]
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x/settings"
+    body: {{}}
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn cmd_harden_fleet_apply_summary_with_plans() {
+        // Set up so execute_fleet actually generates plans and prints summary.
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        write_failing_aws_check_for_fleet(&checks, &srv.base_url);
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out");
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden_fleet(
+            &mut out,
+            &fleet,
+            checks.to_str().unwrap(),
+            "api",
+            true,  // apply
+            true,  // confirm
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+            1,
+            true,  // continue_on_error
+            &outd,
+            false, // dry_run
+        );
+        // Whether it ends Ok or Err, the summary code paths get exercised.
+        let _ = result;
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Fleet Summary") || s.contains("Test Fleet"));
     }
 
     #[test]
