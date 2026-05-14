@@ -4256,6 +4256,34 @@ remediation:
     }
 
     #[test]
+    fn run_with_evaluate_control_only_dispatches() {
+        // The 'else if let Some(ctrl)' branch in the Evaluate dispatcher arm.
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "evaluate", "mock.test",
+            "--controls-dir", cdir.to_str().unwrap(),
+        ]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
+    }
+
+    #[test]
+    fn run_with_test_with_module_no_store_no_confirm() {
+        // cmd_test dispatch via positional module arg
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "test", "mock.safety_test",
+        ]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
+    }
+
+    #[test]
     fn run_with_evaluate_target_without_control_errors() {
         let cli = parse_args(&["ocean", "evaluate", "--target", "okta"]);
         let mut out = Vec::new();
@@ -4613,6 +4641,70 @@ assertions:
         let s = String::from_utf8(out).unwrap();
         // SARIF output includes our check id.
         assert!(s.contains("SARIF-FAIL"));
+    }
+
+    #[test]
+    fn cmd_report_framework_sarif_executor_ok_path() {
+        // Tries to ensure executor.execute_observer returns Ok (covering L1622).
+        // Use mock observer (built-in) directly via a YAML check that has
+        // an api_call to a server returning matching data.
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        // Queue multiple responses since executor might retry
+        let srv = crate::testutil::MockHTTPServer::new(vec![
+            (200, r#"{"x": "ok"}"#.to_string()),
+            (200, r#"{"x": "ok"}"#.to_string()),
+            (200, r#"{"x": "ok"}"#.to_string()),
+            (200, r#"{"x": "ok"}"#.to_string()),
+        ]);
+        std::fs::write(
+            checks.join("OK-FAIL.check.yaml"),
+            format!(
+                r#"id: OK-PASS-1
+name: OK Pass
+description: passes
+source: github
+profile: L1
+severity: low
+tags: [test]
+references:
+  soc2: CC6.1
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == 'ok'"
+    severity: low
+    title: t
+    pass_message: ok
+    fail_message: fail
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
     }
 
     #[test]
