@@ -348,6 +348,17 @@ assertions:
     }
 
     #[test]
+    fn write_sarif_fault_injection() {
+        use crate::testutil::FailingWriter;
+        let def = sample_def();
+        let sarif = build_sarif(&[def], &[]);
+        for n in 0..5 {
+            let mut w = FailingWriter::new(n);
+            let _ = write_sarif(&mut w, &sarif);
+        }
+    }
+
+    #[test]
     fn effective_severity_prefers_assertion() {
         let def = sample_def();
         assert_eq!(effective_severity(&def), "critical");
