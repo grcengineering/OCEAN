@@ -2823,4 +2823,71 @@ classification:
         // Schedule doesn't exist — implementation may either error or succeed quietly
         let _ = cmd_schedule_remove(&db, "nonexistent-id");
     }
+
+    // --- cmd_schedule_status ---
+    #[test]
+    fn cmd_schedule_status_missing_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_schedule_status(&mut out, OutputFormat::Json, &db, "nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_schedule_status_existing_returns_ok() {
+        use crate::scheduler::Schedule;
+        use chrono::Utc;
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let store = open_store(&db).unwrap();
+        let now = Utc::now();
+        let sched = Schedule {
+            id: "test-sched".to_string(),
+            control_id: "iam.test".to_string(),
+            cron_expr: "0 * * * *".to_string(),
+            modules: vec!["mock.test".to_string()],
+            max_safety_level: "safe".to_string(),
+            environment_scope: "production".to_string(),
+            enabled: true,
+            catch_up: false,
+            last_run: None,
+            next_run: None,
+            created_at: now,
+            updated_at: now,
+        };
+        store.store_schedule(&sched).unwrap();
+        let mut out = Vec::new();
+        let result = cmd_schedule_status(&mut out, OutputFormat::Json, &db, "test-sched");
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("test-sched"));
+    }
+
+    #[test]
+    fn cmd_schedule_remove_existing_succeeds() {
+        use crate::scheduler::Schedule;
+        use chrono::Utc;
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let store = open_store(&db).unwrap();
+        let now = Utc::now();
+        let sched = Schedule {
+            id: "removable".to_string(),
+            control_id: "iam.test".to_string(),
+            cron_expr: "0 * * * *".to_string(),
+            modules: vec!["mock.test".to_string()],
+            max_safety_level: "safe".to_string(),
+            environment_scope: "production".to_string(),
+            enabled: true,
+            catch_up: false,
+            last_run: None,
+            next_run: None,
+            created_at: now,
+            updated_at: now,
+        };
+        store.store_schedule(&sched).unwrap();
+        let result = cmd_schedule_remove(&db, "removable");
+        assert!(result.is_ok());
+    }
 }
