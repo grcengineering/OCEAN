@@ -682,4 +682,16 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("GitHub API request failed"));
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_exercises_closure() {
+        let srv = mock_server(vec![(200, "this is not json {")]);
+        let _ = SecretPushTester.test(&base_config(&srv));
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_exercises_closure() {
+        let srv = mock_server(vec![(500, "<html>500</html>")]);
+        let _ = SecretPushTester.test(&base_config(&srv));
+    }
 }

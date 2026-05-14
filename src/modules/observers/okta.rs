@@ -864,4 +864,16 @@ mod tests {
             "Default MFA Policy"
         );
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_exercises_closure() {
+        let srv = mock_server(200, "not json {");
+        let _ = MfaPolicyObserver.observe(&base_config(&srv));
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_exercises_closure() {
+        let srv = mock_server(500, "<html>500</html>");
+        let _ = MfaPolicyObserver.observe(&base_config(&srv));
+    }
 }

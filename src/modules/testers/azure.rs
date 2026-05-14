@@ -656,4 +656,16 @@ mod tests {
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["error_code"].as_str(), Some("interaction_required"));
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_exercises_closure() {
+        let srv = mock_server(200, "this is not json {");
+        let _ = MfaBypassTester.test(&base_config(&srv));
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_exercises_closure() {
+        let srv = mock_server(500, "<html>500</html>");
+        let _ = MfaBypassTester.test(&base_config(&srv));
+    }
 }

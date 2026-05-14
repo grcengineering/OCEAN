@@ -664,4 +664,16 @@ mod tests {
         assert_eq!(ev.raw_data["http_status"].as_u64(), Some(403));
         assert_eq!(ev.raw_data["test_result"].as_str(), Some("blocked"));
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_exercises_closure() {
+        let srv = mock_server(200, "this is not json {");
+        let _ = MfaBypassTester.test(&base_config(&srv));
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_exercises_closure() {
+        let srv = mock_server(500, "<html>500</html>");
+        let _ = MfaBypassTester.test(&base_config(&srv));
+    }
 }
