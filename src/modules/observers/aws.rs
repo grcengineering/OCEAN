@@ -863,6 +863,18 @@ mod tests {
     }
 
     #[test]
+    fn iam_observer_with_session_token_compliant() {
+        // Drives the Some(session_token) branch in sigv4_get (L96-98, L132-134).
+        let srv = mock_server(vec![EMPTY_USERS.to_string()]);
+        let mut config = base_config(&srv);
+        config.insert("AWS_SESSION_TOKEN".to_string(), "FwoGZX...".to_string());
+        let results = IamObserver.observe(&config).unwrap();
+        assert_eq!(results.len(), 1);
+        let ev = &results[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
+
+    #[test]
     fn iam_observer_user_with_mfa_fresh_key_compliant() {
         let srv = mock_server(vec![
             ONE_USER.to_string(),
