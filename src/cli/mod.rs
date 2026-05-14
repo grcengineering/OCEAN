@@ -5094,7 +5094,7 @@ remediation:
         let out_dir = dir.path().join("out");
         let cli = parse_args(&[
             "ocean", "build",
-            "--target", "soc2",
+            "--target", "terraform",
             "--source", source.to_str().unwrap(),
             "--output", out_dir.to_str().unwrap(),
         ]);
@@ -5470,13 +5470,30 @@ classification:
         let result = cmd_build(
             &mut out,
             source.to_str().unwrap(),
-            "soc2",
+            "terraform",
             Some(out_dir.to_str().unwrap()),
             false,
             false,
             None,
         );
-        // Empty source dir → codegen may succeed or err; both paths exercise the function.
+        let _ = result;
+    }
+
+    #[test]
+    fn cmd_build_with_default_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("src");
+        std::fs::create_dir_all(&source).unwrap();
+        let mut out = Vec::new();
+        let result = cmd_build(
+            &mut out,
+            source.to_str().unwrap(),
+            "gh-cli",
+            None, // default output
+            false,
+            false,
+            None,
+        );
         let _ = result;
     }
 
