@@ -686,6 +686,7 @@ assertions: []
     // ── dirs_home tests ──────────────────────────────────────────────────────
 
     #[test]
+    #[serial_test::serial]
     fn dirs_home_returns_path_from_home_env() {
         let old = std::env::var("HOME").ok();
         std::env::set_var("HOME", "/tmp/fake_home_for_test");
@@ -699,6 +700,7 @@ assertions: []
     }
 
     #[test]
+    #[serial_test::serial]
     fn dirs_home_returns_none_when_home_not_set() {
         let old = std::env::var("HOME").ok();
         std::env::remove_var("HOME");

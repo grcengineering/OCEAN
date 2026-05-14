@@ -614,6 +614,7 @@ mod tests {
 
     // UT-036: write_fleet_audit_log writes entry with expected fields when HOME is set
     #[test]
+    #[serial_test::serial]
     fn write_fleet_audit_log_appends_entry() {
         let tmp = tempfile::tempdir().unwrap();
         // Redirect HOME so audit.log lands in our temp dir
@@ -670,6 +671,7 @@ mod tests {
 
     // UT-037: write_fleet_audit_log falls back to .ocean/ when HOME is unset
     #[test]
+    #[serial_test::serial]
     fn write_fleet_audit_log_home_unset_fallback() {
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let original_home = std::env::var("HOME").ok();
@@ -1125,6 +1127,7 @@ remediation:
 
     // UT-050: write_fleet_audit_log with all-succeeded fleet (no failed IDs)
     #[test]
+    #[serial_test::serial]
     fn write_fleet_audit_log_all_succeeded() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
@@ -1174,6 +1177,7 @@ remediation:
 
     // UT-051: write_fleet_audit_log with multiple failed targets
     #[test]
+    #[serial_test::serial]
     fn write_fleet_audit_log_multiple_failures() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
@@ -1486,6 +1490,7 @@ remediation:
 
     // UT-060: write_fleet_audit_log appends multiple entries
     #[test]
+    #[serial_test::serial]
     fn write_fleet_audit_log_appends_multiple() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());

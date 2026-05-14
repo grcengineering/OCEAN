@@ -274,6 +274,7 @@ mod tests {
 
     // UT-010: Valid fleet manifest parses successfully
     #[test]
+    #[serial_test::serial]
     fn valid_manifest_parses() {
         std::env::set_var("TEST_GH_TOKEN", "ghp_test123");
         std::env::set_var("TEST_GH_ORG", "acme");
@@ -317,6 +318,7 @@ targets: []
 
     // UT-012: Duplicate target IDs rejected
     #[test]
+    #[serial_test::serial]
     fn duplicate_ids_rejected() {
         std::env::set_var("TEST_DUP_TOKEN", "tok");
         let yaml = br#"
@@ -359,6 +361,7 @@ targets:
 
     // UT-014: Env var interpolation resolves set vars
     #[test]
+    #[serial_test::serial]
     fn env_var_resolves() {
         std::env::set_var("TEST_RESOLVE_VAR", "secret_value");
         let result = resolve_env_ref("${TEST_RESOLVE_VAR}").unwrap();
@@ -367,6 +370,7 @@ targets:
 
     // UT-015: Env var interpolation fails on unset vars
     #[test]
+    #[serial_test::serial]
     fn unset_env_var_fails() {
         std::env::remove_var("DEFINITELY_NOT_SET_12345");
         let err = resolve_env_ref("${DEFINITELY_NOT_SET_12345}").unwrap_err();
@@ -396,6 +400,7 @@ targets:
 
     // UT-017: Credentials accept only env var syntax for known secrets
     #[test]
+    #[serial_test::serial]
     fn credential_allowlist_enforced() {
         std::env::set_var("TEST_ALLOW_TOKEN", "tok");
         let yaml = br#"
@@ -490,6 +495,7 @@ targets:
     // ── from_file tests ───────────────────────────────────────────────────────
 
     #[test]
+    #[serial_test::serial]
     fn from_file_parses_valid_manifest() {
         std::env::set_var("FILE_TEST_TOKEN", "file_token_value");
         let dir = tempfile::TempDir::new().unwrap();
@@ -544,6 +550,7 @@ targets:
     // ── allowed_credentials source coverage ──────────────────────────────────
 
     #[test]
+    #[serial_test::serial]
     fn okta_source_credential_allowlist() {
         std::env::set_var("OKTA_API_TOKEN_TEST", "tok");
         let yaml = br#"
@@ -579,6 +586,7 @@ targets:
     }
 
     #[test]
+    #[serial_test::serial]
     fn aws_source_credential_allowlist() {
         std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAFAKE");
         std::env::set_var("AWS_SECRET_ACCESS_KEY", "fakesecret");
@@ -598,6 +606,7 @@ targets:
     }
 
     #[test]
+    #[serial_test::serial]
     fn azure_source_credential_allowlist() {
         std::env::set_var("AZURE_CLIENT_ID", "fake-client-id");
         std::env::set_var("AZURE_CLIENT_SECRET", "fake-secret");
@@ -645,6 +654,7 @@ targets:
     // ── manifest without description field ────────────────────────────────────
 
     #[test]
+    #[serial_test::serial]
     fn manifest_without_description() {
         std::env::set_var("NODESC_TOKEN", "tok");
         let yaml = br#"

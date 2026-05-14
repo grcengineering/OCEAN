@@ -76,6 +76,7 @@ crossterm = "0.29"
 handlebars = "6"
 
 [dev-dependencies]
+serial_test = "3"
 tempfile = "3"
 tower = { version = "0.4", features = ["util"] }
 jsonschema = "0.28"

@@ -4,6 +4,7 @@
 
 pub mod api;
 pub mod check;
+pub mod cli;
 pub mod codegen;
 pub mod config;
 pub mod control;

@@ -8,7 +8,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::io::Write;
 
-use ocean::check::definition::CheckDefinition;
+use crate::check::definition::CheckDefinition;
 
 // ─── SARIF schema types ──────────────────────────────────────────────────────
 

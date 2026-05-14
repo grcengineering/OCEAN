@@ -10,7 +10,7 @@ use std::io::Write;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use ocean::{
+use crate::{
     check::loader::load_all_checks,
     codegen::{generate as codegen_generate, BuildTarget},
     control::{
@@ -654,7 +654,7 @@ pub fn run() -> Result<()> {
             controls_dir,
         } => {
             let store = open_store(&cli.db)?;
-            ocean::dashboard::run(&store, &controls_dir, refresh)
+            crate::dashboard::run(&store, &controls_dir, refresh)
         }
         Commands::Compliance {
             framework,
@@ -868,7 +868,7 @@ fn cmd_test<W: Write>(
     let executor = Executor::new(registry);
     let config = env_as_config();
 
-    let authorizer: Box<dyn ocean::module::Authorizer> = if confirm {
+    let authorizer: Box<dyn crate::module::Authorizer> = if confirm {
         Box::new(ConfirmAuthorizer)
     } else {
         Box::new(AutoAuthorizer)
@@ -971,7 +971,7 @@ fn cmd_evaluate<W: Write>(
                         id: comp_id.clone(),
                         name: comp_id.clone(),
                         description: String::new(),
-                        evaluation_logic: ocean::control::EvaluationLogic::default(),
+                        evaluation_logic: crate::control::EvaluationLogic::default(),
                         framework_mappings: vec![],
                         observers: vec![],
                         testers: vec![],
@@ -1244,7 +1244,7 @@ fn cmd_test_path<W: Write>(
             .collect();
 
         for mref in testers {
-            let authorizer: Box<dyn ocean::module::Authorizer> = if confirm {
+            let authorizer: Box<dyn crate::module::Authorizer> = if confirm {
                 Box::new(ConfirmAuthorizer)
             } else {
                 Box::new(AutoAuthorizer)
@@ -1503,7 +1503,7 @@ fn cmd_schedule_status<W: Write>(
 
 fn cmd_serve(port: u16, auth_token: Option<&str>, db: &str) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(ocean::api::server::serve(
+    rt.block_on(crate::api::server::serve(
         port,
         auth_token.map(String::from),
         db.to_string(),
@@ -1543,7 +1543,7 @@ fn cmd_report_framework<W: Write>(
 
     // Validate all requested frameworks.
     for fw in &requested {
-        ocean::report::validate_framework(fw)?;
+        crate::report::validate_framework(fw)?;
     }
 
     // SARIF mode: fall back to legacy check-level output (SARIF doesn't map to
@@ -1554,7 +1554,7 @@ fn cmd_report_framework<W: Write>(
 
     // Generate a ComplianceReport for each requested framework.
     for fw in &requested {
-        let report = ocean::report::generate_report(
+        let report = crate::report::generate_report(
             dir,
             fw,
             &config,
@@ -1567,7 +1567,7 @@ fn cmd_report_framework<W: Write>(
             continue;
         }
 
-        ocean::report::print_report(out, &report, format)?;
+        crate::report::print_report(out, &report, format)?;
     }
 
     Ok(())
@@ -1581,7 +1581,7 @@ fn cmd_report_framework_sarif<W: Write>(
     check_filter: &filter::CheckFilter,
     config: &HashMap<String, String>,
 ) -> Result<()> {
-    let all_defs = ocean::check::loader::load_definitions_from_dir(checks_dir);
+    let all_defs = crate::check::loader::load_definitions_from_dir(checks_dir);
     let defs: Vec<_> = if check_filter.is_empty() {
         all_defs
     } else {
@@ -1599,12 +1599,12 @@ fn cmd_report_framework_sarif<W: Write>(
     let mut sarif_results: Vec<sarif::CheckResult> = Vec::new();
 
     for def in &defs {
-        if def.check_type != ocean::check::definition::CheckType::Passive {
+        if def.check_type != crate::check::definition::CheckType::Passive {
             continue;
         }
 
         // Only include checks that reference at least one requested framework.
-        let refs = ocean::report::extract_references(def);
+        let refs = crate::report::extract_references(def);
         let matches_fw = refs.iter().any(|(fw, _)| frameworks.contains(fw));
         if !matches_fw {
             continue;
@@ -1614,7 +1614,7 @@ fn cmd_report_framework_sarif<W: Write>(
             Ok(evidence) => {
                 let any_fail = evidence
                     .iter()
-                    .any(|e| matches!(e.status_id, ocean::StatusId::Ineffective));
+                    .any(|e| matches!(e.status_id, crate::StatusId::Ineffective));
                 if any_fail { "FAIL" } else { "PASS" }
             }
             Err(_) => "ERROR",
@@ -1664,7 +1664,7 @@ fn cmd_harden<W: Write>(
 
     // Validate that target check ID exists if a specific one was given.
     if let Some(target) = id_filter {
-        let all_defs = ocean::check::loader::load_definitions_from_dir(dir);
+        let all_defs = crate::check::loader::load_definitions_from_dir(dir);
         let target_exists = all_defs.iter().any(|d| d.id == target || d.source == target || d.id.starts_with(target));
         if !target_exists {
             return Err(anyhow!("Check '{}' not found in {}", target, checks_dir));
@@ -1674,7 +1674,7 @@ fn cmd_harden<W: Write>(
     let mut plans = plan_harden(dir, &rem_mode, &config, id_filter)?;
     if !check_filter.is_empty() {
         // Load definitions to apply tag/severity/profile filter.
-        let defs = ocean::check::loader::load_definitions_from_dir(dir);
+        let defs = crate::check::loader::load_definitions_from_dir(dir);
         let allowed: std::collections::HashSet<String> = defs
             .iter()
             .filter(|d| check_filter.matches(d))
@@ -1735,7 +1735,7 @@ fn cmd_harden_fleet<W: Write>(
 
     // Load and validate the fleet manifest (F9, F10, F5, F7, F2, F1)
     eprintln!("Loading fleet manifest: {}", fleet_path.display());
-    let manifest = ocean::fleet::FleetManifest::from_file(fleet_path)?;
+    let manifest = crate::fleet::FleetManifest::from_file(fleet_path)?;
 
     eprintln!(
         "Fleet \"{}\" — {} target(s), concurrency {}",
@@ -1801,7 +1801,7 @@ fn cmd_harden_fleet<W: Write>(
     }
 
     // Execute fleet via tokio runtime
-    let opts = ocean::fleet::FleetExecOptions {
+    let opts = crate::fleet::FleetExecOptions {
         checks_dir: checks_dir.to_string(),
         mode: rem_mode,
         apply,
@@ -1812,7 +1812,7 @@ fn cmd_harden_fleet<W: Write>(
     };
 
     let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
-    let fleet_result = rt.block_on(ocean::fleet::execute_fleet(&manifest, &opts))?;
+    let fleet_result = rt.block_on(crate::fleet::execute_fleet(&manifest, &opts))?;
 
     // Print fleet summary
     writeln!(out)?;
@@ -1837,9 +1837,9 @@ fn cmd_harden_fleet<W: Write>(
 
     for tr in &fleet_result.targets {
         let status_icon = match tr.status {
-            ocean::fleet::TargetStatus::Completed => "OK",
-            ocean::fleet::TargetStatus::Failed => "FAIL",
-            ocean::fleet::TargetStatus::Skipped => "SKIP",
+            crate::fleet::TargetStatus::Completed => "OK",
+            crate::fleet::TargetStatus::Failed => "FAIL",
+            crate::fleet::TargetStatus::Skipped => "SKIP",
         };
         writeln!(
             out,
@@ -1855,7 +1855,7 @@ fn cmd_harden_fleet<W: Write>(
     writeln!(out, "Results: {}", output_dir.display())?;
 
     // Exit code is handled by the caller via fleet_exit_code
-    let exit_code = ocean::fleet::fleet_exit_code(&fleet_result);
+    let exit_code = crate::fleet::fleet_exit_code(&fleet_result);
     if exit_code != 0 {
         return Err(anyhow!(
             "{} target(s) failed during fleet execution",

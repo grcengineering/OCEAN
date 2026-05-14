@@ -1,6 +1,6 @@
 // Check filtering — tag, severity, and profile filters for CLI commands.
 
-use ocean::check::definition::CheckDefinition;
+use crate::check::definition::CheckDefinition;
 
 /// Filter criteria for check selection.
 #[derive(Debug, Default, Clone)]

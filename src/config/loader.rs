@@ -175,6 +175,7 @@ mod tests {
     // probably doesn't exist in CI, so defaults will be returned) — the test
     // just guarantees the closure runs.
     #[test]
+    #[serial_test::serial]
     fn load_default_path_closure_runs_when_no_path_and_no_env() {
         let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         // Save / unset OCEAN_CONFIG so the second branch fires.
@@ -189,6 +190,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn load_default_path_closure_with_userprofile_fallback() {
         let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         // Exercises the .or_else(|_| std::env::var("USERPROFILE")) branch.
@@ -210,6 +212,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn load_default_path_closure_with_no_home_no_userprofile() {
         let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         // Final fallback: "." when neither HOME nor USERPROFILE is set.
@@ -373,6 +376,7 @@ server:
     }
 
     #[test]
+    #[serial_test::serial]
     fn load_via_ocean_config_env_var() {
         let dir = std::env::temp_dir();
         let path = dir

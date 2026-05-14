@@ -1420,6 +1420,7 @@ remediation:
     // ─── write_audit_log ─────────────────────────────────────────────────────
 
     #[test]
+    #[serial_test::serial]
     fn write_audit_log_creates_file_in_home() {
         // write_audit_log reads $HOME to determine the log path.
         // Override HOME to a tempdir so we don't pollute the real ~/.ocean/audit.log.
@@ -1464,6 +1465,7 @@ remediation:
     }
 
     #[test]
+    #[serial_test::serial]
     fn write_audit_log_failed_result() {
         let tmp = TempDir::new().unwrap();
         let tmp_home = tmp.path().to_str().unwrap().to_string();
@@ -1499,6 +1501,7 @@ remediation:
     }
 
     #[test]
+    #[serial_test::serial]
     fn write_audit_log_appends_multiple_entries() {
         let tmp = TempDir::new().unwrap();
         let tmp_home = tmp.path().to_str().unwrap().to_string();
@@ -1538,6 +1541,7 @@ remediation:
     }
 
     #[test]
+    #[serial_test::serial]
     fn write_audit_log_scrubs_credentials() {
         let tmp = TempDir::new().unwrap();
         let tmp_home = tmp.path().to_str().unwrap().to_string();
@@ -2066,6 +2070,7 @@ remediation:
     }
 
     #[test]
+    #[serial_test::serial]
     fn is_user_checks_dir_home_unset() {
         // When HOME is not set, is_user_checks_dir should return false.
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
@@ -2179,6 +2184,7 @@ remediation:
     }
 
     #[test]
+    #[serial_test::serial]
     fn write_audit_log_home_unset_uses_fallback() {
         // When HOME is not set, write_audit_log falls back to ".ocean".
         let plan = RemediationPlan {
@@ -2344,6 +2350,7 @@ remediation:
     }
 
     #[test]
+    #[serial_test::serial]
     fn execute_plans_writes_audit_logs() {
         // execute_plans calls write_audit_log for each plan.
         let tmp = TempDir::new().unwrap();
