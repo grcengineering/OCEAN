@@ -5077,6 +5077,40 @@ remediation:
 
     #[test]
     #[serial_test::serial]
+    fn cmd_harden_fleet_apply_aborts_without_continue_on_error() {
+        // continue_on_error=false → execute_fleet returns Err → ? propagates
+        // → cmd_harden_fleet returns Err before the summary code.
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        write_failing_aws_check_for_fleet(&checks, &srv.base_url);
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out-abort");
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let _ = cmd_harden_fleet(
+            &mut out,
+            &fleet,
+            checks.to_str().unwrap(),
+            "api",
+            true,
+            true,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+            1,
+            false, // continue_on_error = false → abort
+            &outd,
+            false,
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn cmd_harden_fleet_apply_fault_injection() {
         // Drive each `?` continuation in the summary printing after a
         // successful execute_fleet.
