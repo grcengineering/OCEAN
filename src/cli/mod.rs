@@ -4802,6 +4802,16 @@ remediation:
     }
 
     #[test]
+    fn run_with_dashboard_dispatches_bad_db_errors() {
+        // run_with's Dashboard arm: open_store fails on a directory path
+        // → return Err before crate::dashboard::run is called.
+        let (_d, db) = bad_db_path();
+        let cli = parse_args(&["ocean", "--db", &db, "dashboard"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
     fn run_with_build_dispatches() {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("source");
