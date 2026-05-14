@@ -4177,6 +4177,124 @@ classification:
 
     // --- cmd_report_framework_sarif via a real check def ---
     #[test]
+    fn cmd_report_framework_sarif_with_passive_failing_check() {
+        // Drives the cmd_report_framework_sarif loop body including the
+        // executor.execute_observer call and the FAIL status branch.
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            checks.join("SARIF-FAIL.check.yaml"),
+            format!(
+                r#"
+id: SARIF-FAIL
+name: SARIF Failing Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+references:
+  soc2: CC6.1
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: critical
+    title: t
+    pass_message: ok
+    fail_message: fail
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        // SARIF output includes our check id.
+        assert!(s.contains("SARIF-FAIL"));
+    }
+
+    #[test]
+    fn cmd_report_framework_sarif_with_passive_check_not_matching_framework() {
+        // Check exists but its reference is for "nist" not "soc2" → filtered out.
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            checks.join("SARIF-NIST.check.yaml"),
+            format!(
+                r#"
+id: SARIF-NIST
+name: NIST-only Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+references:
+  nist: IA-2
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn cmd_report_framework_sarif_with_real_check_def() {
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
