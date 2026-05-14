@@ -391,4 +391,22 @@ mod tests {
         let result = AdminRolesObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_returns_error() {
+        // 200 with non-JSON body → into_json().map_err(...) closure fires
+        let srv = mock_server(200, "this is not json {");
+        let result = AdminRolesObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_uses_fallback() {
+        // 500 with non-JSON body → unwrap_or_else fallback fires, then
+        // status-based branch handles the result. observe() should still
+        // surface a structured error (not panic).
+        let srv = mock_server(500, "<html>500</html>");
+        let result = AdminRolesObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
 }

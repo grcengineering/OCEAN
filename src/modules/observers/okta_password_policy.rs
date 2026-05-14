@@ -522,4 +522,18 @@ mod tests {
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.findings[0].title, "Password Policy Compliant");
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_returns_error() {
+        let srv = mock_server(200, "this is not json {");
+        let result = PasswordPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_uses_fallback() {
+        let srv = mock_server(500, "<html>500</html>");
+        let result = PasswordPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
 }
