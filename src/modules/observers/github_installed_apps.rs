@@ -257,4 +257,63 @@ mod tests {
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["total_apps"], 5);
     }
+
+    #[test]
+    fn moderate_app_count_is_effective_with_note() {
+        let apps: Vec<serde_json::Value> = (0..8)
+            .map(|i| json!({"app_slug": format!("app-{}", i)}))
+            .collect();
+        let body = json!({"total_count": 8, "installations": apps}).to_string();
+        let srv = mock_server(200, &body);
+        let ev = &InstalledAppsObserver
+            .observe(&test_config_with_org(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Moderate App Count"));
+    }
+
+    #[test]
+    fn installed_apps_api_error_returns_err() {
+        let srv = mock_server(403, r#"{"message":"Forbidden"}"#);
+        let result = InstalledAppsObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn installed_apps_evidence_types() {
+        assert_eq!(InstalledAppsObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn installed_apps_credential_requirements() {
+        let reqs = InstalledAppsObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn installed_apps_missing_token_errors() {
+        let err = InstalledAppsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn installed_apps_missing_org_errors() {
+        let err = InstalledAppsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

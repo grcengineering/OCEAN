@@ -177,4 +177,50 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("GITHUB_ORG"));
     }
+
+    #[test]
+    fn saml_missing_token_returns_err() {
+        use std::collections::HashMap;
+        let err = SamlSsoObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "acme-org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn saml_connection_refused_errors() {
+        let mut cfg = test_config_with_org("placeholder");
+        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        let result = SamlSsoObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn saml_evidence_types() {
+        assert_eq!(SamlSsoObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn saml_credential_requirements() {
+        let reqs = SamlSsoObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = SamlSsoObserver;
+        assert_eq!(obs.id(), "github.saml_sso");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "github");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
+    }
 }

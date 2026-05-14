@@ -598,4 +598,70 @@ mod tests {
         let id2 = MfaBypassTester.test(&base_config(&srv2)).unwrap()[0].id;
         assert_ne!(id1, id2);
     }
+
+    #[test]
+    fn password_expired_is_effective() {
+        // PASSWORD_EXPIRED means bypass attempt still didn't succeed without MFA.
+        let srv = mock_server(200, r#"{"status":"PASSWORD_EXPIRED"}"#);
+        let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert!(ev.findings.iter().any(|f| f.title == "MFA Bypass Blocked"));
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = MfaBypassTester;
+        assert_eq!(t.id(), "okta.mfa_bypass");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "okta");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    // ── Missed Module trait fns ──────────────────────────────────────────────
+
+    #[test]
+    fn mfa_bypass_evidence_types_value() {
+        assert_eq!(MfaBypassTester.evidence_types(), &[1001]);
+    }
+
+    #[test]
+    fn mfa_bypass_source_system_value() {
+        assert_eq!(MfaBypassTester.source_system(), "okta");
+    }
+
+    // ── Connection refused error ─────────────────────────────────────────────
+
+    #[test]
+    fn connection_refused_returns_err() {
+        let config = base_config("http://127.0.0.1:1");
+        let result = MfaBypassTester.test(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Okta authn request failed"));
+    }
+
+    // ── HTTP 403 with body parsing (Err::Status arm) ─────────────────────────
+
+    #[test]
+    fn http_403_raw_data_shows_blocked() {
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        );
+        let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.raw_data["bypass_blocked"].as_bool(), Some(true));
+        assert_eq!(ev.raw_data["http_status"].as_u64(), Some(403));
+        assert_eq!(ev.raw_data["test_result"].as_str(), Some("blocked"));
+    }
 }

@@ -225,4 +225,189 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn control_row_uptime_none_returns_dash() {
+        let row = ControlRow::empty("test");
+        assert_eq!(row.uptime_text(), "-");
+    }
+
+    #[test]
+    fn control_row_uptime_zero_formats_correctly() {
+        let mut row = ControlRow::empty("test");
+        row.uptime_percent = Some(0.0);
+        assert_eq!(row.uptime_text(), "0.0%");
+    }
+
+    #[test]
+    fn control_row_uptime_100_formats_correctly() {
+        let mut row = ControlRow::empty("test");
+        row.uptime_percent = Some(100.0);
+        assert_eq!(row.uptime_text(), "100.0%");
+    }
+
+    #[test]
+    fn load_control_yamls_with_valid_control_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        let yaml = r#"
+id: test-ctrl-001
+name: Test Control
+description: A test control
+framework_mappings:
+  - framework: SOC2
+    requirement_id: CC6.1
+observers: []
+testers: []
+evaluation_logic:
+  preset: all_effective
+  cel_expression: ""
+"#;
+        let path = dir.path().join("test-ctrl.yaml");
+        std::fs::write(&path, yaml).unwrap();
+
+        let controls = load_control_yamls(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(controls.len(), 1);
+        assert_eq!(controls[0].id, "test-ctrl-001");
+    }
+
+    #[test]
+    fn load_control_yamls_skips_invalid_yaml_files() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("bad.yaml"), "not: valid: yaml: [[[").unwrap();
+
+        let controls = load_control_yamls(dir.path().to_str().unwrap()).unwrap();
+        assert!(controls.is_empty());
+    }
+
+    #[test]
+    fn load_control_yamls_skips_frameworks_subdirectory() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // Create a "frameworks" subdirectory with a yaml file — should be skipped
+        let fw_dir = dir.path().join("frameworks");
+        std::fs::create_dir(&fw_dir).unwrap();
+        let valid_yaml = r#"
+id: fw-ctrl
+name: Framework Control
+description: Should be skipped
+framework_mappings: []
+observers: []
+testers: []
+evaluation_logic:
+  preset: all_effective
+  cel_expression: ""
+"#;
+        std::fs::write(fw_dir.join("fw.yaml"), valid_yaml).unwrap();
+
+        // Also add a valid control in the root
+        let ctrl_yaml = r#"
+id: root-ctrl
+name: Root Control
+description: Root level
+framework_mappings: []
+observers: []
+testers: []
+evaluation_logic:
+  preset: all_effective
+  cel_expression: ""
+"#;
+        std::fs::write(dir.path().join("root.yaml"), ctrl_yaml).unwrap();
+
+        let controls = load_control_yamls(dir.path().to_str().unwrap()).unwrap();
+        // Only the root control should be loaded; frameworks/ is skipped
+        assert_eq!(controls.len(), 1);
+        assert_eq!(controls[0].id, "root-ctrl");
+    }
+
+    #[test]
+    fn load_control_yamls_yml_extension_also_loaded() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let yaml = r#"
+id: ctrl-yml
+name: Yml Control
+description: ""
+framework_mappings: []
+observers: []
+testers: []
+evaluation_logic:
+  preset: all_effective
+  cel_expression: ""
+"#;
+        std::fs::write(dir.path().join("ctrl.yml"), yaml).unwrap();
+
+        let controls = load_control_yamls(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(controls.len(), 1);
+        assert_eq!(controls[0].id, "ctrl-yml");
+    }
+
+    #[test]
+    fn load_controls_uses_store_for_status_and_evidence() {
+        use crate::storage::SqliteStore;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let yaml = r#"
+id: store-ctrl
+name: Store Control
+description: ""
+framework_mappings:
+  - framework: SOC2
+    requirement_id: CC6.2
+observers: []
+testers: []
+evaluation_logic:
+  preset: all_effective
+  cel_expression: ""
+"#;
+        std::fs::write(dir.path().join("ctrl.yaml"), yaml).unwrap();
+
+        let db_path = dir.path().join("test.db").to_str().unwrap().to_string();
+        let store = SqliteStore::open(&db_path).unwrap();
+
+        let rows = load_controls(dir.path().to_str().unwrap(), &store).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].control.id, "store-ctrl");
+        // No status or evidence in DB yet
+        assert!(rows[0].status.is_none());
+        assert!(rows[0].evidence.is_empty());
+        // Framework mapping picked up from first entry
+        assert_eq!(rows[0].framework, "SOC2 CC6.2");
+    }
+
+    #[test]
+    fn load_controls_with_no_framework_mappings() {
+        use crate::storage::SqliteStore;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let yaml = r#"
+id: no-fw-ctrl
+name: No Framework
+description: ""
+framework_mappings: []
+observers: []
+testers: []
+evaluation_logic:
+  preset: all_effective
+  cel_expression: ""
+"#;
+        std::fs::write(dir.path().join("ctrl.yaml"), yaml).unwrap();
+
+        let db_path = dir.path().join("test2.db").to_str().unwrap().to_string();
+        let store = SqliteStore::open(&db_path).unwrap();
+
+        let rows = load_controls(dir.path().to_str().unwrap(), &store).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].framework, ""); // No mapping → empty string
+    }
+
+    #[test]
+    fn load_controls_missing_dir_returns_empty() {
+        use crate::storage::SqliteStore;
+
+        let db_dir = tempfile::TempDir::new().unwrap();
+        let db_path = db_dir.path().join("test.db").to_str().unwrap().to_string();
+        let store = SqliteStore::open(&db_path).unwrap();
+
+        let rows = load_controls("/nonexistent/controls/dir", &store).unwrap();
+        assert!(rows.is_empty());
+    }
 }

@@ -220,4 +220,74 @@ mod tests {
         let err = exec.execute_tester("test.fail", &cfg).unwrap_err();
         assert!(err.to_string().contains("cleanup completed"));
     }
+
+    // Test the branch where evidence already has a test_transcript (line 101).
+    // We need a tester whose evidence has a pre-existing transcript.
+    #[test]
+    fn execute_tester_appends_cleanup_to_existing_transcript() {
+        use crate::evidence::transcript::{TestTranscript, TranscriptAction, TranscriptCleanup, TranscriptObservation};
+
+        struct TesterWithTranscript;
+
+        impl crate::module::Module for TesterWithTranscript {
+            fn id(&self) -> &str { "test.with_transcript" }
+            fn name(&self) -> &str { "Tester With Transcript" }
+            fn version(&self) -> &str { "0.1.0" }
+            fn source_system(&self) -> &str { "mock" }
+            fn evidence_types(&self) -> &[i32] { &[1001] }
+            fn credential_requirements(&self) -> Vec<crate::module::CredentialReq> { vec![] }
+        }
+
+        impl crate::module::Tester for TesterWithTranscript {
+            fn safety_class(&self) -> crate::module::SafetyClassification {
+                crate::module::SafetyClassification::Safe
+            }
+            fn environment_scope(&self) -> crate::module::EnvironmentScope {
+                crate::module::EnvironmentScope::Production
+            }
+            fn pre_flight_checks(&self) -> Vec<String> { vec![] }
+            fn cleanup_procedures(&self) -> Vec<String> {
+                vec!["restore-state".to_string()]
+            }
+            fn test(&self, _: &HashMap<String, String>) -> anyhow::Result<Vec<crate::evidence::Evidence>> {
+                let mut ev = crate::testutil::make_evidence();
+                // Evidence already has a transcript — exercises line 101
+                ev.test_transcript = Some(TestTranscript {
+                    actions_attempted: vec![TranscriptAction {
+                        action: "step1".to_string(),
+                        timestamp: chrono::Utc::now(),
+                        parameters: serde_json::Value::Null,
+                    }],
+                    observations: vec![TranscriptObservation {
+                        observation: "obs1".to_string(),
+                        timestamp: chrono::Utc::now(),
+                        expected: true,
+                    }],
+                    cleanup_actions: vec![TranscriptCleanup {
+                        action: "existing_cleanup".to_string(),
+                        timestamp: chrono::Utc::now(),
+                        success: true,
+                    }],
+                });
+                Ok(vec![ev])
+            }
+        }
+
+        let (reg, exec) = make_executor();
+        reg.register_tester(Arc::new(TesterWithTranscript));
+        let cfg = TestConfig::default_safe();
+        let ev = exec.execute_tester("test.with_transcript", &cfg).unwrap();
+        assert_eq!(ev.len(), 1);
+        let transcript = ev[0].test_transcript.as_ref().unwrap();
+        // Should have the original cleanup + the new one appended
+        assert!(transcript.cleanup_actions.len() >= 2);
+    }
+
+    // TestConfig::default_safe branches
+    #[test]
+    fn test_config_default_safe_has_production_scope() {
+        let cfg = TestConfig::default_safe();
+        assert!(matches!(cfg.target_environment, EnvironmentScope::Production));
+        assert!(cfg.module_config.is_empty());
+    }
 }

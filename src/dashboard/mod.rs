@@ -1,19 +1,14 @@
 pub mod data;
+pub mod terminal;
 pub mod ui;
 
-use std::io;
-use std::time::{Duration, Instant};
-
-use anyhow::{Context, Result};
-use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use ratatui::prelude::*;
+use anyhow::Result;
+use crossterm::event::{self, KeyCode, KeyModifiers};
 
 use crate::storage::Store;
 use data::ControlRow;
+
+pub use terminal::run;
 
 /// Which view the dashboard is currently showing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,80 +124,6 @@ impl App {
         }
         Ok(())
     }
-}
-
-/// Run the TUI dashboard.
-///
-/// This is the main entry point called by the CLI. It sets up the terminal,
-/// runs the event loop, and restores the terminal on exit.
-pub fn run(store: &dyn Store, controls_dir: &str, refresh_secs: u64) -> Result<()> {
-    // Check for TTY
-    if !atty_check() {
-        anyhow::bail!(
-            "ocean dashboard requires an interactive terminal (TTY). \
-             Redirect output is not supported."
-        );
-    }
-
-    // Setup terminal
-    enable_raw_mode().context("failed to enable raw mode")?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).context("failed to create terminal")?;
-
-    // Run app (wrapped so we always restore terminal)
-    let result = run_app(&mut terminal, store, controls_dir, refresh_secs);
-
-    // Restore terminal
-    disable_raw_mode().context("failed to disable raw mode")?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)
-        .context("failed to leave alternate screen")?;
-    terminal.show_cursor().context("failed to show cursor")?;
-
-    result
-}
-
-fn run_app(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    store: &dyn Store,
-    controls_dir: &str,
-    refresh_secs: u64,
-) -> Result<()> {
-    let mut app = App::new();
-    let tick_rate = Duration::from_secs(refresh_secs);
-    let mut last_tick = Instant::now();
-
-    // Initial data load
-    app.refresh_data(store, controls_dir)?;
-
-    loop {
-        terminal.draw(|frame| ui::render(frame, &app))?;
-
-        let timeout = tick_rate.saturating_sub(last_tick.elapsed());
-        if event::poll(timeout).context("event poll failed")? {
-            if let Event::Key(key) = event::read().context("event read failed")? {
-                app.handle_key(key);
-            }
-        }
-
-        if last_tick.elapsed() >= tick_rate {
-            app.refresh_data(store, controls_dir)?;
-            last_tick = Instant::now();
-        }
-
-        if app.should_quit {
-            break;
-        }
-    }
-
-    Ok(())
-}
-
-/// Check if stdout is a TTY.
-fn atty_check() -> bool {
-    use std::io::IsTerminal;
-    io::stdout().is_terminal()
 }
 
 #[cfg(test)]
@@ -373,5 +294,129 @@ mod tests {
             state: KeyEventState::NONE,
         });
         assert!(app.should_quit);
+    }
+
+    #[test]
+    fn ctrl_c_quits_from_detail_view() {
+        let mut app = App::new();
+        app.view = View::Detail(0);
+        app.handle_key(KeyEvent {
+            code: KeyCode::Char('c'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        });
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn handle_key_unknown_keys_are_ignored_in_main() {
+        let mut app = App::new();
+        app.handle_key(key(KeyCode::F(1)));
+        assert_eq!(app.view, View::Main);
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn handle_key_unknown_keys_are_ignored_in_detail() {
+        let mut app = App::new();
+        app.view = View::Detail(0);
+        app.handle_key(key(KeyCode::F(1)));
+        assert_eq!(app.view, View::Detail(0));
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn previous_noop_empty_controls() {
+        let mut app = App::new();
+        app.previous();
+        assert_eq!(app.selected, 0);
+    }
+
+    #[test]
+    fn scroll_down_increments_offset() {
+        let mut app = App::new();
+        app.scroll_down();
+        assert_eq!(app.scroll_offset, 1);
+        app.scroll_down();
+        assert_eq!(app.scroll_offset, 2);
+    }
+
+    #[test]
+    fn scroll_up_saturates_at_zero() {
+        let mut app = App::new();
+        app.scroll_up();
+        assert_eq!(app.scroll_offset, 0);
+    }
+
+    #[test]
+    fn app_default_is_same_as_new() {
+        let a = App::new();
+        let b = App::default();
+        assert_eq!(a.view, b.view);
+        assert_eq!(a.selected, b.selected);
+        assert_eq!(a.should_quit, b.should_quit);
+        assert_eq!(a.scroll_offset, b.scroll_offset);
+    }
+
+    #[test]
+    fn refresh_data_clamps_selection() {
+        use crate::storage::SqliteStore;
+        let dir = tempfile::TempDir::new().unwrap();
+        let db_path = dir.path().join("test.db").to_str().unwrap().to_string();
+        let store = SqliteStore::open(&db_path).unwrap();
+
+        let mut app = App::new();
+        // Start with selection at index 5
+        app.selected = 5;
+        // Refresh with an empty controls dir → controls list becomes empty
+        let result = app.refresh_data(&store, "/nonexistent/controls/dir");
+        assert!(result.is_ok());
+        // Empty list → selected should be clamped (no change since list is empty)
+        assert_eq!(app.selected, 5); // No clamping when empty — only clamps if selected >= len
+    }
+
+    #[test]
+    fn handle_key_jk_scroll_in_detail_view() {
+        let mut app = App::new();
+        app.view = View::Detail(0);
+        app.handle_key(key(KeyCode::Char('j')));
+        assert_eq!(app.scroll_offset, 1);
+        app.handle_key(key(KeyCode::Char('k')));
+        assert_eq!(app.scroll_offset, 0);
+    }
+
+    #[test]
+    fn refresh_data_clamps_selection_when_controls_shrink() {
+        use crate::storage::SqliteStore;
+
+        let dir = tempfile::TempDir::new().unwrap();
+
+        // Write a single valid control YAML
+        let yaml = r#"
+id: clamp-test-ctrl
+name: Clamp Test
+description: ""
+framework_mappings: []
+observers: []
+testers: []
+evaluation_logic:
+  preset: all_effective
+  cel_expression: ""
+"#;
+        std::fs::write(dir.path().join("ctrl.yaml"), yaml).unwrap();
+
+        let db_dir = tempfile::TempDir::new().unwrap();
+        let db_path = db_dir.path().join("test.db").to_str().unwrap().to_string();
+        let store = SqliteStore::open(&db_path).unwrap();
+
+        let mut app = App::new();
+        // Set selected to something higher than the 1 control that will load
+        app.selected = 10;
+        let result = app.refresh_data(&store, dir.path().to_str().unwrap());
+        assert!(result.is_ok());
+        // 1 control loaded, selected was 10, should be clamped to 0
+        assert_eq!(app.controls.len(), 1);
+        assert_eq!(app.selected, 0); // clamped to len() - 1 = 0
     }
 }

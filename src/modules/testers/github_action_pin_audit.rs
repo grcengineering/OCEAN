@@ -521,6 +521,61 @@ mod tests {
     }
 
     #[test]
+    fn missing_token_errors() {
+        let config = HashMap::from([
+            ("GITHUB_OWNER".to_string(), "org".to_string()),
+            ("GITHUB_REPO".to_string(), "repo".to_string()),
+        ]);
+        let err = ActionPinAuditTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn missing_owner_errors() {
+        let config = HashMap::from([
+            ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+            ("GITHUB_REPO".to_string(), "repo".to_string()),
+        ]);
+        let err = ActionPinAuditTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_OWNER"));
+    }
+
+    #[test]
+    fn missing_repo_errors() {
+        let config = HashMap::from([
+            ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+            ("GITHUB_OWNER".to_string(), "org".to_string()),
+        ]);
+        let err = ActionPinAuditTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_REPO"));
+    }
+
+    #[test]
+    fn non_200_non_404_list_status_returns_err() {
+        let srv = mock_server_multi(vec![(500, r#"{"message":"Internal Server Error"}"#)]);
+        let result = ActionPinAuditTester.test(&test_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("500"));
+    }
+
+    #[test]
+    fn docker_action_is_sha_pinned() {
+        assert!(is_sha_pinned("docker://my-image:latest"));
+    }
+
+    #[test]
+    fn workflow_file_not_200_is_skipped() {
+        // If a file fetch returns non-200, it's skipped (not counted in workflows_checked).
+        let list_resp: &'static str =
+            r#"[{"name":"ci.yml","type":"file","path":".github/workflows/ci.yml"}]"#;
+        let srv = mock_server_multi(vec![(200, list_resp), (404, r#"{"message":"Not Found"}"#)]);
+        let ev = &ActionPinAuditTester.test(&test_config(&srv)).unwrap()[0];
+        // File was not 200 so skipped — 0 workflows checked, no unpinned
+        assert_eq!(ev.raw_data["workflows_checked"].as_u64(), Some(0));
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
+
+    #[test]
     fn no_workflow_files_is_effective() {
         use std::io::{Read, Write};
         use std::net::TcpListener;
@@ -549,5 +604,72 @@ mod tests {
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["workflows_checked"].as_u64(), Some(0));
         assert!(ev.findings.is_empty());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = ActionPinAuditTester;
+        assert_eq!(t.id(), "github.action_pin_audit");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "github");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "GITHUB_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_OWNER"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_REPO"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    // ── extract_uses_lines coverage ──────────────────────────────────────────
+
+    #[test]
+    fn extract_uses_lines_handles_list_item_form() {
+        let content = "steps:\n  - uses: actions/checkout@v4\n  - uses: actions/setup-node@v3\n";
+        let lines = extract_uses_lines(content);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "actions/checkout@v4");
+        assert_eq!(lines[1], "actions/setup-node@v3");
+    }
+
+    #[test]
+    fn extract_uses_lines_handles_plain_uses() {
+        let content = "uses: actions/checkout@abc123\n";
+        let lines = extract_uses_lines(content);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], "actions/checkout@abc123");
+    }
+
+    #[test]
+    fn extract_uses_lines_ignores_non_uses_lines() {
+        let content = "run: echo hello\nname: test\nuses: foo/bar@v1\n";
+        let lines = extract_uses_lines(content);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], "foo/bar@v1");
+    }
+
+    #[test]
+    fn extract_uses_lines_empty_content() {
+        let lines = extract_uses_lines("");
+        assert!(lines.is_empty());
+    }
+
+    // ── Non-.yml/.yaml files are filtered out ────────────────────────────────
+
+    #[test]
+    fn non_yaml_files_are_filtered() {
+        // Workflow directory contains a non-yaml file — it should be skipped.
+        let list_resp: &'static str = r#"[{"name":"README.md","type":"file","path":".github/workflows/README.md"}]"#;
+        let srv = mock_server_multi(vec![(200, list_resp)]);
+        let ev = &ActionPinAuditTester.test(&test_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert_eq!(ev.raw_data["workflows_checked"].as_u64(), Some(0));
     }
 }

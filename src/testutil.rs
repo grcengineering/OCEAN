@@ -395,3 +395,271 @@ impl MockHTTPServer {
         &self.base_url
     }
 }
+
+// ---------------------------------------------------------------------------
+// Meta-tests: exercise every constructor and method in this file.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::module::{AuthorizationLevel, Module, SafetyClassification};
+
+    // ── make_evidence ────────────────────────────────────────────────────────
+
+    #[test]
+    fn make_evidence_returns_valid_record() {
+        let ev = make_evidence();
+        assert_eq!(ev.control_id, "test.control");
+        assert_eq!(ev.class_uid, 1001);
+        assert!(!ev.observables.is_empty());
+        assert!(!ev.findings.is_empty());
+    }
+
+    // ── MockObserver constructors ─────────────────────────────────────────────
+
+    #[test]
+    fn mock_observer_new_fields() {
+        let obs = MockObserver::new("obs.id");
+        assert_eq!(obs.id, "obs.id");
+        assert_eq!(obs.name, "Mock Observer");
+        assert_eq!(obs.source, "mock");
+        assert!(!obs.fail);
+    }
+
+    #[test]
+    fn mock_observer_failing_sets_fail_flag() {
+        let obs = MockObserver::failing("obs.fail");
+        assert!(obs.fail);
+        assert_eq!(obs.id, "obs.fail");
+    }
+
+    #[test]
+    fn mock_observer_empty_id_has_empty_id() {
+        let obs = MockObserver::empty_id();
+        assert_eq!(obs.id, "");
+        assert_eq!(obs.name, "Bad Observer");
+    }
+
+    #[test]
+    fn mock_observer_empty_name_has_empty_name() {
+        let obs = MockObserver::empty_name("obs.empty_name");
+        assert_eq!(obs.id, "obs.empty_name");
+        assert_eq!(obs.name, "");
+        assert!(!obs.fail);
+    }
+
+    #[test]
+    fn mock_observer_empty_source_has_empty_source() {
+        let obs = MockObserver::empty_source("obs.empty_source");
+        assert_eq!(obs.source, "");
+    }
+
+    // ── MockObserver Module + Observer trait methods ──────────────────────────
+
+    #[test]
+    fn mock_observer_module_trait_methods() {
+        let obs = MockObserver::new("obs.trait");
+        assert_eq!(obs.id(), "obs.trait");
+        assert_eq!(obs.name(), "Mock Observer");
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "mock");
+        assert_eq!(obs.evidence_types(), &[1001]);
+        assert!(obs.credential_requirements().is_empty());
+    }
+
+    #[test]
+    fn mock_observer_observe_returns_evidence() {
+        let obs = MockObserver::new("obs.ok");
+        let creds = HashMap::new();
+        let result = obs.observe(&creds).unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn mock_observer_failing_observe_returns_error() {
+        let obs = MockObserver::failing("obs.err");
+        let creds = HashMap::new();
+        assert!(obs.observe(&creds).is_err());
+    }
+
+    // ── MockTester constructors ───────────────────────────────────────────────
+
+    #[test]
+    fn mock_tester_safe_fields() {
+        let t = MockTester::safe("t.safe");
+        assert_eq!(t.id, "t.safe");
+        assert!(matches!(t.safety, SafetyClassification::Safe));
+        assert!(matches!(t.scope, crate::module::EnvironmentScope::Production));
+        assert!(!t.fail);
+    }
+
+    #[test]
+    fn mock_tester_observable_fields() {
+        let t = MockTester::observable("t.obs");
+        assert_eq!(t.id, "t.obs");
+        assert!(matches!(t.safety, SafetyClassification::Observable));
+        assert!(matches!(t.scope, crate::module::EnvironmentScope::Staging));
+        assert!(!t.fail);
+    }
+
+    #[test]
+    fn mock_tester_reversible_fields() {
+        let t = MockTester::reversible("t.rev");
+        assert_eq!(t.id, "t.rev");
+        assert!(matches!(t.safety, SafetyClassification::Reversible));
+        assert!(matches!(t.scope, crate::module::EnvironmentScope::Isolated));
+        assert!(!t.fail);
+    }
+
+    #[test]
+    fn mock_tester_destructive_fields() {
+        let t = MockTester::destructive("t.dest");
+        assert!(matches!(t.safety, SafetyClassification::Destructive));
+        assert!(matches!(t.scope, crate::module::EnvironmentScope::Isolated));
+    }
+
+    #[test]
+    fn mock_tester_failing_sets_fail_flag() {
+        let t = MockTester::failing("t.fail");
+        assert!(t.fail);
+    }
+
+    #[test]
+    fn mock_tester_empty_id_has_empty_id() {
+        let t = MockTester::empty_id();
+        assert_eq!(t.id, "");
+    }
+
+    #[test]
+    fn mock_tester_empty_name_id_constructor() {
+        let t = MockTester::empty_name_id("t.eni");
+        assert_eq!(t.id, "t.eni");
+        assert!(matches!(t.safety, SafetyClassification::Safe));
+    }
+
+    // ── MockTester Module + Tester trait methods ──────────────────────────────
+
+    #[test]
+    fn mock_tester_module_trait_methods() {
+        let t = MockTester::safe("t.trait");
+        assert_eq!(t.id(), "t.trait");
+        assert_eq!(t.name(), "Mock Tester");
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "mock");
+        assert_eq!(t.evidence_types(), &[1001]);
+        assert!(t.credential_requirements().is_empty());
+    }
+
+    #[test]
+    fn mock_tester_tester_trait_methods() {
+        let t = MockTester::safe("t.tester");
+        assert!(matches!(t.safety_class(), SafetyClassification::Safe));
+        assert!(matches!(t.environment_scope(), crate::module::EnvironmentScope::Production));
+        assert!(!t.pre_flight_checks().is_empty());
+        assert!(!t.cleanup_procedures().is_empty());
+    }
+
+    #[test]
+    fn mock_tester_test_returns_evidence() {
+        let t = MockTester::safe("t.ok");
+        let creds = HashMap::new();
+        let result = t.test(&creds).unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(matches!(result[0].confidence_level, crate::evidence::ConfidenceLevel::ActiveVerification));
+    }
+
+    #[test]
+    fn mock_tester_failing_test_returns_error() {
+        let t = MockTester::failing("t.err");
+        let creds = HashMap::new();
+        assert!(t.test(&creds).is_err());
+    }
+
+    // ── TesterBadMeta ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn tester_bad_meta_module_trait_methods() {
+        let t = TesterBadMeta { id: "tbm.id", name: "", source: "mock" };
+        assert_eq!(t.id(), "tbm.id");
+        assert_eq!(t.name(), "");
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "mock");
+        assert!(t.evidence_types().is_empty());
+        assert!(t.credential_requirements().is_empty());
+    }
+
+    #[test]
+    fn tester_bad_meta_tester_trait_methods() {
+        let t = TesterBadMeta { id: "tbm.tester", name: "bad", source: "mock" };
+        assert!(matches!(t.safety_class(), SafetyClassification::Safe));
+        assert!(matches!(t.environment_scope(), crate::module::EnvironmentScope::Production));
+        assert!(t.pre_flight_checks().is_empty());
+        assert!(t.cleanup_procedures().is_empty());
+    }
+
+    #[test]
+    fn tester_bad_meta_test_returns_evidence() {
+        let t = TesterBadMeta { id: "tbm.test", name: "bad", source: "mock" };
+        let creds = HashMap::new();
+        let result = t.test(&creds).unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
+    // ── DenyAuthorizer ────────────────────────────────────────────────────────
+
+    #[test]
+    fn deny_authorizer_always_returns_false() {
+        let auth = DenyAuthorizer;
+        let result = auth
+            .authorize("t.deny", SafetyClassification::Safe, AuthorizationLevel::Auto)
+            .unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn deny_authorizer_returns_false_for_all_safety_levels() {
+        let auth = DenyAuthorizer;
+        for safety in [
+            SafetyClassification::Safe,
+            SafetyClassification::Observable,
+            SafetyClassification::Reversible,
+            SafetyClassification::Destructive,
+        ] {
+            assert!(!auth.authorize("x", safety, AuthorizationLevel::Auto).unwrap());
+        }
+    }
+
+    // ── MockHTTPServer ────────────────────────────────────────────────────────
+
+    #[test]
+    fn mock_http_server_url_is_localhost() {
+        let server = MockHTTPServer::new(vec![(200, r#"{"ok":true}"#.to_string())]);
+        assert!(server.url().starts_with("http://127.0.0.1:"));
+    }
+
+    #[test]
+    fn mock_http_server_serves_response() {
+        let server = MockHTTPServer::new(vec![(200, r#"{"ok":true}"#.to_string())]);
+        let resp = ureq::get(server.url()).call().unwrap();
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = resp.into_json().unwrap();
+        assert_eq!(body["ok"], true);
+    }
+
+    #[test]
+    fn mock_http_server_serves_non_200_status() {
+        let server = MockHTTPServer::new(vec![(404, r#"{"error":"not found"}"#.to_string())]);
+        // ureq treats 4xx as errors by default — use call_with_settings or check via http()
+        // We use ureq::get(...).call() which returns Err for 4xx; just verify the status via
+        // the ErrorKind::Status variant.
+        let err = ureq::get(server.url()).call().unwrap_err();
+        if let ureq::Error::Status(code, _) = err {
+            assert_eq!(code, 404);
+        } else {
+            panic!("Expected HTTP status error, got: {err:?}");
+        }
+    }
+}

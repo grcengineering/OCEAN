@@ -245,4 +245,46 @@ mod tests {
             .iter()
             .any(|f| f.title == "Audit Log Streaming Unavailable"));
     }
+
+    #[test]
+    fn audit_log_unexpected_status_returns_err() {
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = AuditLogStreamingObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn audit_log_evidence_types() {
+        assert_eq!(AuditLogStreamingObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn audit_log_credential_requirements() {
+        let reqs = AuditLogStreamingObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn audit_log_missing_token_errors() {
+        let err = AuditLogStreamingObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn audit_log_missing_org_errors() {
+        let err = AuditLogStreamingObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

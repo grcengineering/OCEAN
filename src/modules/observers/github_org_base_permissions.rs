@@ -201,4 +201,46 @@ mod tests {
         assert!(!ev.findings.is_empty());
         assert!(ev.findings[0].description.contains("admin"));
     }
+
+    #[test]
+    fn base_permission_api_error_returns_err() {
+        let srv = mock_server(404, r#"{"message":"Not Found"}"#);
+        let result = OrgBasePermissionsObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn base_permission_evidence_types() {
+        assert_eq!(OrgBasePermissionsObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn base_permission_credential_requirements() {
+        let reqs = OrgBasePermissionsObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn base_permission_missing_token_errors() {
+        let err = OrgBasePermissionsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn base_permission_missing_org_errors() {
+        let err = OrgBasePermissionsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

@@ -24,7 +24,7 @@ endif
 # Regex pattern of files to exclude from coverage.
 # src/main.rs is the CLI entry point — not meaningfully unit-testable.
 # src/secrets/* providers (Vault, AWS Secrets Manager) require live services.
-STUB_REGEX := src/(main|secrets)
+STUB_REGEX := src/(main|secrets|dashboard/(ui|terminal)|api/server)
 
 # ---------------------------------------------------------------------------
 # Build

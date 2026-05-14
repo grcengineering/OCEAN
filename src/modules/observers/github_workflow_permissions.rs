@@ -310,4 +310,18 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("GITHUB_REPO"));
     }
+
+    #[test]
+    fn workflow_evidence_types() {
+        assert_eq!(WorkflowPermissionsObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn workflow_credential_requirements() {
+        let reqs = WorkflowPermissionsObserver.credential_requirements();
+        assert_eq!(reqs.len(), 3);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_REPO" && r.required));
+    }
 }

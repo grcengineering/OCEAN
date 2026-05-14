@@ -336,4 +336,88 @@ mod tests {
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
     }
+
+    #[test]
+    fn empty_environments_200_is_unknown() {
+        let srv = mock_server(200, r#"{"total_count":0,"environments":[]}"#);
+        let ev = &EnvironmentProtectionObserver
+            .observe(&test_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Unknown);
+    }
+
+    #[test]
+    fn env_protection_500_returns_err() {
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = EnvironmentProtectionObserver.observe(&test_config(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn env_protection_evidence_types() {
+        assert_eq!(EnvironmentProtectionObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn env_protection_credential_requirements() {
+        let reqs = EnvironmentProtectionObserver.credential_requirements();
+        assert_eq!(reqs.len(), 3);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_REPO" && r.required));
+    }
+
+    #[test]
+    fn env_protection_missing_token_errors() {
+        let err = EnvironmentProtectionObserver
+            .observe(&HashMap::from([
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn env_protection_missing_owner_errors() {
+        let err = EnvironmentProtectionObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_OWNER"));
+    }
+
+    #[test]
+    fn env_protection_missing_repo_errors() {
+        let err = EnvironmentProtectionObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_REPO"));
+    }
+
+    #[test]
+    fn env_protection_connection_refused_errors() {
+        let mut cfg = test_config("placeholder");
+        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        let result = EnvironmentProtectionObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = EnvironmentProtectionObserver;
+        assert_eq!(obs.id(), "github.environment_protection");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "github");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
+    }
 }

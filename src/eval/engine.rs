@@ -223,4 +223,81 @@ mod tests {
             .to_string()
             .contains("neither preset nor cel_expression"));
     }
+
+    // --- CEL variables: unknown_count, active_count ---
+
+    fn ev_unknown() -> Evidence {
+        let mut e = make_evidence();
+        e.status_id = StatusId::Unknown;
+        e.confidence_level = ConfidenceLevel::PassiveObservation;
+        e
+    }
+
+    #[test]
+    fn cel_unknown_count_variable() {
+        let ev = vec![ev_unknown()];
+        let result = CelEngine::evaluate(&logic_cel("unknown_count == 1"), &ev).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn cel_active_count_variable() {
+        let ev = vec![ev_active()];
+        let result = CelEngine::evaluate(&logic_cel("active_count == 1"), &ev).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn cel_evidence_count_variable() {
+        let ev = vec![ev_effective(), ev_ineffective(), ev_unknown()];
+        let result = CelEngine::evaluate(&logic_cel("evidence_count == 3"), &ev).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn cel_ineffective_count_variable() {
+        let ev = vec![ev_ineffective(), ev_ineffective()];
+        let result = CelEngine::evaluate(&logic_cel("ineffective_count == 2"), &ev).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn cel_has_active_false_when_no_active() {
+        let ev = vec![ev_effective()]; // passive only
+        let result = CelEngine::evaluate(&logic_cel("has_active == false"), &ev).unwrap();
+        assert!(result);
+    }
+
+    // --- preset: all_effective with multiple evidence ---
+
+    #[test]
+    fn preset_all_effective_fails_when_any_ineffective() {
+        let ev = vec![ev_effective(), ev_ineffective()];
+        let result = CelEngine::evaluate(&logic_preset("all_effective"), &ev).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn preset_any_effective_fails_when_all_ineffective() {
+        let ev = vec![ev_ineffective(), ev_ineffective()];
+        let result = CelEngine::evaluate(&logic_preset("any_effective"), &ev).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn preset_active_verified_fails_when_only_passive() {
+        let ev = vec![ev_effective()]; // passive only
+        let result = CelEngine::evaluate(&logic_preset("active_verified"), &ev).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn cel_empty_evidence_all_counts_zero() {
+        let result = CelEngine::evaluate(
+            &logic_cel("evidence_count == 0 && effective_count == 0 && ineffective_count == 0 && unknown_count == 0 && active_count == 0"),
+            &[],
+        )
+        .unwrap();
+        assert!(result);
+    }
 }

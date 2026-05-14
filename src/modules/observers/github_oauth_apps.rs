@@ -247,4 +247,46 @@ mod tests {
             .iter()
             .any(|f| f.title == "OAuth App Check Unavailable"));
     }
+
+    #[test]
+    fn oauth_unexpected_status_returns_err() {
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = OAuthAppsObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn oauth_evidence_types() {
+        assert_eq!(OAuthAppsObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn oauth_credential_requirements() {
+        let reqs = OAuthAppsObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn oauth_missing_token_errors() {
+        let err = OAuthAppsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn oauth_missing_org_errors() {
+        let err = OAuthAppsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

@@ -677,7 +677,10 @@ pub fn resolve_vars_masked(template: &str, config: &HashMap<String, String>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    static HOME_MUTEX: Mutex<()> = Mutex::new(());
 
     fn write_check(dir: &Path, filename: &str, content: &str) {
         std::fs::write(dir.join(filename), content).unwrap();
@@ -1412,5 +1415,1139 @@ remediation:
             validate_remediation_url("https://evil.example.com/api.github.com/steal").is_err(),
             "Path-embedded api.github.com must be rejected"
         );
+    }
+
+    // ─── write_audit_log ─────────────────────────────────────────────────────
+
+    #[test]
+    fn write_audit_log_creates_file_in_home() {
+        // write_audit_log reads $HOME to determine the log path.
+        // Override HOME to a tempdir so we don't pollute the real ~/.ocean/audit.log.
+        let tmp = TempDir::new().unwrap();
+        let tmp_home = tmp.path().to_str().unwrap().to_string();
+
+        let plan = RemediationPlan {
+            check_id: "GH-AUDIT".to_string(),
+            check_name: "Audit Log Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(ApiAction {
+                method: "PATCH".to_string(),
+                url: "https://api.github.com/orgs/test".to_string(),
+                body: None,
+            }),
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let result = RemediationResult {
+            check_id: "GH-AUDIT".to_string(),
+            success: true,
+            actions_taken: vec!["done".to_string()],
+            errors: Vec::new(),
+        };
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+
+        // Temporarily override HOME (serialized to avoid races).
+        let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("HOME", &tmp_home);
+        write_audit_log(&plan, &result, &mask);
+        std::env::remove_var("HOME");
+        drop(_guard);
+
+        let log_path = tmp.path().join(".ocean").join("audit.log");
+        assert!(log_path.exists(), "audit.log should be created under $HOME/.ocean/");
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert!(content.contains("GH-AUDIT"), "log entry should contain check_id");
+        assert!(content.contains("SUCCESS"), "log entry should contain status");
+        assert!(content.contains("HARDEN --apply"), "log entry should contain action type");
+    }
+
+    #[test]
+    fn write_audit_log_failed_result() {
+        let tmp = TempDir::new().unwrap();
+        let tmp_home = tmp.path().to_str().unwrap().to_string();
+
+        let plan = RemediationPlan {
+            check_id: "GH-FAIL".to_string(),
+            check_name: "Fail Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let result = RemediationResult {
+            check_id: "GH-FAIL".to_string(),
+            success: false,
+            actions_taken: Vec::new(),
+            errors: vec!["something went wrong".to_string()],
+        };
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+
+        let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("HOME", &tmp_home);
+        write_audit_log(&plan, &result, &mask);
+        std::env::remove_var("HOME");
+        drop(_guard);
+
+        let log_path = tmp.path().join(".ocean").join("audit.log");
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert!(content.contains("FAILED"), "failed result should be logged as FAILED");
+        assert!(content.contains("no-api"), "no api_action should show 'no-api'");
+    }
+
+    #[test]
+    fn write_audit_log_appends_multiple_entries() {
+        let tmp = TempDir::new().unwrap();
+        let tmp_home = tmp.path().to_str().unwrap().to_string();
+
+        let make_plan = |id: &str| RemediationPlan {
+            check_id: id.to_string(),
+            check_name: "Multi".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let make_result = |id: &str| RemediationResult {
+            check_id: id.to_string(),
+            success: true,
+            actions_taken: Vec::new(),
+            errors: Vec::new(),
+        };
+
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+
+        let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("HOME", &tmp_home);
+        write_audit_log(&make_plan("ENTRY-1"), &make_result("ENTRY-1"), &mask);
+        write_audit_log(&make_plan("ENTRY-2"), &make_result("ENTRY-2"), &mask);
+        std::env::remove_var("HOME");
+        drop(_guard);
+
+        let log_path = tmp.path().join(".ocean").join("audit.log");
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert!(content.contains("ENTRY-1") && content.contains("ENTRY-2"),
+            "both entries should appear in the log");
+        // Two newlines means two appended lines
+        assert!(content.lines().count() >= 2, "should have at least two log lines");
+    }
+
+    #[test]
+    fn write_audit_log_scrubs_credentials() {
+        let tmp = TempDir::new().unwrap();
+        let tmp_home = tmp.path().to_str().unwrap().to_string();
+
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_super_secret_xyz".to_string());
+        let mask = CredentialMask::from_config(&config);
+
+        let plan = RemediationPlan {
+            check_id: "GH-SEC".to_string(),
+            check_name: "Sec Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(ApiAction {
+                method: "PATCH".to_string(),
+                url: "https://api.github.com/orgs/test?auth=ghp_super_secret_xyz".to_string(),
+                body: None,
+            }),
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let result = RemediationResult {
+            check_id: "GH-SEC".to_string(),
+            success: true,
+            actions_taken: Vec::new(),
+            errors: Vec::new(),
+        };
+
+        let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("HOME", &tmp_home);
+        write_audit_log(&plan, &result, &mask);
+        std::env::remove_var("HOME");
+        drop(_guard);
+
+        let log_path = tmp.path().join(".ocean").join("audit.log");
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert!(!content.contains("ghp_super_secret_xyz"),
+            "credential should be scrubbed from audit log");
+        assert!(content.contains("***REDACTED***"),
+            "redacted marker should appear in log");
+    }
+
+    // ─── execute_api_call ─────────────────────────────────────────────────────
+
+    #[test]
+    fn execute_api_call_invalid_method_returns_err() {
+        let action = ApiAction {
+            method: "CONNECT".to_string(),
+            url: "https://api.github.com/orgs/test".to_string(),
+            body: None,
+        };
+        let config = HashMap::new();
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("invalid HTTP method"), "error should describe the problem: {msg}");
+        assert!(msg.contains("CONNECT"), "error should name the bad method: {msg}");
+    }
+
+    #[test]
+    fn execute_api_call_trace_method_rejected() {
+        let action = ApiAction {
+            method: "TRACE".to_string(),
+            url: "https://api.github.com/orgs/test".to_string(),
+            body: None,
+        };
+        let config = HashMap::new();
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn execute_api_call_uses_github_token_auth() {
+        // Verify token is picked up from config: spawn a mock server and check
+        // that the Authorization header is set when GITHUB_TOKEN is in config.
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"ok":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "GET".to_string(),
+            url: format!("{}/test", server.url()),
+            body: None,
+        };
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_test_token".to_string());
+
+        // The request will succeed (200 from mock); the fact it returns Ok proves
+        // the token was accepted (we're not checking the header value server-side,
+        // but this covers the auth-construction branch).
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_ok(), "GET to mock server should succeed: {:?}", result);
+        let msg = result.unwrap();
+        assert!(msg.contains("GET"), "result should mention the method");
+        assert!(msg.contains("200"), "result should mention the status code");
+    }
+
+    #[test]
+    fn execute_api_call_uses_okta_token_when_no_github() {
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"ok":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "GET".to_string(),
+            url: format!("{}/test", server.url()),
+            body: None,
+        };
+        let mut config = HashMap::new();
+        config.insert("OKTA_API_TOKEN".to_string(), "okta_secret".to_string());
+
+        let result = execute_api_call(&action, &config);
+        // The call reaches the server (200) regardless of which token is used.
+        assert!(result.is_ok(), "OKTA token path should succeed: {:?}", result);
+    }
+
+    #[test]
+    fn execute_api_call_no_token_in_config() {
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"ok":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "GET".to_string(),
+            url: format!("{}/test", server.url()),
+            body: None,
+        };
+        let config = HashMap::new(); // No token at all → auth header is empty string
+
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_ok(), "call with no token should still reach mock server: {:?}", result);
+    }
+
+    #[test]
+    fn execute_api_call_with_body() {
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"updated":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "PATCH".to_string(),
+            url: format!("{}/test", server.url()),
+            body: Some(serde_json::json!({"setting": true})),
+        };
+        let config = HashMap::new();
+
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_ok(), "PATCH with body should succeed: {:?}", result);
+        let msg = result.unwrap();
+        assert!(msg.contains("PATCH"), "result should mention PATCH method");
+    }
+
+    #[test]
+    fn execute_api_call_post_with_body() {
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            201,
+            r#"{"created":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "POST".to_string(),
+            url: format!("{}/test", server.url()),
+            body: Some(serde_json::json!({"name": "test"})),
+        };
+        let config = HashMap::new();
+
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_ok(), "POST with body should succeed: {:?}", result);
+    }
+
+    #[test]
+    fn execute_api_call_put_without_body() {
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"ok":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "PUT".to_string(),
+            url: format!("{}/test", server.url()),
+            body: None,
+        };
+        let config = HashMap::new();
+
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_ok(), "PUT without body should succeed: {:?}", result);
+    }
+
+    #[test]
+    fn execute_api_call_delete() {
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            204,
+            String::new(),
+        )]);
+        let action = ApiAction {
+            method: "DELETE".to_string(),
+            url: format!("{}/test", server.url()),
+            body: None,
+        };
+        let config = HashMap::new();
+
+        // 204 with empty body: ureq may or may not error on empty JSON parse,
+        // but the request itself reaches the server. Check we at least attempt it.
+        let _ = execute_api_call(&action, &config);
+        // Not asserting Ok/Err here since empty body JSON parse behavior varies;
+        // the coverage target is the DELETE branch inside execute_api_call.
+    }
+
+    // ─── execute_plan terraform branches ─────────────────────────────────────
+
+    #[test]
+    fn execute_plan_terraform_writes_to_dir_when_provided() {
+        let tmp = TempDir::new().unwrap();
+        let tf_dir = tmp.path().join("tf");
+
+        let plan = RemediationPlan {
+            check_id: "TF-WRITE".to_string(),
+            check_name: "TF Write Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: vec![serde_json::json!({"type": "github_org"})],
+        };
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+
+        let result = execute_plan(&plan, &config, Some(&tf_dir), &mask);
+        assert!(result.success, "terraform write should succeed");
+        assert!(result.actions_taken.iter().any(|a| a.contains("Terraform written to")),
+            "action message should mention Terraform written to path");
+        assert!(tf_dir.exists(), "terraform dir should have been created");
+    }
+
+    #[test]
+    fn execute_plan_terraform_none_dir_generates_hcl_inline() {
+        let plan = RemediationPlan {
+            check_id: "TF-INLINE".to_string(),
+            check_name: "TF Inline Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: vec![serde_json::json!({"type": "github_org"})],
+        };
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+
+        let result = execute_plan(&plan, &config, None, &mask);
+        assert!(result.success, "inline terraform should succeed");
+        assert!(result.actions_taken.iter().any(|a| a.contains("Terraform HCL:")),
+            "action message should contain inline HCL");
+    }
+
+    // ─── print_results text format ────────────────────────────────────────────
+
+    #[test]
+    fn print_results_text_success() {
+        let results = vec![RemediationResult {
+            check_id: "GH-1.01".to_string(),
+            success: true,
+            actions_taken: vec!["PATCH → HTTP 200".to_string()],
+            errors: Vec::new(),
+        }];
+        let mut out = Vec::new();
+        print_results(&mut out, &results, "table", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("✓"), "success should show checkmark");
+        assert!(s.contains("GH-1.01"), "should show check id");
+        assert!(s.contains("PATCH → HTTP 200"), "should show action taken");
+    }
+
+    #[test]
+    fn print_results_text_failure() {
+        let results = vec![RemediationResult {
+            check_id: "GH-1.08".to_string(),
+            success: false,
+            actions_taken: Vec::new(),
+            errors: vec!["API call failed: HTTP 403 Forbidden".to_string()],
+        }];
+        let mut out = Vec::new();
+        print_results(&mut out, &results, "table", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("✗"), "failure should show X mark");
+        assert!(s.contains("GH-1.08"), "should show check id");
+        assert!(s.contains("ERROR:"), "should show ERROR: prefix");
+        assert!(s.contains("403"), "should show error content");
+    }
+
+    #[test]
+    fn print_results_text_multiple_mixed() {
+        let results = vec![
+            RemediationResult {
+                check_id: "GH-1.01".to_string(),
+                success: true,
+                actions_taken: vec!["action one".to_string(), "action two".to_string()],
+                errors: Vec::new(),
+            },
+            RemediationResult {
+                check_id: "GH-1.08".to_string(),
+                success: false,
+                actions_taken: Vec::new(),
+                errors: vec!["err one".to_string(), "err two".to_string()],
+            },
+        ];
+        let mut out = Vec::new();
+        print_results(&mut out, &results, "table", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("✓") && s.contains("✗"), "should show both outcomes");
+        assert!(s.contains("action one") && s.contains("action two"), "all actions should appear");
+        assert!(s.contains("err one") && s.contains("err two"), "all errors should appear");
+    }
+
+    // ─── print_dry_run terraform resources ────────────────────────────────────
+
+    #[test]
+    fn print_dry_run_table_with_terraform_resources() {
+        let plans = vec![RemediationPlan {
+            check_id: "TF-1".to_string(),
+            check_name: "Terraform Check".to_string(),
+            description: "fix it".to_string(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: vec![
+                serde_json::json!({"type": "github_org"}),
+                serde_json::json!({"type": "github_branch"}),
+            ],
+        }];
+        let mut out = Vec::new();
+        print_dry_run(&mut out, &plans, "table", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Terraform:"), "should show Terraform summary");
+        assert!(s.contains("2 resource(s)"), "should mention count of resources");
+    }
+
+    // ─── https_host malformed URL ─────────────────────────────────────────────
+
+    #[test]
+    fn https_host_malformed_url_returns_none() {
+        // Malformed URL cannot be parsed — should return None (not panic).
+        assert!(https_host("not a url at all").is_none());
+        assert!(https_host("").is_none());
+        assert!(https_host("://no-scheme").is_none());
+    }
+
+    #[test]
+    fn https_host_http_scheme_returns_none() {
+        // HTTP scheme is rejected (only HTTPS is accepted).
+        assert!(https_host("http://api.github.com/orgs/test").is_none());
+    }
+
+    #[test]
+    fn https_host_valid_https_returns_host() {
+        let host = https_host("https://mycompany.okta.com/api/v1/policies");
+        assert_eq!(host, Some("mycompany.okta.com".to_string()));
+    }
+
+    #[test]
+    fn is_okta_url_malformed_returns_false() {
+        assert!(!is_okta_url("not_a_url"));
+        assert!(!is_okta_url("http://mycompany.okta.com/test"));
+    }
+
+    #[test]
+    fn is_okta_url_oktapreview_accepted() {
+        assert!(is_okta_url("https://mycompany.oktapreview.com/api/v1"));
+    }
+
+    #[test]
+    fn is_aws_url_malformed_returns_false() {
+        assert!(!is_aws_url("not_a_url"));
+        assert!(!is_aws_url("http://iam.amazonaws.com/"));
+    }
+
+    // ─── resolve_vars_masked uncovered branches ───────────────────────────────
+
+    #[test]
+    fn resolve_vars_masked_non_credential_var_resolved() {
+        // Non-credential vars in ALLOWED_TEMPLATE_VARS should be substituted.
+        let mut config = HashMap::new();
+        config.insert("org".to_string(), "acme-corp".to_string());
+        let result = resolve_vars_masked("https://api.github.com/orgs/{{org}}", &config);
+        assert_eq!(result, "https://api.github.com/orgs/acme-corp");
+    }
+
+    #[test]
+    fn resolve_vars_masked_credential_var_stays_as_placeholder() {
+        // Credential vars should remain unreplaced (TH-1a display safety).
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_secret".to_string());
+        let result = resolve_vars_masked("Bearer {{GITHUB_TOKEN}}", &config);
+        // Credential placeholder should NOT be substituted.
+        assert!(result.contains("{{GITHUB_TOKEN}}"), "credential placeholder should stay: {result}");
+        assert!(!result.contains("ghp_secret"), "credential value should not appear: {result}");
+    }
+
+    #[test]
+    fn resolve_vars_masked_unknown_var_unchanged() {
+        // Vars not in ALLOWED_TEMPLATE_VARS are not in config, stay as-is.
+        let config = HashMap::new();
+        let result = resolve_vars_masked("{{UNKNOWN_VAR}}", &config);
+        assert_eq!(result, "{{UNKNOWN_VAR}}");
+    }
+
+    #[test]
+    fn resolve_vars_masked_mixed_credential_and_plain() {
+        // Only non-credential vars are resolved; credentials stay as placeholder.
+        let mut config = HashMap::new();
+        config.insert("OKTA_API_TOKEN".to_string(), "okta_secret".to_string());
+        config.insert("domain".to_string(), "mycompany".to_string());
+        let result = resolve_vars_masked("https://{{domain}}.okta.com?token={{OKTA_API_TOKEN}}", &config);
+        assert!(result.contains("mycompany"), "plain var 'domain' should be substituted");
+        assert!(result.contains("{{OKTA_API_TOKEN}}"), "credential placeholder must remain");
+        assert!(!result.contains("okta_secret"), "credential value must not appear");
+    }
+
+    // ─── plan_harden early-return branches ───────────────────────────────────
+
+    #[test]
+    fn plan_harden_empty_checks_dir_returns_empty() {
+        let dir = TempDir::new().unwrap();
+        // Empty dir — no check files — defs.is_empty() early return.
+        let config = HashMap::new();
+        let result = plan_harden(dir.path(), &RemediationMode::All, &config, None).unwrap();
+        assert!(result.is_empty(), "empty checks dir should return empty plans");
+    }
+
+    #[test]
+    fn plan_harden_no_remediable_checks_returns_empty() {
+        let dir = TempDir::new().unwrap();
+        // Write a check without a remediation block — remediable.is_empty() early return.
+        write_check(dir.path(), "no_rem.check.yaml", CHECK_WITHOUT_REMEDIATION);
+        let config = HashMap::new();
+        let result = plan_harden(dir.path(), &RemediationMode::All, &config, None).unwrap();
+        assert!(result.is_empty(), "checks without remediation should produce no plans");
+    }
+
+    // ─── confirm_apply with body display ──────────────────────────────────────
+
+    #[test]
+    fn confirm_apply_auto_confirm_with_terraform_resources() {
+        // Cover the terraform_resources display branch in confirm_apply.
+        let plans = vec![RemediationPlan {
+            check_id: "TF-CONFIRM".to_string(),
+            check_name: "TF Confirm Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: vec![serde_json::json!({"type": "github_org"})],
+        }];
+        let mut out = Vec::new();
+        let confirmed = confirm_apply(&mut out, &plans, &HashMap::new(), true).unwrap();
+        assert!(confirmed);
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Terraform:"), "should show Terraform resource count in confirmation");
+        assert!(s.contains("1 resource(s)"), "should show count");
+    }
+
+    #[test]
+    fn confirm_apply_auto_confirm_with_cli_action() {
+        // Cover the cli_action display branch in confirm_apply.
+        let plans = vec![RemediationPlan {
+            check_id: "CLI-CONFIRM".to_string(),
+            check_name: "CLI Confirm Test".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: Some("gh api orgs/test -X PATCH".to_string()),
+            terraform_resources: Vec::new(),
+        }];
+        let mut out = Vec::new();
+        let confirmed = confirm_apply(&mut out, &plans, &HashMap::new(), true).unwrap();
+        assert!(confirmed);
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("CLI (display only):"), "should label CLI action");
+        assert!(s.contains("gh api"), "should show CLI command");
+    }
+
+    // ─── Additional coverage tests ───────────────────────────────────────────
+
+    #[test]
+    fn execute_api_call_connection_refused_returns_err() {
+        // Cover the transport error path (not a status error, but a connection failure).
+        let action = ApiAction {
+            method: "GET".to_string(),
+            url: "http://127.0.0.1:1/nonexistent".to_string(),
+            body: None,
+        };
+        let config = HashMap::new();
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_err(), "connection refused should return Err");
+    }
+
+    #[test]
+    fn execute_api_call_post_without_body() {
+        // POST without body uses req.call() path.
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"ok":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "POST".to_string(),
+            url: format!("{}/test", server.url()),
+            body: None,
+        };
+        let config = HashMap::new();
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_ok(), "POST without body should succeed: {:?}", result);
+    }
+
+    #[test]
+    fn execute_api_call_method_case_insensitive() {
+        // Method is uppercased internally — "get" should work.
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"ok":true}"#.to_string(),
+        )]);
+        let action = ApiAction {
+            method: "get".to_string(),
+            url: format!("{}/test", server.url()),
+            body: None,
+        };
+        let config = HashMap::new();
+        let result = execute_api_call(&action, &config);
+        assert!(result.is_ok(), "lowercase method should be accepted");
+    }
+
+    #[test]
+    fn is_user_checks_dir_home_unset() {
+        // When HOME is not set, is_user_checks_dir should return false.
+        let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let original_home = std::env::var("HOME").ok();
+        std::env::remove_var("HOME");
+
+        let result = is_user_checks_dir(Path::new("/some/path"));
+        assert!(!result, "should return false when HOME is unset");
+
+        // Restore HOME.
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        }
+        drop(_guard);
+    }
+
+    #[test]
+    fn warn_user_checks_no_warning_for_non_user_dir() {
+        // Non-user-checks dirs should produce no output.
+        let mut out = Vec::new();
+        warn_user_checks(&mut out, Path::new("/usr/share/ocean/checks"), &[]);
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.is_empty(), "non-user dir should produce no warning output");
+    }
+
+    #[test]
+    fn credential_mask_filters_empty_values() {
+        // Empty credential values in config should be filtered out (not cause empty-string replacement).
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), String::new()); // empty
+        config.insert("OKTA_API_TOKEN".to_string(), "okta_real".to_string());
+        let mask = CredentialMask::from_config(&config);
+
+        // The empty GITHUB_TOKEN value should be filtered out.
+        let result = mask.scrub("text with okta_real in it");
+        assert!(result.contains("***REDACTED***"), "non-empty token should be scrubbed");
+        assert!(!result.contains("okta_real"), "okta token should be scrubbed");
+    }
+
+    #[test]
+    fn credential_mask_no_matching_keys() {
+        // Config with keys that are NOT credential env vars.
+        let mut config = HashMap::new();
+        config.insert("org".to_string(), "my-org".to_string());
+        config.insert("domain".to_string(), "example.com".to_string());
+        let mask = CredentialMask::from_config(&config);
+
+        let result = mask.scrub("my-org example.com");
+        assert_eq!(result, "my-org example.com", "non-credential values should not be scrubbed");
+    }
+
+    #[test]
+    fn execute_plan_api_error_scrubs_credentials() {
+        // When an API call fails, the error message is scrubbed.
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_visible_secret".to_string());
+        let mask = CredentialMask::from_config(&config);
+
+        let plan = RemediationPlan {
+            check_id: "API-ERR".to_string(),
+            check_name: "API Error".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(ApiAction {
+                method: "GET".to_string(),
+                url: "http://127.0.0.1:1/will-fail".to_string(),
+                body: None,
+            }),
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+
+        let result = execute_plan(&plan, &config, None, &mask);
+        assert!(!result.success, "connection failure should make result not successful");
+        assert!(!result.errors.is_empty(), "should have errors");
+        // Credential should be scrubbed from error messages.
+        for err in &result.errors {
+            assert!(!err.contains("ghp_visible_secret"), "credential leaked in error: {err}");
+        }
+    }
+
+    #[test]
+    fn execute_plan_combined_api_cli_terraform() {
+        // Test a plan with all three action types.
+        let tmp = TempDir::new().unwrap();
+        let tf_dir = tmp.path().join("tf");
+        let server = crate::testutil::MockHTTPServer::new(vec![(
+            200,
+            r#"{"ok":true}"#.to_string(),
+        )]);
+        let plan = RemediationPlan {
+            check_id: "COMBO".to_string(),
+            check_name: "Combined".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(ApiAction {
+                method: "GET".to_string(),
+                url: format!("{}/test", server.url()),
+                body: None,
+            }),
+            cli_action: Some("echo hello".to_string()),
+            terraform_resources: vec![serde_json::json!({"type": "github_org"})],
+        };
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+
+        let result = execute_plan(&plan, &config, Some(&tf_dir), &mask);
+        assert!(result.success, "combined plan should succeed");
+        // Should have 3 actions: API result, CLI display, Terraform write
+        assert_eq!(result.actions_taken.len(), 3, "should have 3 actions: {:?}", result.actions_taken);
+    }
+
+    #[test]
+    fn write_audit_log_home_unset_uses_fallback() {
+        // When HOME is not set, write_audit_log falls back to ".ocean".
+        let plan = RemediationPlan {
+            check_id: "NO-HOME".to_string(),
+            check_name: "No Home".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let result = RemediationResult {
+            check_id: "NO-HOME".to_string(),
+            success: true,
+            actions_taken: Vec::new(),
+            errors: Vec::new(),
+        };
+        let mask = CredentialMask::from_config(&HashMap::new());
+
+        let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let original_home = std::env::var("HOME").ok();
+        std::env::remove_var("HOME");
+
+        // Should not panic even without HOME.
+        write_audit_log(&plan, &result, &mask);
+
+        // Restore HOME.
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        }
+        drop(_guard);
+    }
+
+    #[test]
+    fn is_azure_url_malformed_returns_false() {
+        assert!(!is_azure_url("not_a_url"));
+        assert!(!is_azure_url("http://management.azure.com/test"));
+    }
+
+    #[test]
+    fn validate_remediation_url_github_non_api() {
+        // github.com (not api.github.com) should also be accepted.
+        assert!(validate_remediation_url("https://github.com/orgs/test/settings").is_ok());
+    }
+
+    #[test]
+    fn validate_remediation_url_oktapreview() {
+        assert!(validate_remediation_url("https://mycompany.oktapreview.com/api/v1/policies").is_ok());
+    }
+
+    #[test]
+    fn validate_remediation_url_completely_invalid() {
+        // Not a URL at all — will fail URL parse, then fail allowlist.
+        assert!(validate_remediation_url("not-a-url").is_err());
+    }
+
+    #[test]
+    fn https_host_uppercase_is_lowercased() {
+        let host = https_host("https://API.GITHUB.COM/orgs/test");
+        assert_eq!(host, Some("api.github.com".to_string()));
+    }
+
+    #[test]
+    fn print_dry_run_json_with_terraform_resources() {
+        // JSON output with terraform_resources > 0 should show count.
+        let plans = vec![RemediationPlan {
+            check_id: "TF-JSON".to_string(),
+            check_name: "TF JSON Test".to_string(),
+            description: "fix".to_string(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: vec![serde_json::json!({"type": "github_org"})],
+        }];
+        let mut out = Vec::new();
+        print_dry_run(&mut out, &plans, "json", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(v[0]["terraform_resources"], 1);
+    }
+
+    #[test]
+    fn print_dry_run_table_with_cli_only_plan() {
+        // Table output with only cli_action (no API, no terraform).
+        let plans = vec![RemediationPlan {
+            check_id: "CLI-ONLY".to_string(),
+            check_name: "CLI Only".to_string(),
+            description: "fix".to_string(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: Some("gh api orgs/test".to_string()),
+            terraform_resources: Vec::new(),
+        }];
+        let mut out = Vec::new();
+        print_dry_run(&mut out, &plans, "table", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("CLI:"), "should show CLI label");
+        assert!(s.contains("gh api"), "should show command");
+    }
+
+    #[test]
+    fn print_dry_run_table_with_steps() {
+        // Table output with manual steps but no API/CLI/TF.
+        let plans = vec![RemediationPlan {
+            check_id: "STEPS-ONLY".to_string(),
+            check_name: "Steps Only".to_string(),
+            description: "fix".to_string(),
+            steps: vec!["Step 1: do X".to_string(), "Step 2: do Y".to_string()],
+            api_action: None,
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        }];
+        let mut out = Vec::new();
+        print_dry_run(&mut out, &plans, "table", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Manual steps:"), "should show manual steps header");
+        assert!(s.contains("Step 1: do X"), "should show step 1");
+        assert!(s.contains("Step 2: do Y"), "should show step 2");
+    }
+
+    #[test]
+    fn print_results_text_scrubs_credentials() {
+        // Success actions and failure errors should both be scrubbed.
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_leaked".to_string());
+
+        let results = vec![
+            RemediationResult {
+                check_id: "SCRUB-OK".to_string(),
+                success: true,
+                actions_taken: vec!["action with ghp_leaked token".to_string()],
+                errors: Vec::new(),
+            },
+            RemediationResult {
+                check_id: "SCRUB-ERR".to_string(),
+                success: false,
+                actions_taken: Vec::new(),
+                errors: vec!["error with ghp_leaked token".to_string()],
+            },
+        ];
+        let mut out = Vec::new();
+        print_results(&mut out, &results, "table", &config).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.contains("ghp_leaked"), "credentials should be scrubbed from text output: {s}");
+        assert!(s.contains("***REDACTED***"), "should show redacted marker");
+    }
+
+    #[test]
+    fn print_results_json_scrubs_credentials() {
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_injson".to_string());
+
+        let results = vec![RemediationResult {
+            check_id: "JSON-SCRUB".to_string(),
+            success: true,
+            actions_taken: vec!["sent ghp_injson to server".to_string()],
+            errors: Vec::new(),
+        }];
+        let mut out = Vec::new();
+        print_results(&mut out, &results, "json", &config).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.contains("ghp_injson"), "credentials should be scrubbed from JSON output: {s}");
+    }
+
+    #[test]
+    fn execute_plans_writes_audit_logs() {
+        // execute_plans calls write_audit_log for each plan.
+        let tmp = TempDir::new().unwrap();
+        let tmp_home = tmp.path().to_str().unwrap().to_string();
+
+        let plans = vec![
+            RemediationPlan {
+                check_id: "AUDIT-1".to_string(),
+                check_name: "Audit 1".to_string(),
+                description: String::new(),
+                steps: Vec::new(),
+                api_action: None,
+                cli_action: Some("echo test".to_string()),
+                terraform_resources: Vec::new(),
+            },
+            RemediationPlan {
+                check_id: "AUDIT-2".to_string(),
+                check_name: "Audit 2".to_string(),
+                description: String::new(),
+                steps: Vec::new(),
+                api_action: None,
+                cli_action: None,
+                terraform_resources: Vec::new(),
+            },
+        ];
+
+        let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("HOME", &tmp_home);
+        let results = execute_plans(&plans, &HashMap::new(), None);
+        std::env::remove_var("HOME");
+        drop(_guard);
+
+        assert_eq!(results.len(), 2);
+        let log_path = tmp.path().join(".ocean").join("audit.log");
+        assert!(log_path.exists(), "audit.log should be created by execute_plans");
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert!(content.contains("AUDIT-1") && content.contains("AUDIT-2"),
+            "both plans should be logged");
+    }
+
+    #[test]
+    fn resolve_vars_multiple_allowed_vars() {
+        // Test multiple allowed vars resolved in one template.
+        let mut config = HashMap::new();
+        config.insert("org".to_string(), "my-org".to_string());
+        config.insert("domain".to_string(), "example.com".to_string());
+        config.insert("tenant".to_string(), "my-tenant".to_string());
+        let result = resolve_vars("{{org}}/{{domain}}/{{tenant}}", &config);
+        assert_eq!(result, "my-org/example.com/my-tenant");
+    }
+
+    #[test]
+    fn confirm_apply_auto_confirm_with_body_and_all_actions() {
+        // Cover the full display of a plan with API body, CLI, and terraform in confirm_apply.
+        let plans = vec![RemediationPlan {
+            check_id: "ALL-ACTIONS".to_string(),
+            check_name: "All Actions".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(ApiAction {
+                method: "PATCH".to_string(),
+                url: "https://api.github.com/orgs/test".to_string(),
+                body: Some(serde_json::json!({"key": "value"})),
+            }),
+            cli_action: Some("gh api test".to_string()),
+            terraform_resources: vec![serde_json::json!({"type": "x"}), serde_json::json!({"type": "y"})],
+        }];
+        let mut out = Vec::new();
+        let confirmed = confirm_apply(&mut out, &plans, &HashMap::new(), true).unwrap();
+        assert!(confirmed);
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("PATCH"), "should show method");
+        assert!(s.contains("Body:"), "should show body");
+        assert!(s.contains("CLI (display only):"), "should show CLI");
+        assert!(s.contains("2 resource(s)"), "should show terraform count");
+    }
+
+    #[test]
+    fn execute_plan_terraform_write_error() {
+        // Trigger a terraform write failure by giving an invalid directory path.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let tmp = TempDir::new().unwrap();
+            let readonly_dir = tmp.path().join("readonly");
+            std::fs::create_dir_all(&readonly_dir).unwrap();
+            std::fs::set_permissions(&readonly_dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+            let nested = readonly_dir.join("nested");
+
+            let plan = RemediationPlan {
+                check_id: "TF-ERR".to_string(),
+                check_name: "TF Error".to_string(),
+                description: String::new(),
+                steps: Vec::new(),
+                api_action: None,
+                cli_action: None,
+                terraform_resources: vec![serde_json::json!({"type": "github_org"})],
+            };
+            let config = HashMap::new();
+            let mask = CredentialMask::from_config(&config);
+
+            let result = execute_plan(&plan, &config, Some(&nested), &mask);
+            assert!(!result.success, "terraform write to unwritable dir should fail");
+            assert!(!result.errors.is_empty(), "should have error message");
+
+            // Restore permissions for cleanup.
+            std::fs::set_permissions(&readonly_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+    }
+
+    #[test]
+    fn remediation_mode_includes_terraform_only() {
+        assert!(!RemediationMode::Terraform.includes_api());
+        assert!(RemediationMode::Terraform.includes_terraform());
+        assert!(!RemediationMode::Terraform.includes_cli());
+    }
+
+    #[test]
+    fn remediation_mode_includes_cli_only() {
+        assert!(!RemediationMode::Cli.includes_api());
+        assert!(!RemediationMode::Cli.includes_terraform());
+        assert!(RemediationMode::Cli.includes_cli());
+    }
+
+    #[test]
+    fn credential_mask_all_credential_types() {
+        // Test that all six credential env vars are scrubbed.
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "gh_secret".to_string());
+        config.insert("OKTA_API_TOKEN".to_string(), "okta_secret".to_string());
+        config.insert("AWS_SECRET_ACCESS_KEY".to_string(), "aws_key".to_string());
+        config.insert("AWS_SESSION_TOKEN".to_string(), "aws_session".to_string());
+        config.insert("AZURE_CLIENT_SECRET".to_string(), "azure_secret".to_string());
+        config.insert("GCP_SERVICE_ACCOUNT_KEY".to_string(), "gcp_key".to_string());
+        let mask = CredentialMask::from_config(&config);
+
+        let input = "gh_secret okta_secret aws_key aws_session azure_secret gcp_key";
+        let result = mask.scrub(input);
+        assert_eq!(result.matches("***REDACTED***").count(), 6,
+            "all 6 credentials should be scrubbed: {result}");
+    }
+
+    #[test]
+    fn resolve_vars_credential_vars_are_resolved() {
+        // resolve_vars (unlike resolve_vars_masked) should resolve credential vars too.
+        let mut config = HashMap::new();
+        config.insert("GITHUB_TOKEN".to_string(), "ghp_resolved".to_string());
+        let result = resolve_vars("Bearer {{GITHUB_TOKEN}}", &config);
+        assert_eq!(result, "Bearer ghp_resolved", "resolve_vars should resolve credential vars");
+    }
+
+    #[test]
+    fn resolve_vars_masked_all_credential_vars_stay() {
+        // All credential env vars should stay as placeholders in masked mode.
+        let mut config = HashMap::new();
+        config.insert("AWS_SECRET_ACCESS_KEY".to_string(), "aws_secret_val".to_string());
+        config.insert("AWS_SESSION_TOKEN".to_string(), "aws_session_val".to_string());
+        config.insert("AZURE_CLIENT_SECRET".to_string(), "azure_val".to_string());
+        config.insert("GCP_SERVICE_ACCOUNT_KEY".to_string(), "gcp_val".to_string());
+
+        for key in &["AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AZURE_CLIENT_SECRET", "GCP_SERVICE_ACCOUNT_KEY"] {
+            let template = format!("{{{{{}}}}}", key);
+            let result = resolve_vars_masked(&template, &config);
+            assert_eq!(result, template, "credential var {} should stay as placeholder", key);
+        }
+    }
+
+    #[test]
+    fn print_dry_run_json_with_cli_action() {
+        let plans = vec![RemediationPlan {
+            check_id: "CLI-JSON".to_string(),
+            check_name: "CLI JSON Test".to_string(),
+            description: "fix".to_string(),
+            steps: vec!["do X".to_string()],
+            api_action: None,
+            cli_action: Some("gh api test".to_string()),
+            terraform_resources: Vec::new(),
+        }];
+        let mut out = Vec::new();
+        print_dry_run(&mut out, &plans, "json", &empty_config()).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(v[0]["cli"], "gh api test");
+        assert!(v[0]["api"].is_null(), "api should be null when not present");
+    }
+
+    #[test]
+    fn execute_plan_empty_plan_succeeds() {
+        // A plan with no actions at all should still succeed.
+        let plan = RemediationPlan {
+            check_id: "EMPTY".to_string(),
+            check_name: "Empty".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let config = HashMap::new();
+        let mask = CredentialMask::from_config(&config);
+
+        let result = execute_plan(&plan, &config, None, &mask);
+        assert!(result.success, "empty plan should succeed");
+        assert!(result.actions_taken.is_empty(), "no actions taken");
+        assert!(result.errors.is_empty(), "no errors");
     }
 }

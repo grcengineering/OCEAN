@@ -313,4 +313,70 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("403"));
     }
+
+    #[test]
+    fn missing_token_errors() {
+        let config = HashMap::from([("GITHUB_ORG".to_string(), "my-org".to_string())]);
+        let err = ActionsRestrictionTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn missing_org_errors() {
+        let config = HashMap::from([("GITHUB_TOKEN".to_string(), "tok".to_string())]);
+        let err = ActionsRestrictionTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
+
+    #[test]
+    fn non_200_non_403_returns_err() {
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = ActionsRestrictionTester.test(&test_config_with_org(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("500"));
+    }
+
+    #[test]
+    fn actions_restricted_local_only_is_effective() {
+        let srv = mock_server(
+            200,
+            r#"{"enabled_repositories":"all","allowed_actions":"local_only"}"#,
+        );
+        let ev = &ActionsRestrictionTester
+            .test(&test_config_with_org(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert!(ev.findings.iter().any(|f| f.title == "Actions Restricted"));
+    }
+
+    #[test]
+    fn actions_missing_allowed_actions_field_defaults_to_all_ineffective() {
+        // When allowed_actions is absent, defaults to "all" → Ineffective.
+        let srv = mock_server(200, r#"{"enabled_repositories":"all"}"#);
+        let ev = &ActionsRestrictionTester
+            .test(&test_config_with_org(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = ActionsRestrictionTester;
+        assert_eq!(t.id(), "github.actions_restriction");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "github");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "GITHUB_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_ORG"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
 }

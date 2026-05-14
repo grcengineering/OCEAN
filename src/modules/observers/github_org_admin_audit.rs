@@ -205,4 +205,39 @@ mod tests {
         let result = OrgAdminAuditObserver.observe(&test_config_with_org(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn admin_audit_evidence_types() {
+        assert_eq!(OrgAdminAuditObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn admin_audit_credential_requirements() {
+        let reqs = OrgAdminAuditObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn admin_audit_missing_token_errors() {
+        let err = OrgAdminAuditObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn admin_audit_missing_org_errors() {
+        let err = OrgAdminAuditObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

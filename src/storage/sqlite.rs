@@ -1049,4 +1049,408 @@ mod tests {
         let (store, _dir) = open_store();
         assert!(store.close().is_ok());
     }
+
+    // ---------------------------------------------------------------------------
+    // Corrupt-data scan error paths
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn scan_evidence_bad_uuid_errors() {
+        let (store, _dir) = open_store();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+             timestamp, confidence_level, metadata_json, observables_json,
+             status_id, status, raw_data, findings_json) VALUES
+             ('NOT-A-UUID','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+              '{}','[]',1,'ok','null','[]')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_evidence_bad_timestamp_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json) VALUES
+                 ('{id}','c',1,1,1,'not-a-date','passive_observation',
+                  '{{}}','[]',1,'ok','null','[]')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_evidence_bad_metadata_json_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json) VALUES
+                 ('{id}','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+                  'BAD','[]',1,'ok','null','[]')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_evidence_bad_observables_json_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json) VALUES
+                 ('{id}','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+                  '{meta}','BAD',1,'ok','null','[]')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_evidence_bad_raw_data_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json) VALUES
+                 ('{id}','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+                  '{meta}','[]',1,'ok','BAD','[]')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_evidence_bad_findings_json_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json) VALUES
+                 ('{id}','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+                  '{meta}','[]',1,'ok','null','BAD')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_evidence_bad_transcript_json_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json, test_transcript_json) VALUES
+                 ('{id}','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+                  '{meta}','[]',1,'ok','null','[]','BAD')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_evidence_bad_enrichments_json_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json, enrichments_json) VALUES
+                 ('{id}','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+                  '{meta}','[]',1,'ok','null','[]','BAD')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.query_evidence(&EvidenceQuery::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_control_status_bad_uuid_errors() {
+        let (store, _dir) = open_store();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO control_status (id, control_id, timestamp, status, confidence,
+             evidence_ids_json, evaluation_details) VALUES
+             ('NOT-UUID','cc6.1','2024-01-01T00:00:00Z','effective','high','[]','ok')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_control_status("cc6.1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_control_status_bad_timestamp_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO control_status (id, control_id, timestamp, status, confidence,
+                 evidence_ids_json, evaluation_details) VALUES
+                 ('{id}','cc6.1','bad-time','effective','high','[]','ok')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_control_status("cc6.1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_control_status_bad_evidence_ids_errors() {
+        let (store, _dir) = open_store();
+        let id = Uuid::new_v4().to_string();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            &format!(
+                "INSERT INTO control_status (id, control_id, timestamp, status, confidence,
+                 evidence_ids_json, evaluation_details) VALUES
+                 ('{id}','cc6.1','2024-01-01T00:00:00Z','effective','high','BAD','ok')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_control_status("cc6.1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_bad_modules_json_errors() {
+        let (store, _dir) = open_store();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO schedules (id, control_id, cron_expr, modules_json, enabled,
+             max_safety_level, environment_scope, catch_up, last_run, next_run,
+             created_at, updated_at) VALUES
+             ('s1','cc6.1','0 * * * *','BAD',1,'safe','production',0,NULL,NULL,
+              '2024-01-01T00:00:00Z','2024-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_schedule("s1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_bad_created_at_errors() {
+        let (store, _dir) = open_store();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT INTO schedules (id, control_id, cron_expr, modules_json, enabled,
+             max_safety_level, environment_scope, catch_up, last_run, next_run,
+             created_at, updated_at) VALUES
+             ('s2','cc6.1','0 * * * *','["m"]',1,'safe','production',0,NULL,NULL,
+              'bad-date','2024-01-01T00:00:00Z')"#,
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_schedule("s2");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_bad_updated_at_errors() {
+        let (store, _dir) = open_store();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT INTO schedules (id, control_id, cron_expr, modules_json, enabled,
+             max_safety_level, environment_scope, catch_up, last_run, next_run,
+             created_at, updated_at) VALUES
+             ('s3','cc6.1','0 * * * *','["m"]',1,'safe','production',0,NULL,NULL,
+              '2024-01-01T00:00:00Z','bad-date')"#,
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_schedule("s3");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_bad_last_run_errors() {
+        let (store, _dir) = open_store();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT INTO schedules (id, control_id, cron_expr, modules_json, enabled,
+             max_safety_level, environment_scope, catch_up, last_run, next_run,
+             created_at, updated_at) VALUES
+             ('s4','cc6.1','0 * * * *','["m"]',1,'safe','production',0,'bad-date',NULL,
+              '2024-01-01T00:00:00Z','2024-01-01T00:00:00Z')"#,
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_schedule("s4");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_bad_next_run_errors() {
+        let (store, _dir) = open_store();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT INTO schedules (id, control_id, cron_expr, modules_json, enabled,
+             max_safety_level, environment_scope, catch_up, last_run, next_run,
+             created_at, updated_at) VALUES
+             ('s5','cc6.1','0 * * * *','["m"]',1,'safe','production',0,NULL,'bad-date',
+              '2024-01-01T00:00:00Z','2024-01-01T00:00:00Z')"#,
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.get_schedule("s5");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_run_bad_started_at_errors() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("sr1")).unwrap();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO schedule_runs (id, schedule_id, started_at, completed_at, status,
+             module_results_json) VALUES
+             ('r1','sr1','bad-date','2024-01-01T00:00:00Z','success','[]')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.list_schedule_runs("sr1", 10);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_run_bad_completed_at_errors() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("sr2")).unwrap();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO schedule_runs (id, schedule_id, started_at, completed_at, status,
+             module_results_json) VALUES
+             ('r2','sr2','2024-01-01T00:00:00Z','bad-date','success','[]')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.list_schedule_runs("sr2", 10);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_schedule_run_bad_results_json_errors() {
+        let (store, _dir) = open_store();
+        store.store_schedule(&make_schedule("sr3")).unwrap();
+        let conn = store.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO schedule_runs (id, schedule_id, started_at, completed_at, status,
+             module_results_json) VALUES
+             ('r3','sr3','2024-01-01T00:00:00Z','2024-01-01T00:00:00Z','success','BAD')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let result = store.list_schedule_runs("sr3", 10);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn query_evidence_with_min_confidence() {
+        let (store, _dir) = open_store();
+        store.store_evidence(&make_evidence()).unwrap();
+        let q = EvidenceQuery {
+            min_confidence: Some(ConfidenceLevel::PassiveObservation),
+            ..Default::default()
+        };
+        let results = store.query_evidence(&q).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn query_evidence_with_cursor() {
+        let (store, _dir) = open_store();
+        store.store_evidence(&make_evidence()).unwrap();
+        let q = EvidenceQuery {
+            cursor: Some("cursor-token".to_string()),
+            ..Default::default()
+        };
+        let results = store.query_evidence(&q).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn parse_rfc3339_valid() {
+        let dt = parse_rfc3339("2024-06-15T12:00:00Z").unwrap();
+        assert_eq!(dt.date_naive().to_string(), "2024-06-15");
+    }
+
+    #[test]
+    fn parse_rfc3339_invalid() {
+        assert!(parse_rfc3339("not-a-date").is_err());
+    }
 }

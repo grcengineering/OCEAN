@@ -629,4 +629,57 @@ mod tests {
         let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.confidence_level, ConfidenceLevel::ActiveVerification);
     }
+
+    // ── Cleanup failure branch ──────────────────────────────────────────────
+    // When 201 is returned (file created) but delete fails (non-200/204),
+    // a "Cleanup Failed" finding is appended.
+
+    #[test]
+    fn push_201_cleanup_failure_adds_finding() {
+        let srv = mock_server(vec![
+            (201, CREATED_BODY),
+            (500, r#"{"message":"Internal Server Error"}"#),
+        ]);
+        let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev.findings.iter().any(|f| f.title == "Cleanup Failed"));
+        let cleanup_finding = ev.findings.iter().find(|f| f.title == "Cleanup Failed").unwrap();
+        assert_eq!(cleanup_finding.severity_id, 2);
+    }
+
+    // ── Delete returns 204 (also a success) ─────────────────────────────────
+
+    #[test]
+    fn push_201_delete_204_is_cleanup_success() {
+        let srv = mock_server(vec![
+            (201, CREATED_BODY),
+            (204, r#"{}"#),
+        ]);
+        let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        // No cleanup failure finding
+        assert!(!ev.findings.iter().any(|f| f.title == "Cleanup Failed"));
+    }
+
+    // ── Evidence fields for 201 path ────────────────────────────────────────
+
+    #[test]
+    fn push_201_has_correct_metadata() {
+        let srv = mock_server(vec![(201, CREATED_BODY), (200, DELETE_OK_BODY)]);
+        let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.metadata.module.name, "github.secret_push");
+        assert_eq!(ev.metadata.source.system, "github");
+        assert_eq!(ev.metadata.source.api_version, "v3");
+        assert_eq!(ev.metadata.safety_classification.as_deref(), Some("observable"));
+    }
+
+    // ── Connection refused (non-HTTP error) ─────────────────────────────────
+
+    #[test]
+    fn connection_refused_returns_err() {
+        let config = base_config("http://127.0.0.1:1");
+        let result = SecretPushTester.test(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("GitHub API request failed"));
+    }
 }

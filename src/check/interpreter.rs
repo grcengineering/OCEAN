@@ -1323,6 +1323,565 @@ mod tests {
         );
     }
 
+    // ── execute_step via mock HTTP server ────────────────────────────────────
+
+    /// Build a minimal CheckStep for a given method and URL.
+    fn make_step(id: &str, method: &str, url: &str) -> CheckStep {
+        CheckStep {
+            id: id.to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: method.to_string(),
+                url: url.to_string(),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: HashMap::new(),
+            on_error: HashMap::new(),
+            note: String::new(),
+        }
+    }
+
+    fn make_step_with_body(id: &str, method: &str, url: &str, body: serde_json::Value) -> CheckStep {
+        CheckStep {
+            id: id.to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: method.to_string(),
+                url: url.to_string(),
+                headers: HashMap::new(),
+                body: Some(body),
+                paginate: false,
+            },
+            extract: HashMap::new(),
+            on_error: HashMap::new(),
+            note: String::new(),
+        }
+    }
+
+    /// Spin up a one-shot mock HTTP server and return its base URL.
+    fn one_shot_server(status: u16, body: &str) -> String {
+        crate::modules::github_common::mock_server(status, body)
+    }
+
+    #[test]
+    fn execute_step_get_ok_parses_body() {
+        let url = one_shot_server(200, r#"{"two_factor_requirement_enabled":true}"#);
+        let step = make_step("s1", "GET", &format!("{url}/orgs/test"));
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+        assert_eq!(result.body["two_factor_requirement_enabled"], true);
+    }
+
+    #[test]
+    fn execute_step_post_without_body() {
+        let url = one_shot_server(201, r#"{"created":true}"#);
+        let step = make_step("s_post", "POST", &format!("{url}/repos"));
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 201);
+    }
+
+    #[test]
+    fn execute_step_put_without_body() {
+        let url = one_shot_server(200, r#"{"ok":true}"#);
+        let step = make_step("s_put", "PUT", &format!("{url}/resource"));
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    #[test]
+    fn execute_step_patch_method() {
+        let url = one_shot_server(200, r#"{"updated":true}"#);
+        let step = make_step("s_patch", "PATCH", &format!("{url}/resource"));
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    #[test]
+    fn execute_step_delete_method() {
+        let url = one_shot_server(204, r#"{}"#);
+        let step = make_step("s_delete", "DELETE", &format!("{url}/resource"));
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 204);
+    }
+
+    #[test]
+    fn execute_step_unsupported_method_returns_err() {
+        let step = make_step("s_bad", "CONNECT", "http://127.0.0.1:9/test");
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx);
+        assert!(result.is_err());
+        // Extract the error message without unwrap_err() (which requires T: Debug).
+        let msg = result.err().unwrap().to_string();
+        assert!(msg.contains("unsupported HTTP method"), "error should explain problem: {msg}");
+        assert!(msg.contains("CONNECT"), "error should name the bad method: {msg}");
+    }
+
+    #[test]
+    fn execute_step_error_status_code_captured() {
+        // 4xx responses are captured as Err(Status) by ureq but we handle them.
+        let url = one_shot_server(403, r#"{"error":"forbidden"}"#);
+        let step = make_step("s_err", "GET", &format!("{url}/resource"));
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        // Our execute_step converts ureq::Error::Status into a StepResult.
+        assert_eq!(result.status_code, 403);
+    }
+
+    #[test]
+    fn execute_step_paginate_flag_returns_first_page() {
+        // paginate=true currently returns the first page without following Link headers.
+        let url = one_shot_server(200, r#"[{"login":"alice"},{"login":"bob"}]"#);
+        let step = CheckStep {
+            id: "s_page".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/users"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: true,
+            },
+            extract: HashMap::new(),
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+        assert!(result.body.is_array(), "paginated response should be an array");
+    }
+
+    #[test]
+    fn execute_step_get_with_body_field_ignores_body() {
+        // GET requests with a body defined should call req.call() (ignore body).
+        let url = one_shot_server(200, r#"{"ok":true}"#);
+        let step = make_step_with_body(
+            "s_get_body",
+            "GET",
+            &format!("{url}/resource"),
+            serde_json::json!({"should":"be ignored"}),
+        );
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    #[test]
+    fn execute_step_delete_with_body_ignores_body() {
+        // DELETE requests with a body defined should also call req.call().
+        let url = one_shot_server(200, r#"{"deleted":true}"#);
+        let step = make_step_with_body(
+            "s_del_body",
+            "DELETE",
+            &format!("{url}/resource"),
+            serde_json::json!({"should":"be ignored"}),
+        );
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    // ── evaluate_assertion non-bool return ───────────────────────────────────
+
+    #[test]
+    fn evaluate_assertion_non_bool_cel_returns_err() {
+        // CEL expression that evaluates to a non-bool value should return Err.
+        let assertion = CheckAssertion {
+            id: "non_bool".to_string(),
+            expr: "1 + 1".to_string(), // Returns an integer, not a bool
+            severity: "medium".to_string(),
+            title: String::new(),
+            pass_message: String::new(),
+            fail_message: String::new(),
+            finding: None,
+        };
+        let extracted = HashMap::new();
+        let result = evaluate_assertion(&assertion, &extracted);
+        assert!(result.is_err(), "non-bool CEL result should return Err");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("non-bool"), "error should describe non-bool result: {msg}");
+    }
+
+    #[test]
+    fn evaluate_assertion_string_result_returns_err() {
+        let assertion = CheckAssertion {
+            id: "str_result".to_string(),
+            expr: "\"hello\"".to_string(), // Returns a string
+            severity: "medium".to_string(),
+            title: String::new(),
+            pass_message: String::new(),
+            fail_message: String::new(),
+            finding: None,
+        };
+        let extracted = HashMap::new();
+        let result = evaluate_assertion(&assertion, &extracted);
+        assert!(result.is_err(), "string CEL result should return Err");
+    }
+
+    // ── build_input_context env alias not found ──────────────────────────────
+
+    #[test]
+    fn build_input_context_env_alias_not_in_config() {
+        // Input declares an env alias, but the value isn't in config at all.
+        // The context should not contain the input key.
+        let def = make_minimal_def_with_inputs();
+        let config = HashMap::new(); // Neither "org" nor "GITHUB_ORG" present
+
+        let ctx = build_input_context(&def, &config);
+        // "org" should not be set since neither direct name nor env alias is available.
+        assert!(
+            !ctx.contains_key("org"),
+            "org should not be in context when neither direct name nor env alias is in config"
+        );
+    }
+
+    #[test]
+    fn build_input_context_env_empty_string_not_added() {
+        // If env is an empty string in the InputDef, the env alias lookup is skipped.
+        let def = CheckDefinition {
+            inputs: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "myvar".to_string(),
+                    super::super::definition::InputDef {
+                        description: "Some var".to_string(),
+                        env: String::new(), // empty env — no alias lookup
+                        default: String::new(),
+                        required: false,
+                    },
+                );
+                m
+            },
+            ..default_check_def()
+        };
+        let mut config = HashMap::new();
+        config.insert("OTHER_VAR".to_string(), "val".to_string());
+
+        let ctx = build_input_context(&def, &config);
+        // "myvar" should not appear since it's neither in config directly nor via env
+        assert!(!ctx.contains_key("myvar"));
+    }
+
+    // ── run_steps: when guard, on_error handler, $status_code extract ────────
+
+    #[test]
+    fn run_steps_skips_step_when_guard_fails() {
+        // Step with a `when` guard that evaluates to false should be skipped.
+        let url = one_shot_server(200, r#"{"value":42}"#);
+        let step = CheckStep {
+            id: "s_guard".to_string(),
+            action: "api_call".to_string(),
+            when: "false".to_string(), // Always false — step is skipped
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("value".to_string(), "$.value".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        // extracted should be empty since the step was skipped.
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+        assert!(
+            !extracted.contains_key("value"),
+            "variable should not be extracted when step is guarded off"
+        );
+    }
+
+    #[test]
+    fn run_steps_executes_step_when_guard_true() {
+        // Step with `when: true` should run normally.
+        let url = one_shot_server(200, r#"{"setting":true}"#);
+        let step = CheckStep {
+            id: "s_run".to_string(),
+            action: "api_call".to_string(),
+            when: "true".to_string(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("setting".to_string(), "$.setting".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+        assert!(extracted.contains_key("setting"), "setting should be extracted when guard passes");
+    }
+
+    #[test]
+    fn run_steps_on_error_continue_skips_extraction() {
+        // When a step returns an error-status that has `continue` in on_error,
+        // extraction is skipped but run_steps succeeds.
+        let url = one_shot_server(422, r#"{"message":"already exists"}"#);
+        let mut on_error = HashMap::new();
+        on_error.insert("422".to_string(), "continue".to_string());
+
+        let step = CheckStep {
+            id: "s_err_cont".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "POST".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("message".to_string(), "$.message".to_string());
+                m
+            },
+            on_error,
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+        // status_code is always set even for continue
+        assert!(extracted.contains_key("status_code"), "status_code should be set");
+        // But extraction of body fields should be skipped
+        assert!(
+            !extracted.contains_key("message"),
+            "body extraction should be skipped on continue"
+        );
+    }
+
+    #[test]
+    fn run_steps_status_code_extracted_as_special_var() {
+        // $status_code as extract path should put the numeric status code into extracted.
+        let url = one_shot_server(200, r#"{"ok":true}"#);
+        let step = CheckStep {
+            id: "s_status".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("code".to_string(), "$status_code".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+        assert!(extracted.contains_key("code"), "code should be extracted via $status_code");
+        assert_eq!(extracted["code"], serde_json::json!(200));
+    }
+
+    #[test]
+    fn run_steps_populates_step_id_status_code_alias() {
+        // step_id_status_code alias should be available in extracted after step runs.
+        let url = one_shot_server(200, r#"{"ok":true}"#);
+        let step = make_step("my_step", "GET", &format!("{url}/resource"));
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+        assert!(
+            extracted.contains_key("my_step_status_code"),
+            "per-step status alias should be set"
+        );
+    }
+
+    // ── evaluate_all_assertions: safety field non-empty ──────────────────────
+
+    #[test]
+    fn evaluate_all_assertions_safety_field_non_empty_sets_classification() {
+        // When def.safety is non-empty, metadata.safety_classification should be Some.
+        let def = CheckDefinition {
+            safety: "observable".to_string(),
+            assertions: vec![CheckAssertion {
+                id: "a1".to_string(),
+                expr: "val == true".to_string(),
+                severity: "medium".to_string(),
+                title: String::new(),
+                pass_message: String::new(),
+                fail_message: String::new(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let mut extracted = HashMap::new();
+        extracted.insert("val".to_string(), serde_json::json!(true));
+
+        let results = evaluate_all_assertions(
+            &def,
+            &extracted,
+            &HashMap::new(),
+            ConfidenceLevel::PassiveObservation,
+        );
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].metadata.safety_classification,
+            Some("observable".to_string()),
+            "non-empty safety field should be Some"
+        );
+    }
+
+    #[test]
+    fn evaluate_all_assertions_safety_field_empty_is_none() {
+        // When def.safety is empty, metadata.safety_classification should be None.
+        let def = CheckDefinition {
+            safety: String::new(),
+            assertions: vec![CheckAssertion {
+                id: "a1".to_string(),
+                expr: "val == true".to_string(),
+                severity: "medium".to_string(),
+                title: String::new(),
+                pass_message: String::new(),
+                fail_message: String::new(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let mut extracted = HashMap::new();
+        extracted.insert("val".to_string(), serde_json::json!(true));
+
+        let results = evaluate_all_assertions(
+            &def,
+            &extracted,
+            &HashMap::new(),
+            ConfidenceLevel::PassiveObservation,
+        );
+
+        assert_eq!(results[0].metadata.safety_classification, None);
+    }
+
+    // ── YamlObserver::observe via mock server ─────────────────────────────────
+
+    #[test]
+    fn yaml_observer_observe_runs_steps_and_evaluates_assertions() {
+        let url = one_shot_server(200, r#"{"two_factor_requirement_enabled":true}"#);
+
+        let def = CheckDefinition {
+            id: "OBS-MOCK".to_string(),
+            name: "Mock Observer Test".to_string(),
+            source: "github".to_string(),
+            steps: vec![CheckStep {
+                id: "get_org".to_string(),
+                action: "api_call".to_string(),
+                when: String::new(),
+                request: super::super::definition::RequestDef {
+                    method: "GET".to_string(),
+                    url: format!("{url}/orgs/test"),
+                    headers: HashMap::new(),
+                    body: None,
+                    paginate: false,
+                },
+                extract: {
+                    let mut m = HashMap::new();
+                    m.insert("mfa_enforced".to_string(), "$.two_factor_requirement_enabled".to_string());
+                    m
+                },
+                on_error: HashMap::new(),
+                note: String::new(),
+            }],
+            assertions: vec![CheckAssertion {
+                id: "mfa_check".to_string(),
+                expr: "mfa_enforced == true".to_string(),
+                severity: "critical".to_string(),
+                title: "MFA Enforcement".to_string(),
+                pass_message: "MFA is enforced".to_string(),
+                fail_message: "MFA is NOT enforced".to_string(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let observer = YamlObserver::new(def);
+        let config = HashMap::new();
+        let results = observer.observe(&config).unwrap();
+
+        assert_eq!(results.len(), 1, "should produce one Evidence per assertion");
+        assert_eq!(results[0].status_id, StatusId::Effective, "MFA enforced → should pass");
+    }
+
+    #[test]
+    fn yaml_observer_observe_failing_assertion() {
+        let url = one_shot_server(200, r#"{"two_factor_requirement_enabled":false}"#);
+
+        let def = CheckDefinition {
+            id: "OBS-FAIL".to_string(),
+            name: "Failing Observer Test".to_string(),
+            source: "github".to_string(),
+            steps: vec![CheckStep {
+                id: "get_org".to_string(),
+                action: "api_call".to_string(),
+                when: String::new(),
+                request: super::super::definition::RequestDef {
+                    method: "GET".to_string(),
+                    url: format!("{url}/orgs/test"),
+                    headers: HashMap::new(),
+                    body: None,
+                    paginate: false,
+                },
+                extract: {
+                    let mut m = HashMap::new();
+                    m.insert("mfa_enforced".to_string(), "$.two_factor_requirement_enabled".to_string());
+                    m
+                },
+                on_error: HashMap::new(),
+                note: String::new(),
+            }],
+            assertions: vec![CheckAssertion {
+                id: "mfa_check".to_string(),
+                expr: "mfa_enforced == true".to_string(),
+                severity: "critical".to_string(),
+                title: "MFA Enforcement".to_string(),
+                pass_message: "MFA is enforced".to_string(),
+                fail_message: "MFA is NOT enforced".to_string(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let observer = YamlObserver::new(def);
+        let config = HashMap::new();
+        let results = observer.observe(&config).unwrap();
+
+        assert_eq!(results[0].status_id, StatusId::Ineffective, "MFA disabled → should fail");
+        assert!(!results[0].findings.is_empty(), "failing assertion should create a finding");
+    }
+
     // ── Helper functions ─────────────────────────────────────────────────────
 
     fn default_check_def() -> CheckDefinition {
@@ -1384,5 +1943,589 @@ mod tests {
             }],
             ..default_check_def()
         }
+    }
+
+    // ─── Additional coverage tests ───────────────────────────────────────────
+
+    // ── YamlTester::test() via mock server ───────────────────────────────────
+
+    #[test]
+    fn yaml_tester_test_runs_steps_and_evaluates_assertions() {
+        let url = one_shot_server(200, r#"{"two_factor_requirement_enabled":true}"#);
+
+        let def = CheckDefinition {
+            id: "TST-MOCK".to_string(),
+            name: "Mock Tester Test".to_string(),
+            source: "github".to_string(),
+            check_type: super::super::definition::CheckType::Active,
+            safety: "observable".to_string(),
+            environment: "staging".to_string(),
+            steps: vec![CheckStep {
+                id: "get_org".to_string(),
+                action: "api_call".to_string(),
+                when: String::new(),
+                request: super::super::definition::RequestDef {
+                    method: "GET".to_string(),
+                    url: format!("{url}/orgs/test"),
+                    headers: HashMap::new(),
+                    body: None,
+                    paginate: false,
+                },
+                extract: {
+                    let mut m = HashMap::new();
+                    m.insert("mfa_enforced".to_string(), "$.two_factor_requirement_enabled".to_string());
+                    m
+                },
+                on_error: HashMap::new(),
+                note: String::new(),
+            }],
+            assertions: vec![CheckAssertion {
+                id: "mfa_check".to_string(),
+                expr: "mfa_enforced == true".to_string(),
+                severity: "critical".to_string(),
+                title: "MFA Enforcement".to_string(),
+                pass_message: "MFA is enforced".to_string(),
+                fail_message: "MFA is NOT enforced".to_string(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let tester = YamlTester::new(def);
+        let config = HashMap::new();
+        let results = tester.test(&config).unwrap();
+
+        assert_eq!(results.len(), 1, "should produce one Evidence per assertion");
+        assert_eq!(results[0].status_id, StatusId::Effective, "MFA enforced → should pass");
+        assert_eq!(results[0].confidence_level, ConfidenceLevel::ActiveVerification);
+        assert_eq!(results[0].metadata.module.module_type, "tester");
+    }
+
+    #[test]
+    fn yaml_tester_test_failing_assertion() {
+        let url = one_shot_server(200, r#"{"two_factor_requirement_enabled":false}"#);
+
+        let def = CheckDefinition {
+            id: "TST-FAIL".to_string(),
+            name: "Failing Tester".to_string(),
+            source: "github".to_string(),
+            check_type: super::super::definition::CheckType::Active,
+            safety: "reversible".to_string(),
+            environment: "production".to_string(),
+            steps: vec![CheckStep {
+                id: "get_org".to_string(),
+                action: "api_call".to_string(),
+                when: String::new(),
+                request: super::super::definition::RequestDef {
+                    method: "GET".to_string(),
+                    url: format!("{url}/orgs/test"),
+                    headers: HashMap::new(),
+                    body: None,
+                    paginate: false,
+                },
+                extract: {
+                    let mut m = HashMap::new();
+                    m.insert("mfa_enforced".to_string(), "$.two_factor_requirement_enabled".to_string());
+                    m
+                },
+                on_error: HashMap::new(),
+                note: String::new(),
+            }],
+            assertions: vec![CheckAssertion {
+                id: "mfa_check".to_string(),
+                expr: "mfa_enforced == true".to_string(),
+                severity: "critical".to_string(),
+                title: "MFA Enforcement".to_string(),
+                pass_message: "MFA is enforced".to_string(),
+                fail_message: "MFA is NOT enforced".to_string(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let tester = YamlTester::new(def);
+        let config = HashMap::new();
+        let results = tester.test(&config).unwrap();
+
+        assert_eq!(results[0].status_id, StatusId::Ineffective);
+        assert!(!results[0].findings.is_empty());
+    }
+
+    // ── endpoint fallbacks: "owner" and "GITHUB_ORG" ─────────────────────────
+
+    #[test]
+    fn evaluate_all_assertions_endpoint_from_owner() {
+        let def = make_def_with_assertions();
+        let extracted = HashMap::new();
+        let mut ctx = HashMap::new();
+        ctx.insert("owner".to_string(), "repo-owner".to_string());
+
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+
+        assert_eq!(results[0].metadata.source.endpoint, "repo-owner");
+    }
+
+    #[test]
+    fn evaluate_all_assertions_endpoint_from_github_org() {
+        let def = make_def_with_assertions();
+        let extracted = HashMap::new();
+        let mut ctx = HashMap::new();
+        ctx.insert("GITHUB_ORG".to_string(), "gh-org".to_string());
+
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+
+        assert_eq!(results[0].metadata.source.endpoint, "gh-org");
+    }
+
+    #[test]
+    fn evaluate_all_assertions_endpoint_org_takes_priority_over_owner() {
+        let def = make_def_with_assertions();
+        let extracted = HashMap::new();
+        let mut ctx = HashMap::new();
+        ctx.insert("org".to_string(), "org-name".to_string());
+        ctx.insert("owner".to_string(), "owner-name".to_string());
+        ctx.insert("GITHUB_ORG".to_string(), "github-org-name".to_string());
+
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+
+        // "org" is first in the chain, so it should take priority.
+        assert_eq!(results[0].metadata.source.endpoint, "org-name");
+    }
+
+    #[test]
+    fn evaluate_all_assertions_endpoint_empty_when_no_context() {
+        let def = make_def_with_assertions();
+        let extracted = HashMap::new();
+        let ctx = HashMap::new(); // No org, owner, or GITHUB_ORG
+
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+
+        assert_eq!(results[0].metadata.source.endpoint, "");
+    }
+
+    // ── execute_step with PATCH+body and PUT+body ────────────────────────────
+
+    #[test]
+    fn execute_step_patch_with_body() {
+        let url = one_shot_server(200, r#"{"updated":true}"#);
+        let step = make_step_with_body(
+            "s_patch_body",
+            "PATCH",
+            &format!("{url}/resource"),
+            serde_json::json!({"setting": true}),
+        );
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    #[test]
+    fn execute_step_put_with_body() {
+        let url = one_shot_server(200, r#"{"updated":true}"#);
+        let step = make_step_with_body(
+            "s_put_body",
+            "PUT",
+            &format!("{url}/resource"),
+            serde_json::json!({"name": "new-name"}),
+        );
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    // ── execute_step connection failure ───────────────────────────────────────
+
+    #[test]
+    fn execute_step_connection_failure_returns_err() {
+        let step = make_step("s_conn_fail", "GET", "http://127.0.0.1:1/nonexistent");
+        let ctx = HashMap::new();
+        let result = execute_step(&step, &ctx);
+        assert!(result.is_err(), "connection failure should return Err");
+    }
+
+    // ── run_steps: multi-step with extracted values propagated ────────────────
+
+    #[test]
+    fn run_steps_propagates_extracted_values_to_ctx() {
+        // First step extracts a string value, second step should see it in ctx.
+        let url1 = one_shot_server(200, r#"{"org_name":"acme"}"#);
+        let url2 = one_shot_server(200, r#"{"ok":true}"#);
+
+        let step1 = CheckStep {
+            id: "s1".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url1}/org"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("org_name".to_string(), "$.org_name".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let step2 = CheckStep {
+            id: "s2".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url2}/orgs/{{{{org_name}}}}"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: HashMap::new(),
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step1, step2], &mut ctx).unwrap();
+
+        // org_name should be available as both extracted value and in ctx.
+        assert_eq!(extracted["org_name"], serde_json::json!("acme"));
+        assert_eq!(ctx.get("org_name").unwrap(), "acme");
+    }
+
+    // ── run_steps: when guard with invalid CEL expression defaults to false ──
+
+    #[test]
+    fn run_steps_when_guard_undefined_var_defaults_to_skip() {
+        let url = one_shot_server(200, r#"{"val":42}"#);
+        let step = CheckStep {
+            id: "s_bad_guard".to_string(),
+            action: "api_call".to_string(),
+            when: "undefined_guard_var == true".to_string(), // Undefined var → CEL exec error → unwrap_or(false) → skip
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("val".to_string(), "$.val".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+        // CEL execution error defaults to false (unwrap_or(false)), so step is skipped.
+        assert!(!extracted.contains_key("val"), "step with failing guard should be skipped");
+    }
+
+    // ── run_steps: extraction of boolean and number to ctx ───────────────────
+
+    #[test]
+    fn run_steps_extracts_bool_and_number_to_ctx() {
+        let url = one_shot_server(200, r#"{"enabled":true,"count":42}"#);
+        let step = CheckStep {
+            id: "s_types".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("enabled".to_string(), "$.enabled".to_string());
+                m.insert("count".to_string(), "$.count".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+
+        assert_eq!(extracted["enabled"], serde_json::json!(true));
+        assert_eq!(extracted["count"], serde_json::json!(42));
+        // json_to_string converts bool and number to string in ctx.
+        assert_eq!(ctx.get("enabled").unwrap(), "true");
+        assert_eq!(ctx.get("count").unwrap(), "42");
+    }
+
+    // ── run_steps: extraction of non-scalar (object/array) skips ctx insert ──
+
+    #[test]
+    fn run_steps_non_scalar_extraction_skips_ctx_string() {
+        let url = one_shot_server(200, r#"{"nested":{"key":"val"}}"#);
+        let step = CheckStep {
+            id: "s_nested".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("nested".to_string(), "$.nested".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+
+        // nested is an object — should be in extracted but NOT in ctx string map.
+        assert!(extracted.contains_key("nested"));
+        assert!(!ctx.contains_key("nested"), "object values should not be added to string ctx");
+    }
+
+    // ── run_steps: extraction with path that doesn't match body ──────────────
+
+    #[test]
+    fn run_steps_extraction_no_match_not_inserted() {
+        let url = one_shot_server(200, r#"{"key":"val"}"#);
+        let step = CheckStep {
+            id: "s_nomatch".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers: HashMap::new(),
+                body: None,
+                paginate: false,
+            },
+            extract: {
+                let mut m = HashMap::new();
+                m.insert("missing".to_string(), "$.nonexistent_field".to_string());
+                m
+            },
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        let extracted = run_steps(&[step], &mut ctx).unwrap();
+
+        assert!(!extracted.contains_key("missing"), "non-matching path should not insert variable");
+    }
+
+    // ── YamlTester credential_requirements ────────────────────────────────────
+
+    #[test]
+    fn yaml_tester_credential_requirements() {
+        let def = CheckDefinition {
+            credentials: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "OKTA_API_TOKEN".to_string(),
+                    super::super::definition::CredentialDef {
+                        cred_type: "api_token".to_string(),
+                        scopes: vec!["okta.apps.read".to_string()],
+                        required: true,
+                    },
+                );
+                m
+            },
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        let creds = tester.credential_requirements();
+        assert_eq!(creds.len(), 1);
+        assert_eq!(creds[0].name, "OKTA_API_TOKEN");
+        assert!(creds[0].required);
+    }
+
+    // ── YamlTester environment_scope "stage" alias ───────────────────────────
+
+    #[test]
+    fn yaml_tester_environment_scope_stage_alias() {
+        let def = CheckDefinition {
+            environment: "stage".to_string(),
+            ..default_check_def()
+        };
+        let tester = YamlTester::new(def);
+        assert_eq!(tester.environment_scope(), EnvironmentScope::Staging);
+    }
+
+    // ── evaluate_assertion CEL execution error (undefined variable) ──────────
+
+    #[test]
+    fn evaluate_assertion_execution_error() {
+        // Expression that references a variable not in the context causes execution error.
+        let assertion = CheckAssertion {
+            id: "exec_err".to_string(),
+            expr: "undefined_var == true".to_string(),
+            severity: "medium".to_string(),
+            title: String::new(),
+            pass_message: String::new(),
+            fail_message: String::new(),
+            finding: None,
+        };
+        let extracted = HashMap::new();
+        let result = evaluate_assertion(&assertion, &extracted);
+        assert!(result.is_err(), "referencing undefined var should return Err");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("CEL execution error"), "error should mention CEL execution: {msg}");
+    }
+
+    // ── evaluate_all_assertions with pass_message template resolution ────────
+
+    #[test]
+    fn evaluate_all_assertions_resolves_pass_message_template() {
+        let def = CheckDefinition {
+            id: "MSG-TEST".to_string(),
+            name: "Message Test".to_string(),
+            source: "github".to_string(),
+            assertions: vec![CheckAssertion {
+                id: "msg_assert".to_string(),
+                expr: "val == true".to_string(),
+                severity: "medium".to_string(),
+                title: "Msg Test".to_string(),
+                pass_message: "org {{org}} passed".to_string(),
+                fail_message: "org {{org}} failed".to_string(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let mut extracted = HashMap::new();
+        extracted.insert("val".to_string(), serde_json::json!(true));
+        let mut ctx = HashMap::new();
+        ctx.insert("org".to_string(), "acme".to_string());
+
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+        assert_eq!(results[0].status, "org acme passed");
+    }
+
+    #[test]
+    fn evaluate_all_assertions_resolves_fail_message_template() {
+        let def = CheckDefinition {
+            id: "MSG-FAIL".to_string(),
+            name: "Fail Msg Test".to_string(),
+            source: "github".to_string(),
+            assertions: vec![CheckAssertion {
+                id: "msg_fail".to_string(),
+                expr: "val == true".to_string(),
+                severity: "medium".to_string(),
+                title: "Fail Msg".to_string(),
+                pass_message: "passed".to_string(),
+                fail_message: "org {{org}} failed".to_string(),
+                finding: None,
+            }],
+            ..default_check_def()
+        };
+
+        let mut extracted = HashMap::new();
+        extracted.insert("val".to_string(), serde_json::json!(false)); // force failure
+        let mut ctx = HashMap::new();
+        ctx.insert("org".to_string(), "my-org".to_string());
+
+        let results =
+            evaluate_all_assertions(&def, &extracted, &ctx, ConfidenceLevel::PassiveObservation);
+        assert_eq!(results[0].status, "org my-org failed");
+    }
+
+    // ── execute_step with headers template resolution ────────────────────────
+
+    #[test]
+    fn execute_step_resolves_headers() {
+        let url = one_shot_server(200, r#"{"ok":true}"#);
+        let mut headers = HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer {{token}}".to_string());
+
+        let step = CheckStep {
+            id: "s_headers".to_string(),
+            action: "api_call".to_string(),
+            when: String::new(),
+            request: super::super::definition::RequestDef {
+                method: "GET".to_string(),
+                url: format!("{url}/resource"),
+                headers,
+                body: None,
+                paginate: false,
+            },
+            extract: HashMap::new(),
+            on_error: HashMap::new(),
+            note: String::new(),
+        };
+
+        let mut ctx = HashMap::new();
+        ctx.insert("token".to_string(), "ghp_test_token".to_string());
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    // ── execute_step URL template resolution ─────────────────────────────────
+
+    #[test]
+    fn execute_step_resolves_url_template() {
+        let url = one_shot_server(200, r#"{"ok":true}"#);
+        // Extract just the port from the mock server URL.
+        let port = url.rsplit(':').next().unwrap();
+
+        let step = make_step(
+            "s_url_tmpl",
+            "GET",
+            &format!("http://127.0.0.1:{port}/orgs/{{{{org}}}}"),
+        );
+
+        let mut ctx = HashMap::new();
+        ctx.insert("org".to_string(), "test-org".to_string());
+        let result = execute_step(&step, &ctx).unwrap();
+        assert_eq!(result.status_code, 200);
+    }
+
+    // ── navigate_fields with mid-path non-object ─────────────────────────────
+
+    #[test]
+    fn jsonpath_nested_mid_path_non_object() {
+        // If a middle segment is not an object, navigation should return None.
+        let body = serde_json::json!({"a": "not_an_object"});
+        assert!(jsonpath_extract("$.a.b", &body).is_none());
+    }
+
+    // ── jsonpath array wildcard with nested missing field ─────────────────────
+
+    #[test]
+    fn jsonpath_array_wildcard_missing_nested_field() {
+        let body = serde_json::json!([
+            {"user": {"name": "alice"}},
+            {"user": {}},  // missing "name"
+            {"other": "value"},  // missing "user"
+        ]);
+        let val = jsonpath_extract("$[*].user.name", &body).unwrap();
+        // Only the first element has user.name; the others are filtered out.
+        assert_eq!(val, serde_json::json!(["alice"]));
+    }
+
+    // ── jsonpath $[*] with dot but missing field ────────────────────────────
+
+    #[test]
+    fn jsonpath_array_wildcard_without_dot_prefix_returns_none() {
+        // "$[*]field" (no dot after [*]) should fail the strip_prefix('.').
+        let body = serde_json::json!([1, 2, 3]);
+        assert!(jsonpath_extract("$[*]field", &body).is_none());
     }
 }

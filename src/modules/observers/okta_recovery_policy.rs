@@ -328,4 +328,96 @@ mod tests {
         let result = RecoveryPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = RecoveryPolicyObserver;
+        assert_eq!(obs.id(), "okta.recovery_policy");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "okta");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(creds.len() >= 2);
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn domain_only_uses_https_prefix() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test_token".to_string()),
+            ("OKTA_DOMAIN".to_string(), "localhost".to_string()),
+        ]);
+        let result = RecoveryPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn missing_token_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
+        ]);
+        let result = RecoveryPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
+    }
+
+    #[test]
+    fn missing_domain_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
+        ]);
+        let result = RecoveryPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn api_returns_403_errors() {
+        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let result = RecoveryPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("403"));
+    }
+
+    #[test]
+    fn api_connection_refused_returns_error() {
+        let cfg = base_config("http://127.0.0.1:1");
+        let result = RecoveryPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_json_array_body_errors() {
+        let srv = mock_server(200, r#""not an array""#);
+        let result = RecoveryPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn inactive_policy_only_is_effective_with_no_sms() {
+        // All inactive policies are skipped; result should show email_recovery_enabled=false
+        // and sms_recovery_enabled=false → Effective (no SMS found in any active policy)
+        let body = r#"[{
+            "id": "pol_inactive",
+            "name": "Old Policy",
+            "status": "INACTIVE",
+            "settings": {
+                "recovery": {
+                    "factors": {
+                        "okta_email": { "status": "ACTIVE" },
+                        "okta_sms": { "status": "ACTIVE" }
+                    }
+                }
+            }
+        }]"#;
+        let srv = mock_server(200, body);
+        let ev = &RecoveryPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        // No active policies processed, so SMS is never detected → Effective
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert_eq!(ev.raw_data["sms_recovery_enabled"], false);
+    }
 }

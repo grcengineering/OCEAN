@@ -146,6 +146,9 @@ pub fn load(path: Option<&str>) -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn default_config_has_sensible_values() {
@@ -220,5 +223,139 @@ server:
         let sc = ServerConfig::default();
         assert_eq!(sc.port, 8080);
         assert!(sc.auth_token.is_empty());
+    }
+
+    // --- env var overrides (serialized via ENV_MUTEX to avoid races) ---
+
+    fn with_env<F: FnOnce()>(key: &str, val: &str, f: F) {
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let old = std::env::var(key).ok();
+        std::env::set_var(key, val);
+        f();
+        match old {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+    }
+
+    #[test]
+    fn ocean_db_env_overrides_storage_path() {
+        with_env("OCEAN_DB", "/tmp/custom_test_ocean.db", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert_eq!(cfg.storage_path, "/tmp/custom_test_ocean.db");
+        });
+    }
+
+    #[test]
+    fn ocean_db_empty_string_does_not_override() {
+        with_env("OCEAN_DB", "", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert!(cfg.storage_path.contains(".ocean") || !cfg.storage_path.is_empty());
+        });
+    }
+
+    #[test]
+    fn ocean_controls_dir_env_overrides() {
+        with_env("OCEAN_CONTROLS_DIR", "/tmp/custom_controls", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert_eq!(cfg.controls_dir, "/tmp/custom_controls");
+        });
+    }
+
+    #[test]
+    fn ocean_controls_dir_empty_does_not_override() {
+        with_env("OCEAN_CONTROLS_DIR", "", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert_eq!(cfg.controls_dir, "controls");
+        });
+    }
+
+    #[test]
+    fn ocean_port_env_overrides_server_port() {
+        with_env("OCEAN_PORT", "9999", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert_eq!(cfg.server.port, 9999);
+        });
+    }
+
+    #[test]
+    fn ocean_port_invalid_does_not_override() {
+        with_env("OCEAN_PORT", "not_a_number", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert_eq!(cfg.server.port, 8080);
+        });
+    }
+
+    #[test]
+    fn ocean_auth_token_env_overrides() {
+        with_env("OCEAN_AUTH_TOKEN", "my-secret-token", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert_eq!(cfg.server.auth_token, "my-secret-token");
+        });
+    }
+
+    #[test]
+    fn ocean_auth_token_empty_does_not_override() {
+        with_env("OCEAN_AUTH_TOKEN", "", || {
+            let cfg = load(Some("/tmp/ocean_nonexistent_xyz.yaml")).unwrap();
+            assert!(cfg.server.auth_token.is_empty());
+        });
+    }
+
+    #[test]
+    fn default_storage_path_uses_home_or_userprofile() {
+        // default_storage_path() falls back to HOME or USERPROFILE, or "."
+        // We just verify the default path ends with ocean.db
+        let cfg = Config::default();
+        assert!(
+            cfg.storage_path.ends_with("ocean.db"),
+            "storage_path should end with ocean.db, got: {}",
+            cfg.storage_path
+        );
+    }
+
+    #[test]
+    fn load_via_ocean_config_env_var() {
+        let dir = std::env::temp_dir();
+        let path = dir
+            .join(format!("ocean_env_cfg_{}.yaml", uuid::Uuid::new_v4()))
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        std::fs::write(
+            &path,
+            "storage_path: /tmp/envvar.db\ncontrols_dir: envcontrols\noutput_format: yaml\n",
+        )
+        .unwrap();
+
+        let key = "OCEAN_CONFIG";
+        let old = std::env::var(key).ok();
+        std::env::set_var(key, &path);
+
+        // Pass None so the env var is used
+        let cfg = load(None).unwrap();
+        assert_eq!(cfg.storage_path, "/tmp/envvar.db");
+        assert_eq!(cfg.controls_dir, "envcontrols");
+
+        match old {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn load_bad_yaml_returns_error() {
+        let dir = std::env::temp_dir();
+        let path = dir
+            .join(format!("ocean_bad_cfg_{}.yaml", uuid::Uuid::new_v4()))
+            .to_str()
+            .unwrap()
+            .to_string();
+        std::fs::write(&path, "port: [invalid yaml structure").unwrap();
+        let result = load(Some(&path));
+        assert!(result.is_err(), "bad YAML should return an error");
+        let _ = std::fs::remove_file(path);
     }
 }

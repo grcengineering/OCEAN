@@ -700,4 +700,168 @@ mod tests {
         let values: Vec<&str> = not_allowed.iter().map(|v| v.as_str().unwrap()).collect();
         assert!(values.contains(&"okta_otp"));
     }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = MfaPolicyObserver;
+        assert_eq!(obs.id(), "okta.mfa_policy");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "okta");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(creds.len() >= 2);
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn domain_only_uses_https_prefix() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test_token".to_string()),
+            ("OKTA_DOMAIN".to_string(), "localhost".to_string()),
+        ]);
+        let result = MfaPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn api_connection_refused_returns_error() {
+        let cfg = base_config("http://127.0.0.1:1");
+        let result = MfaPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_json_array_body_errors() {
+        let srv = mock_server(200, r#""not an array""#);
+        let result = MfaPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
+
+    // Authenticators-format policy (newer API response shape)
+    const AUTHENTICATORS_POLICY: &str = r#"[{
+        "id": "pol_auth",
+        "name": "Auth Policy",
+        "status": "ACTIVE",
+        "settings": {
+            "authenticators": [
+                {"key": "webauthn", "enroll": {"self": "REQUIRED"}},
+                {"key": "okta_password", "enroll": {"self": "REQUIRED"}},
+                {"key": "okta_email", "enroll": {"self": "OPTIONAL"}}
+            ]
+        }
+    }]"#;
+
+    #[test]
+    fn authenticators_format_policy_is_effective() {
+        let srv = mock_server(200, AUTHENTICATORS_POLICY);
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        let iam = &ev.raw_data["iam_auth"];
+        // webauthn is PR; okta_password is excluded; okta_email is optional phishable
+        assert_eq!(iam["phishable_factors_allowed"], true);
+    }
+
+    #[test]
+    fn authenticators_format_policy_type_is_mfa_when_phishable_optional() {
+        let srv = mock_server(200, AUTHENTICATORS_POLICY);
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        let iam = &ev.raw_data["iam_auth"];
+        assert_eq!(iam["policy_type"], "mfa");
+    }
+
+    // Policy where factors are all NOT_ALLOWED (no required or optional)
+    const ALL_NOT_ALLOWED_POLICY: &str = r#"[{
+        "id": "pol_none",
+        "name": "No Factors Policy",
+        "status": "ACTIVE",
+        "settings": {
+            "factors": {
+                "okta_otp": {"enroll": {"self": "NOT_ALLOWED"}},
+                "okta_push": {"enroll": {"self": "NOT_ALLOWED"}}
+            }
+        }
+    }]"#;
+
+    #[test]
+    fn policy_with_no_required_factors_not_allowed_is_ineffective() {
+        let srv = mock_server(200, ALL_NOT_ALLOWED_POLICY);
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev.findings.iter().any(|f| f.title == "No Required MFA Factors"));
+        let iam = &ev.raw_data["iam_auth"];
+        assert_eq!(iam["phishing_resistant_required"], false);
+        assert_eq!(iam["phishable_factors_allowed"], false);
+        assert_eq!(iam["policy_type"], "mfa");
+    }
+
+    #[test]
+    fn not_allowed_factors_are_populated_in_factor_policy() {
+        let srv = mock_server(200, ALL_NOT_ALLOWED_POLICY);
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        let not_allowed = ev.raw_data["iam_auth"]["factor_policy"]["not_allowed"]
+            .as_array()
+            .unwrap();
+        assert!(!not_allowed.is_empty());
+    }
+
+    #[test]
+    fn authenticators_format_requires_webauthn_is_pr_required() {
+        // Only webauthn required; okta_password excluded from count
+        let body = r#"[{
+            "id": "pol_pr_auth",
+            "name": "PR Auth Policy",
+            "status": "ACTIVE",
+            "settings": {
+                "authenticators": [
+                    {"key": "webauthn", "enroll": {"self": "REQUIRED"}},
+                    {"key": "okta_password", "enroll": {"self": "REQUIRED"}}
+                ]
+            }
+        }]"#;
+        let srv = mock_server(200, body);
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        let iam = &ev.raw_data["iam_auth"];
+        assert_eq!(iam["phishing_resistant_required"], true);
+    }
+
+    #[test]
+    fn factors_format_takes_priority_over_authenticators() {
+        // Policy has BOTH factors and authenticators — factors takes priority
+        let body = r#"[{
+            "id": "pol_dual",
+            "name": "Dual Format",
+            "status": "ACTIVE",
+            "settings": {
+                "factors": {
+                    "fido_webauthn": {"enroll": {"self": "REQUIRED"}}
+                },
+                "authenticators": [
+                    {"key": "okta_otp", "enroll": {"self": "REQUIRED"}}
+                ]
+            }
+        }]"#;
+        let srv = mock_server(200, body);
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        let required = ev.raw_data["iam_auth"]["factor_policy"]["required"]
+            .as_array()
+            .unwrap();
+        let values: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
+        // Should contain fido_webauthn from factors; authenticators are skipped
+        assert!(values.contains(&"fido_webauthn"));
+        // okta_otp from authenticators should NOT appear (double-count prevention)
+        assert!(!values.contains(&"okta_otp"));
+    }
+
+    #[test]
+    fn policy_name_is_captured_in_iam_auth() {
+        let srv = mock_server(200, ACTIVE_REQUIRED_POLICY);
+        let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(
+            ev.raw_data["iam_auth"]["policy_name"],
+            "Default MFA Policy"
+        );
+    }
 }

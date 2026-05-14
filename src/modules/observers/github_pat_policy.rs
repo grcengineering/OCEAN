@@ -209,4 +209,46 @@ mod tests {
         assert!(!ev.findings.is_empty());
         assert!(ev.findings[0].description.contains("403"));
     }
+
+    #[test]
+    fn pat_unexpected_status_returns_err() {
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = PatPolicyObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn pat_evidence_types() {
+        assert_eq!(PatPolicyObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn pat_credential_requirements() {
+        let reqs = PatPolicyObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn pat_missing_token_errors() {
+        let err = PatPolicyObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn pat_missing_org_errors() {
+        let err = PatPolicyObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

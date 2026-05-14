@@ -532,4 +532,62 @@ mod tests {
             .iter()
             .any(|f| f.title == "Unexpected API Response"));
     }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = BranchBypassTester;
+        assert_eq!(t.id(), "github.branch_bypass");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "github");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "GITHUB_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_OWNER"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_REPO"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    #[test]
+    fn branch_bypass_tester_evidence_types() {
+        assert_eq!(BranchBypassTester.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn branch_bypass_tester_credential_requirements() {
+        let reqs = BranchBypassTester.credential_requirements();
+        assert_eq!(reqs.len(), 3);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_REPO" && r.required));
+    }
+
+    #[test]
+    fn branch_bypass_tester_pre_flight_checks() {
+        let checks = BranchBypassTester.pre_flight_checks();
+        assert!(checks.len() >= 2);
+    }
+
+    #[test]
+    fn branch_bypass_tester_cleanup_procedures() {
+        let procs = BranchBypassTester.cleanup_procedures();
+        assert!(!procs.is_empty());
+    }
+
+    // ── Connection refused error ─────────────────────────────────────────────
+
+    #[test]
+    fn connection_refused_returns_err() {
+        let config = base_config("http://127.0.0.1:1");
+        let result = BranchBypassTester.test(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("GitHub API request failed"));
+    }
 }

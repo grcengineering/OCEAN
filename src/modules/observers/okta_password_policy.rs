@@ -376,4 +376,150 @@ mod tests {
         let result = PasswordPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = PasswordPolicyObserver;
+        assert_eq!(obs.id(), "okta.password_policy");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "okta");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(creds.len() >= 2);
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn domain_only_uses_https_prefix() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test_token".to_string()),
+            ("OKTA_DOMAIN".to_string(), "localhost".to_string()),
+        ]);
+        let result = PasswordPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn missing_token_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
+        ]);
+        let result = PasswordPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
+    }
+
+    #[test]
+    fn missing_domain_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
+        ]);
+        let result = PasswordPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn api_connection_refused_returns_error() {
+        let cfg = base_config("http://127.0.0.1:1");
+        let result = PasswordPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_json_array_body_errors() {
+        let srv = mock_server(200, r#""not an array""#);
+        let result = PasswordPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn insufficient_complexity_is_ineffective() {
+        // Only 2 of 4 complexity types — triggers Insufficient Password Complexity finding
+        let body = r#"[{
+            "id": "pol3",
+            "name": "Low Complexity Policy",
+            "status": "ACTIVE",
+            "settings": {
+                "password": {
+                    "complexity": {
+                        "minLength": 14,
+                        "minLowerCase": 1,
+                        "minUpperCase": 1,
+                        "minNumber": 0,
+                        "minSymbol": 0
+                    }
+                }
+            }
+        }]"#;
+        let srv = mock_server(200, body);
+        let ev = &PasswordPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Insufficient Password Complexity"));
+    }
+
+    #[test]
+    fn both_length_and_complexity_fail_is_ineffective() {
+        // Both short length AND insufficient complexity
+        let body = r#"[{
+            "id": "pol4",
+            "name": "Very Weak Policy",
+            "status": "ACTIVE",
+            "settings": {
+                "password": {
+                    "complexity": {
+                        "minLength": 6,
+                        "minLowerCase": 1,
+                        "minUpperCase": 0,
+                        "minNumber": 0,
+                        "minSymbol": 0
+                    }
+                }
+            }
+        }]"#;
+        let srv = mock_server(200, body);
+        let ev = &PasswordPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev.findings.iter().any(|f| f.title == "Password Minimum Length Too Short"));
+        assert!(ev.findings.iter().any(|f| f.title == "Insufficient Password Complexity"));
+    }
+
+    #[test]
+    fn all_inactive_policies_returns_effective_no_violations() {
+        // All policies are INACTIVE so none are processed — length_ok=true, complexity_ok=true
+        let body = r#"[{
+            "id": "pol5",
+            "name": "Old Policy",
+            "status": "INACTIVE",
+            "settings": {
+                "password": {
+                    "complexity": {
+                        "minLength": 4,
+                        "minLowerCase": 0,
+                        "minUpperCase": 0,
+                        "minNumber": 0,
+                        "minSymbol": 0
+                    }
+                }
+            }
+        }]"#;
+        let srv = mock_server(200, body);
+        let ev = &PasswordPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        // With no active policies processed, defaults apply (length_ok=true, complexity_ok=true)
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
+
+    #[test]
+    fn empty_policies_returns_effective() {
+        let srv = mock_server(200, "[]");
+        let ev = &PasswordPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert_eq!(ev.findings[0].title, "Password Policy Compliant");
+    }
 }

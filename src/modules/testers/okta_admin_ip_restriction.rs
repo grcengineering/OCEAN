@@ -545,4 +545,127 @@ mod tests {
             .any(|f| f.title == "No Sign-On Policies Found"));
         assert_eq!(ev.raw_data["policies_found"].as_u64(), Some(0));
     }
+
+    /// Test: policies 403/401 → Err.
+    #[test]
+    fn policies_401_returns_err() {
+        let srv = mock_server(vec![(
+            401,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        )]);
+        let result = AdminIpRestrictionTester.test(&base_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("401"));
+    }
+
+    /// Test: policy with empty id is skipped; no rule checked → Ineffective.
+    #[test]
+    fn policy_with_empty_id_skipped() {
+        // Policy has no "id" field — skipped, so no restriction found.
+        let policies_body = r#"[{"name":"Policy Without ID","type":"OKTA_SIGN_ON"}]"#;
+        let srv = mock_server(vec![(200, policies_body)]);
+        let ev = &AdminIpRestrictionTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Admin IP Restriction Not Found"));
+    }
+
+    /// Test: rules endpoint returns 403 — rule reading skipped, result is Ineffective.
+    #[test]
+    fn rules_403_skips_policy_and_is_ineffective() {
+        let policies_body = r#"[{"id":"pol1","name":"Admin Policy","type":"OKTA_SIGN_ON"}]"#;
+        let srv = mock_server(vec![
+            (200, policies_body),
+            (403, r#"{"errorCode":"E0000006","errorSummary":"Forbidden"}"#),
+        ]);
+        let ev = &AdminIpRestrictionTester.test(&base_config(&srv)).unwrap()[0];
+        // Rules 403 skips the policy — no restriction detected.
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+    }
+
+    /// Test: connection_is_zone but no include array — still effective.
+    #[test]
+    fn zone_connection_without_include_is_effective() {
+        let policies_body = r#"[{"id":"pol1","name":"Admin Policy","type":"OKTA_SIGN_ON"}]"#;
+        let rules_body =
+            r#"[{"id":"rul1","name":"Zone Rule","conditions":{"network":{"connection":"ZONE"}}}]"#;
+        let srv = mock_server(vec![(200, policies_body), (200, rules_body)]);
+        let ev = &AdminIpRestrictionTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Admin IP Restriction Enforced"));
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = AdminIpRestrictionTester;
+        assert_eq!(t.id(), "okta.admin_ip_restriction");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "okta");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    // ── Missed Module trait fns ──────────────────────────────────────────────
+
+    #[test]
+    fn admin_ip_restriction_version() {
+        assert_eq!(AdminIpRestrictionTester.version(), "0.1.0");
+    }
+
+    #[test]
+    fn admin_ip_restriction_source_system() {
+        assert_eq!(AdminIpRestrictionTester.source_system(), "okta");
+    }
+
+    #[test]
+    fn admin_ip_restriction_evidence_types() {
+        assert_eq!(AdminIpRestrictionTester.evidence_types(), &[1001]);
+    }
+
+    #[test]
+    fn admin_ip_restriction_credential_requirements_count() {
+        let reqs = AdminIpRestrictionTester.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+    }
+
+    // ── 403 on policies fetch ────────────────────────────────────────────────
+
+    #[test]
+    fn policies_403_returns_err() {
+        let srv = mock_server(vec![(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Forbidden"}"#,
+        )]);
+        let result = AdminIpRestrictionTester.test(&base_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("403"));
+    }
+
+    // ── include array without ZONE connection ────────────────────────────────
+
+    #[test]
+    fn include_array_without_zone_connection_is_effective() {
+        let policies_body = r#"[{"id":"pol1","name":"Policy","type":"OKTA_SIGN_ON"}]"#;
+        let rules_body = r#"[{"id":"rul1","name":"IP Rule","conditions":{"network":{"include":["nzn123"]}}}]"#;
+        let srv = mock_server(vec![(200, policies_body), (200, rules_body)]);
+        let ev = &AdminIpRestrictionTester.test(&base_config(&srv)).unwrap()[0];
+        // has_zone_include is true (non-empty include array) → restriction_found
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
 }

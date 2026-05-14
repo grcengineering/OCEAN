@@ -282,4 +282,80 @@ mod tests {
         let result = DependabotAlertsObserver.observe(&test_config(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn dependabot_evidence_types() {
+        assert_eq!(DependabotAlertsObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn dependabot_credential_requirements() {
+        let reqs = DependabotAlertsObserver.credential_requirements();
+        assert_eq!(reqs.len(), 3);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_REPO" && r.required));
+    }
+
+    #[test]
+    fn dependabot_missing_token_errors() {
+        let err = DependabotAlertsObserver
+            .observe(&HashMap::from([
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn dependabot_missing_owner_errors() {
+        let err = DependabotAlertsObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_OWNER"));
+    }
+
+    #[test]
+    fn dependabot_missing_repo_errors() {
+        let err = DependabotAlertsObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_REPO"));
+    }
+
+    #[test]
+    fn dependabot_connection_refused_errors() {
+        let mut cfg = test_config("http://127.0.0.1:1");
+        cfg.remove("GITHUB_API_URL");
+        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        let result = DependabotAlertsObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn dependabot_non_array_response_errors() {
+        let srv = mock_server(200, r#""not an array""#);
+        let result = DependabotAlertsObserver.observe(&test_config(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = DependabotAlertsObserver;
+        assert_eq!(obs.id(), "github.dependabot_alerts");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "github");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
+    }
 }

@@ -628,4 +628,180 @@ mod tests {
             .unwrap()[0];
         assert!(ev.test_transcript.is_none());
     }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = ConditionalAccessObserver;
+        assert_eq!(obs.id(), "azure.conditional_access");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "azure");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
+    }
+
+    // ── get_token error path: token response missing access_token ─────────────
+
+    /// Mock that returns a valid HTTP 200 but with an error body (no access_token).
+    fn mock_server_token_error() -> String {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let body = r#"{"error":"invalid_client","error_description":"Client auth failed"}"#;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(), body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+            }
+        });
+
+        format!("http://127.0.0.1:{}", addr.port())
+    }
+
+    #[test]
+    fn token_request_missing_access_token_returns_error() {
+        let srv = mock_server_token_error();
+        let config = base_config(&srv);
+        let result = ConditionalAccessObserver.observe(&config);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("access_token") || msg.contains("Client auth"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    // ── Graph API missing 'value' field in response ───────────────────────────
+
+    const MISSING_VALUE_RESPONSE: &str = r#"{"@odata.context": "something"}"#;
+
+    #[test]
+    fn graph_response_missing_value_field_returns_error() {
+        let srv = mock_server(TOKEN_RESPONSE, MISSING_VALUE_RESPONSE);
+        let result = ConditionalAccessObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("'value' array") || msg.contains("expected"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    // ── Multiple policies: mix of disabled and no-MFA ─────────────────────────
+
+    const MIXED_POLICIES: &str = r#"{
+        "value": [
+            {
+                "id": "pol1",
+                "displayName": "MFA Policy",
+                "state": "enabled",
+                "grantControls": {
+                    "builtInControls": ["mfa"]
+                }
+            },
+            {
+                "id": "pol2",
+                "displayName": "Disabled Policy",
+                "state": "disabled",
+                "grantControls": {
+                    "builtInControls": ["mfa"]
+                }
+            },
+            {
+                "id": "pol3",
+                "displayName": "No MFA Policy",
+                "state": "enabled",
+                "grantControls": {
+                    "builtInControls": ["approvedApplication"]
+                }
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn mixed_policies_reports_all_issues() {
+        let srv = mock_server(TOKEN_RESPONSE, MIXED_POLICIES);
+        let ev = &ConditionalAccessObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        // Should have both a disabled-policy finding and a no-mfa finding
+        let titles: Vec<&str> = ev.findings.iter().map(|f| f.title.as_str()).collect();
+        assert!(
+            titles.contains(&"Disabled Conditional Access Policy"),
+            "expected disabled finding, got: {titles:?}"
+        );
+        assert!(
+            titles.contains(&"Conditional Access Policy Lacks MFA Requirement"),
+            "expected no-mfa finding, got: {titles:?}"
+        );
+        // Status text should mention counts
+        assert!(ev.status.contains("1 disabled") || ev.status.contains("disabled"));
+        // observables: one per policy = 3
+        assert_eq!(ev.observables.len(), 3);
+    }
+
+    // ── Policy with null grantControls ────────────────────────────────────────
+
+    const NULL_GRANT_CONTROLS: &str = r#"{
+        "value": [
+            {
+                "id": "pol5",
+                "displayName": "No Grant Controls",
+                "state": "enabled",
+                "grantControls": null
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn policy_with_null_grant_controls_is_ineffective() {
+        let srv = mock_server(TOKEN_RESPONSE, NULL_GRANT_CONTROLS);
+        let ev = &ConditionalAccessObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Conditional Access Policy Lacks MFA Requirement"));
+    }
+
+    // ── raw_data counts correct ───────────────────────────────────────────────
+
+    #[test]
+    fn raw_data_counts_match_policy_analysis() {
+        let srv = mock_server(TOKEN_RESPONSE, DISABLED_POLICY);
+        let ev = &ConditionalAccessObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.raw_data["total_policies"], 1);
+        assert_eq!(ev.raw_data["disabled_policies"], 1);
+        assert_eq!(ev.raw_data["policies_without_mfa_requirement"], 0);
+    }
+
+    // ── Graph error 401 ───────────────────────────────────────────────────────
+
+    #[test]
+    fn graph_api_401_returns_error() {
+        let srv = mock_server_graph_error(401);
+        let result = ConditionalAccessObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("401") || msg.contains("status"),
+            "unexpected error: {msg}"
+        );
+    }
 }

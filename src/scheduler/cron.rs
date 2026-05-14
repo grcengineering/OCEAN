@@ -258,4 +258,34 @@ mod tests {
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].control_id, "cc6.2");
     }
+
+    // --- Scheduler::default() ---
+
+    #[test]
+    fn scheduler_default_is_empty() {
+        let s = Scheduler::default();
+        assert_eq!(s.list().len(), 0);
+        // due_now should return empty when no schedules registered
+        assert_eq!(s.due_now(Utc::now()).len(), 0);
+    }
+
+    // --- next_run returns value at exact boundary ---
+
+    #[test]
+    fn next_run_daily_expr() {
+        let now = Utc::now();
+        let next = next_run("0 0 * * *", &now).unwrap();
+        assert!(next > now);
+    }
+
+    // --- due_now with schedule that has no next_run ---
+
+    #[test]
+    fn due_now_skips_schedule_with_no_next_run() {
+        let s = Scheduler::new();
+        let sched = make_schedule("s1", "0 * * * *"); // next_run = None by default
+        s.add(sched).unwrap();
+        // next_run is None → should NOT appear in due list
+        assert_eq!(s.due_now(Utc::now()).len(), 0);
+    }
 }

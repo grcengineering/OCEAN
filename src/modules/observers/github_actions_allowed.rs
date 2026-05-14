@@ -229,4 +229,55 @@ mod tests {
         let result = ActionsAllowedObserver.observe(&test_config_with_org(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn actions_local_only_is_effective() {
+        let srv = mock_server(
+            200,
+            r#"{"allowed_actions":"local_only","enabled_repositories":"all"}"#,
+        );
+        let ev = &ActionsAllowedObserver
+            .observe(&test_config_with_org(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Actions Restricted to Local Only"));
+    }
+
+    #[test]
+    fn actions_allowed_evidence_types() {
+        assert_eq!(ActionsAllowedObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn actions_allowed_credential_requirements() {
+        let reqs = ActionsAllowedObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn actions_allowed_missing_token_errors() {
+        let err = ActionsAllowedObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn actions_allowed_missing_org_errors() {
+        let err = ActionsAllowedObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

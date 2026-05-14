@@ -467,6 +467,73 @@ mod tests {
     }
 
     #[test]
+    fn missing_token_errors() {
+        let config = HashMap::from([
+            ("GITHUB_OWNER".to_string(), "org".to_string()),
+            ("GITHUB_REPO".to_string(), "repo".to_string()),
+        ]);
+        let err = WorkflowInjectionTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn missing_owner_errors() {
+        let config = HashMap::from([
+            ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+            ("GITHUB_REPO".to_string(), "repo".to_string()),
+        ]);
+        let err = WorkflowInjectionTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_OWNER"));
+    }
+
+    #[test]
+    fn missing_repo_errors() {
+        let config = HashMap::from([
+            ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+            ("GITHUB_OWNER".to_string(), "org".to_string()),
+        ]);
+        let err = WorkflowInjectionTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_REPO"));
+    }
+
+    #[test]
+    fn non_200_non_404_list_status_returns_err() {
+        let srv = mock_server_multi(vec![(500, r#"{"message":"Internal Server Error"}"#)]);
+        let result = WorkflowInjectionTester.test(&test_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("500"));
+    }
+
+    #[test]
+    fn head_ref_injection_pattern_is_detected() {
+        let risky_yaml =
+            "on: [pull_request]\njobs:\n  check:\n    steps:\n      - run: echo ${{ github.head_ref }}\n";
+        let file_resp = workflow_file_body(risky_yaml);
+        let file_resp_static: &'static str = Box::leak(file_resp.into_boxed_str());
+        let list_resp: &'static str =
+            r#"[{"name":"pr.yml","type":"file","path":".github/workflows/pr.yml"}]"#;
+
+        let srv = mock_server_multi(vec![(200, list_resp), (200, file_resp_static)]);
+        let ev = &WorkflowInjectionTester.test(&test_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Workflow Injection Risk Detected"));
+    }
+
+    #[test]
+    fn workflow_file_not_200_is_skipped() {
+        // If file fetch returns non-200, skip it (workflows_checked stays 0).
+        let list_resp: &'static str =
+            r#"[{"name":"ci.yml","type":"file","path":".github/workflows/ci.yml"}]"#;
+        let srv = mock_server_multi(vec![(200, list_resp), (404, r#"{"message":"Not Found"}"#)]);
+        let ev = &WorkflowInjectionTester.test(&test_config(&srv)).unwrap()[0];
+        assert_eq!(ev.raw_data["workflows_checked"].as_u64(), Some(0));
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
+
+    #[test]
     fn no_workflows_directory_is_effective() {
         // Single mock server — 404 on the directory listing.
         use std::io::{Read, Write};
@@ -495,5 +562,53 @@ mod tests {
         let ev = &WorkflowInjectionTester.test(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["workflows_checked"].as_u64(), Some(0));
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = WorkflowInjectionTester;
+        assert_eq!(t.id(), "github.workflow_injection");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "github");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "GITHUB_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_OWNER"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_REPO"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    // ── has_injection_pattern: no-space variants ─────────────────────────────
+
+    #[test]
+    fn nospace_github_event_detected() {
+        // ${{github.event. without space after {{ is also detected
+        assert!(has_injection_pattern("run: echo ${{github.event.issue.title}}"));
+    }
+
+    #[test]
+    fn nospace_github_head_ref_detected() {
+        // ${{github.head_ref without space after {{ is also detected
+        assert!(has_injection_pattern("run: echo ${{github.head_ref}}"));
+    }
+
+    #[test]
+    fn no_run_step_no_detection() {
+        // Even with event expressions, if no `run:` step exists, no detection.
+        assert!(!has_injection_pattern("uses: actions/checkout@v4\necho ${{ github.event.issue.title }}"));
+    }
+
+    #[test]
+    fn no_event_expression_no_detection() {
+        // Only `run:` but no event expressions → safe.
+        assert!(!has_injection_pattern("run: echo hello\nrun: npm test"));
     }
 }

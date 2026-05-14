@@ -352,4 +352,95 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("403"));
     }
+
+    #[test]
+    fn missing_token_errors() {
+        let config = HashMap::from([
+            ("GITHUB_OWNER".to_string(), "org".to_string()),
+            ("GITHUB_REPO".to_string(), "repo".to_string()),
+        ]);
+        let err = UnsignedCommitTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn missing_owner_errors() {
+        let config = HashMap::from([
+            ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+            ("GITHUB_REPO".to_string(), "repo".to_string()),
+        ]);
+        let err = UnsignedCommitTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_OWNER"));
+    }
+
+    #[test]
+    fn missing_repo_errors() {
+        let config = HashMap::from([
+            ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+            ("GITHUB_OWNER".to_string(), "org".to_string()),
+        ]);
+        let err = UnsignedCommitTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("GITHUB_REPO"));
+    }
+
+    #[test]
+    fn signing_disabled_200_is_ineffective() {
+        let srv = mock_server(200, r#"{"enabled":false,"url":"..."}"#);
+        let ev = &UnsignedCommitTester.test(&test_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Commit Signing Not Enforced"));
+        assert!(ev
+            .findings
+            .iter()
+            .find(|f| f.title == "Commit Signing Not Enforced")
+            .unwrap()
+            .severity_id
+            > 0);
+    }
+
+    #[test]
+    fn unexpected_status_returns_err() {
+        // Any status besides 200, 403, 404 should return Err.
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = UnsignedCommitTester.test(&test_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("500"));
+    }
+
+    #[test]
+    fn custom_branch_used_in_endpoint() {
+        let srv = mock_server(200, r#"{"enabled":true}"#);
+        let mut cfg = test_config(&srv);
+        cfg.insert("GITHUB_BRANCH".to_string(), "develop".to_string());
+        let ev = &UnsignedCommitTester.test(&cfg).unwrap()[0];
+        // Effective result still returned; branch was used.
+        assert_eq!(ev.status_id, StatusId::Effective);
+        // The status text should mention the branch.
+        assert!(ev.status.contains("develop"));
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = UnsignedCommitTester;
+        assert_eq!(t.id(), "github.unsigned_commit");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "github");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "GITHUB_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_OWNER"));
+        assert!(creds.iter().any(|c| c.name == "GITHUB_REPO"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
 }

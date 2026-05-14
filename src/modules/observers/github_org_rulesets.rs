@@ -302,4 +302,90 @@ mod tests {
             .iter()
             .any(|f| f.title == "Org Rulesets Not Available"));
     }
+
+    #[test]
+    fn org_rulesets_500_returns_err() {
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = OrgRulesetsObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn org_rulesets_active_without_deletion_is_ineffective() {
+        let srv = mock_server(
+            200,
+            r#"[{"id":1,"enforcement":"active","rules":[{"type":"required_status_checks"}]}]"#,
+        );
+        let ev = &OrgRulesetsObserver
+            .observe(&test_config_with_org(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Org Rulesets Missing Deletion Protection"));
+    }
+
+    #[test]
+    fn org_rulesets_evidence_types() {
+        assert_eq!(OrgRulesetsObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn org_rulesets_credential_requirements() {
+        let reqs = OrgRulesetsObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn org_rulesets_missing_token_errors() {
+        let err = OrgRulesetsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn org_rulesets_missing_org_errors() {
+        let err = OrgRulesetsObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
+
+    #[test]
+    fn org_rulesets_connection_refused_errors() {
+        let mut cfg = test_config_with_org("placeholder");
+        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        let result = OrgRulesetsObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn org_rulesets_non_array_response_errors() {
+        let srv = mock_server(200, r#""not an array""#);
+        let result = OrgRulesetsObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = OrgRulesetsObserver;
+        assert_eq!(obs.id(), "github.org_rulesets");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "github");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
+    }
 }

@@ -1031,4 +1031,189 @@ references:
         let result = csv_escape("-5");
         assert!(result.starts_with("'-"), "Minus-prefixed should be escaped: {result}");
     }
+
+    // ─── extract_references: iso27001 and disa_stig loop bodies ────────────
+
+    #[test]
+    fn extract_references_iso27001_and_disa_stig() {
+        let yaml = r#"
+id: TST-ISO-STIG
+name: ISO and STIG Ref Check
+source: github
+steps: []
+assertions: []
+references:
+  soc2: []
+  nist: []
+  iso27001: ["A.5.15", "A.8.8"]
+  pci_dss: []
+  disa_stig: "V-222400"
+"#;
+        let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
+        let refs = extract_references(&def);
+        assert_eq!(refs.len(), 3);
+        assert!(refs.iter().any(|(fw, id)| fw == "iso27001" && id == "A.5.15"));
+        assert!(refs.iter().any(|(fw, id)| fw == "iso27001" && id == "A.8.8"));
+        assert!(refs.iter().any(|(fw, id)| fw == "disa_stig" && id == "V-222400"));
+    }
+
+    // ─── generate_report: empty checks_dir returns NoData controls ──────────
+
+    #[test]
+    fn generate_report_empty_dir_returns_nodata_controls() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = HashMap::new();
+        let report = generate_report(tmp.path(), "soc2", &config, None, None).unwrap();
+        assert_eq!(report.framework, "soc2");
+        // All controls from catalog should be NoData since no checks ran.
+        assert!(report.controls.iter().all(|c| c.status == ControlStatus::NoData));
+        // The SOC2 catalog has 10 controls.
+        assert_eq!(report.controls.len(), 10);
+    }
+
+    #[test]
+    fn generate_report_with_source_and_profile_filter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = HashMap::new();
+        let report = generate_report(tmp.path(), "nist", &config, Some("github"), Some("L1")).unwrap();
+        assert_eq!(report.framework, "nist");
+        assert_eq!(report.source_filter.as_deref(), Some("github"));
+        assert_eq!(report.profile_filter.as_deref(), Some("L1"));
+        // All catalog controls with no checks → NoData.
+        assert!(report.controls.iter().all(|c| c.status == ControlStatus::NoData));
+    }
+
+    // ─── print_report: public dispatcher ─────────────────────────────────────
+
+    #[test]
+    fn print_report_dispatches_json() {
+        let report = make_report("soc2", vec![]);
+        let mut out = Vec::new();
+        print_report(&mut out, &report, "json").unwrap();
+        let s = String::from_utf8(out).unwrap();
+        let _: serde_json::Value = serde_json::from_str(&s).expect("json dispatch must be valid JSON");
+    }
+
+    #[test]
+    fn print_report_dispatches_csv() {
+        let report = make_report("soc2", vec![]);
+        let mut out = Vec::new();
+        print_report(&mut out, &report, "csv").unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.starts_with("framework,control_id,"), "csv dispatch must start with CSV header");
+    }
+
+    #[test]
+    fn print_report_dispatches_table() {
+        let report = make_report("nist", vec![]);
+        let mut out = Vec::new();
+        print_report(&mut out, &report, "table").unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("NIST"), "table dispatch must include framework name");
+    }
+
+    #[test]
+    fn print_report_unknown_format_falls_through_to_table() {
+        let report = make_report("soc2", vec![]);
+        let mut out = Vec::new();
+        print_report(&mut out, &report, "bogus_format").unwrap();
+        let s = String::from_utf8(out).unwrap();
+        // Unknown format falls through to table (the `_ =>` arm).
+        assert!(s.contains("SOC2"), "unknown format should fall through to table");
+    }
+
+    // ─── print_report_table: Fail and Partial status arms ────────────────────
+
+    #[test]
+    fn print_report_table_shows_fail_status() {
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access Controls".into(),
+                mapped_checks: vec![make_check_result("A", "A", "github", "L1", false)],
+                status: ControlStatus::Fail,
+            },
+        ]);
+        let mut out = Vec::new();
+        print_report_table(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Fail"), "Table must display Fail status");
+    }
+
+    #[test]
+    fn print_report_table_shows_partial_status() {
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.2".into(),
+                control_title: "Auth".into(),
+                mapped_checks: vec![
+                    make_check_result("A", "A", "github", "L1", true),
+                    make_check_result("B", "B", "github", "L1", false),
+                ],
+                status: ControlStatus::Partial,
+            },
+        ]);
+        let mut out = Vec::new();
+        print_report_table(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Partial"), "Table must display Partial status");
+    }
+
+    // ─── print_report_table: title truncation (>38 chars) ────────────────────
+
+    #[test]
+    fn print_report_table_truncates_long_title() {
+        let long_title = "A".repeat(50); // 50 chars → must be truncated to 37 + ellipsis
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: long_title.clone(),
+                mapped_checks: vec![],
+                status: ControlStatus::NoData,
+            },
+        ]);
+        let mut out = Vec::new();
+        print_report_table(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        // The truncated title should appear with a trailing ellipsis character.
+        assert!(s.contains('…'), "Long titles must be truncated with ellipsis");
+        // Full title must NOT appear (it's 50 chars, display is capped at 38).
+        assert!(!s.contains(&long_title), "Full long title must not appear verbatim");
+    }
+
+    // ─── print_report_csv: empty mapped_checks row ───────────────────────────
+
+    #[test]
+    fn print_report_csv_empty_mapped_checks_emits_short_row() {
+        let report = make_report("soc2", vec![
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access Controls".into(),
+                mapped_checks: vec![],
+                status: ControlStatus::NoData,
+            },
+        ]);
+        let mut out = Vec::new();
+        print_report_csv(&mut out, &report).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        let lines: Vec<&str> = s.lines().collect();
+        // Header + 1 data line for the NoData control.
+        assert_eq!(lines.len(), 2, "Should have header + 1 NoData row");
+        // The NoData row ends with trailing commas (empty check fields).
+        assert!(lines[1].ends_with(",,,"), "NoData row must end with empty check fields: {}", lines[1]);
+    }
+
+    // ─── status_csv: Partial and NoData arms ─────────────────────────────────
+
+    #[test]
+    fn status_csv_all_variants() {
+        assert_eq!(status_csv(&ControlStatus::Pass), "pass");
+        assert_eq!(status_csv(&ControlStatus::Fail), "fail");
+        assert_eq!(status_csv(&ControlStatus::Partial), "partial");
+        assert_eq!(status_csv(&ControlStatus::NoData), "no_data");
+    }
 }

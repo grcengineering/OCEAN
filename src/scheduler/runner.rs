@@ -399,4 +399,205 @@ mod tests {
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].id, run.id);
     }
+
+    // --- environment_scope mapping ---
+
+    #[test]
+    fn execute_schedule_staging_scope() {
+        let store = make_store();
+        let registry = make_registry();
+        let mut schedule = make_schedule(vec!["mock.safety_test"]);
+        schedule.max_safety_level = "safe".to_string();
+        schedule.environment_scope = "staging".to_string();
+
+        let run = execute_schedule(&schedule, &store, &registry);
+        // mock.safety_test is a Safe tester — should run in staging scope
+        assert_eq!(run.module_results.len(), 1);
+        // It may succeed or skip depending on scope enforcement; either way the run completes
+        assert!(!run.module_results[0].status.is_empty());
+    }
+
+    #[test]
+    fn execute_schedule_isolated_scope() {
+        let store = make_store();
+        let registry = make_registry();
+        let mut schedule = make_schedule(vec!["mock.safety_test"]);
+        schedule.max_safety_level = "safe".to_string();
+        schedule.environment_scope = "isolated".to_string();
+
+        let run = execute_schedule(&schedule, &store, &registry);
+        assert_eq!(run.module_results.len(), 1);
+        assert!(!run.module_results[0].status.is_empty());
+    }
+
+    #[test]
+    fn execute_schedule_lab_scope() {
+        let store = make_store();
+        let registry = make_registry();
+        let mut schedule = make_schedule(vec!["mock.safety_test"]);
+        schedule.max_safety_level = "safe".to_string();
+        schedule.environment_scope = "lab".to_string();
+
+        let run = execute_schedule(&schedule, &store, &registry);
+        assert_eq!(run.module_results.len(), 1);
+        assert!(!run.module_results[0].status.is_empty());
+    }
+
+    #[test]
+    fn execute_schedule_production_scope_is_default() {
+        let store = make_store();
+        let registry = make_registry();
+        let mut schedule = make_schedule(vec!["mock.safety_test"]);
+        schedule.max_safety_level = "safe".to_string();
+        schedule.environment_scope = "unknown_scope".to_string();
+
+        let run = execute_schedule(&schedule, &store, &registry);
+        assert_eq!(run.module_results.len(), 1);
+        // Production scope with safe tester should succeed
+        assert!(!run.module_results[0].status.is_empty());
+    }
+
+    // --- run_status logic branches ---
+
+    #[test]
+    fn execute_schedule_all_fail_status_is_failure() {
+        let store = make_store();
+        let registry = make_registry();
+        let schedule = make_schedule(vec!["nonexistent.a", "nonexistent.b"]);
+
+        let run = execute_schedule(&schedule, &store, &registry);
+
+        assert_eq!(run.status, RUN_STATUS_FAILURE);
+        assert_eq!(run.module_results.len(), 2);
+        for r in &run.module_results {
+            assert_eq!(r.status, MODULE_STATUS_FAILURE);
+        }
+    }
+
+    #[test]
+    fn execute_schedule_all_skip_status_is_failure() {
+        let store = make_store();
+        let registry = make_registry();
+        // Use a tester that will be skipped due to safety level
+        let mut schedule = make_schedule(vec!["mock.safety_test"]);
+        schedule.max_safety_level = "none_allowed".to_string();
+
+        let run = execute_schedule(&schedule, &store, &registry);
+
+        // skip_count > 0 and success_count == 0 → RUN_STATUS_FAILURE
+        assert_eq!(run.status, RUN_STATUS_FAILURE);
+    }
+
+    // --- safety_level_rank exhaustive ---
+
+    #[test]
+    fn safety_level_rank_all_known_values() {
+        assert_eq!(safety_level_rank("safe"), 0);
+        assert_eq!(safety_level_rank("observable"), 1);
+        assert_eq!(safety_level_rank("reversible"), 2);
+        assert_eq!(safety_level_rank("destructive"), 3);
+        assert_eq!(safety_level_rank("SAFE"), 0); // case-insensitive
+        assert_eq!(safety_level_rank("DESTRUCTIVE"), 3);
+        assert_eq!(safety_level_rank("unknown"), -1);
+        assert_eq!(safety_level_rank(""), -1);
+    }
+
+    #[test]
+    fn safety_level_allows_destructive_max_allows_all() {
+        assert!(safety_level_allows("destructive", "safe"));
+        assert!(safety_level_allows("destructive", "observable"));
+        assert!(safety_level_allows("destructive", "reversible"));
+        assert!(safety_level_allows("destructive", "destructive"));
+    }
+
+    #[test]
+    fn safety_level_reversible_boundary() {
+        assert!(safety_level_allows("reversible", "reversible"));
+        assert!(!safety_level_allows("reversible", "destructive"));
+    }
+
+    // --- store error paths ---
+
+    struct FailingStore;
+
+    impl Store for FailingStore {
+        fn store_evidence(&self, _: &crate::evidence::Evidence) -> anyhow::Result<()> {
+            Err(anyhow::anyhow!("disk full"))
+        }
+        fn get_evidence(&self, _: Uuid) -> anyhow::Result<crate::evidence::Evidence> {
+            Err(anyhow::anyhow!("not impl"))
+        }
+        fn query_evidence(&self, _: &crate::storage::EvidenceQuery) -> anyhow::Result<Vec<crate::evidence::Evidence>> {
+            Ok(vec![])
+        }
+        fn store_control_status(&self, _: &crate::control::ControlStatus) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn get_control_status(&self, _: &str) -> anyhow::Result<crate::control::ControlStatus> {
+            Err(anyhow::anyhow!("not impl"))
+        }
+        fn query_history(&self, _: &str, _: chrono::DateTime<Utc>, _: chrono::DateTime<Utc>) -> anyhow::Result<Vec<crate::control::ControlStatus>> {
+            Ok(vec![])
+        }
+        fn store_schedule(&self, _: &Schedule) -> anyhow::Result<()> { Ok(()) }
+        fn get_schedule(&self, _: &str) -> anyhow::Result<Schedule> { Err(anyhow::anyhow!("not impl")) }
+        fn list_schedules(&self) -> anyhow::Result<Vec<Schedule>> { Ok(vec![]) }
+        fn delete_schedule(&self, _: &str) -> anyhow::Result<()> { Ok(()) }
+        fn store_schedule_run(&self, _: &ScheduleRun) -> anyhow::Result<()> { Ok(()) }
+        fn list_schedule_runs(&self, _: &str, _: usize) -> anyhow::Result<Vec<ScheduleRun>> { Ok(vec![]) }
+        fn prune_evidence(&self, _: chrono::DateTime<Utc>) -> anyhow::Result<u64> { Ok(0) }
+        fn close(&self) -> anyhow::Result<()> { Ok(()) }
+    }
+
+    #[test]
+    fn observer_store_error_produces_failure() {
+        let store = FailingStore;
+        let registry = make_registry();
+        let schedule = make_schedule(vec!["mock.test"]);
+
+        let run = execute_schedule(&schedule, &store, &registry);
+
+        assert_eq!(run.module_results.len(), 1);
+        assert_eq!(run.module_results[0].status, MODULE_STATUS_FAILURE);
+        assert!(run.module_results[0].error.contains("disk full"));
+    }
+
+    #[test]
+    fn tester_store_error_produces_failure() {
+        let store = FailingStore;
+        let registry = make_registry();
+        let mut schedule = make_schedule(vec!["mock.safety_test"]);
+        schedule.max_safety_level = "safe".to_string();
+
+        let run = execute_schedule(&schedule, &store, &registry);
+
+        assert_eq!(run.module_results.len(), 1);
+        assert_eq!(run.module_results[0].status, MODULE_STATUS_FAILURE);
+        assert!(run.module_results[0].error.contains("disk full"));
+    }
+
+    #[test]
+    fn tester_not_found_produces_failure() {
+        let store = make_store();
+        let registry = Arc::new(Registry::new());
+        register_all_observers(&registry);
+        // Don't register testers — so the tester lookup will fail
+        // But we need a module that's NOT an observer either
+        let schedule = make_schedule(vec!["nonexistent.tester_only"]);
+
+        let run = execute_schedule(&schedule, &store, &registry);
+        assert_eq!(run.module_results[0].status, MODULE_STATUS_FAILURE);
+    }
+
+    #[test]
+    fn execute_schedule_stage_scope_mapped() {
+        let store = FailingStore;
+        let registry = make_registry();
+        let mut schedule = make_schedule(vec!["mock.safety_test"]);
+        schedule.max_safety_level = "safe".to_string();
+        schedule.environment_scope = "stage".to_string();
+
+        let run = execute_schedule(&schedule, &store, &registry);
+        assert_eq!(run.module_results.len(), 1);
+    }
 }

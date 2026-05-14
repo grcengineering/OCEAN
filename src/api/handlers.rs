@@ -532,6 +532,190 @@ mod tests {
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     }
 
+    // -----------------------------------------------------------------------
+    // Control Status
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn get_control_status_not_found_returns_error() {
+        let state = make_state();
+        let res = oneshot_get("/api/v1/controls/nonexistent/status", state).await;
+        assert!(
+            res.status() == StatusCode::NOT_FOUND
+                || res.status() == StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[tokio::test]
+    async fn get_control_status_found_returns_200() {
+        let state = make_state();
+        let cs = crate::control::ControlStatus {
+            id: Uuid::new_v4(),
+            control_id: "cc6.1".to_string(),
+            timestamp: Utc::now(),
+            status: "effective".to_string(),
+            confidence: "high".to_string(),
+            evidence_ids: vec![],
+            evaluation_details: "ok".to_string(),
+        };
+        state.store.store_control_status(&cs).unwrap();
+        let res = oneshot_get("/api/v1/controls/cc6.1/status", state).await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    // -----------------------------------------------------------------------
+    // Control History
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn get_control_history_no_params_returns_200() {
+        let state = make_state();
+        let res = oneshot_get("/api/v1/controls/cc6.1/history", state).await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn get_control_history_rfc3339_params() {
+        let state = make_state();
+        let res = oneshot_get(
+            "/api/v1/controls/cc6.1/history?from=2024-01-01T00:00:00Z&to=2024-12-31T23:59:59Z",
+            state,
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn get_control_history_date_only_params() {
+        let state = make_state();
+        let res = oneshot_get(
+            "/api/v1/controls/cc6.1/history?from=2024-01-01&to=2024-12-31",
+            state,
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn get_control_history_invalid_date_uses_defaults() {
+        let state = make_state();
+        let res = oneshot_get(
+            "/api/v1/controls/cc6.1/history?from=garbage&to=garbage",
+            state,
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    // -----------------------------------------------------------------------
+    // Delete schedule not found
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn delete_schedule_not_found_returns_404() {
+        let state = make_state();
+        let app = router(state);
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/v1/schedules/ghost-id")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
+
+    // -----------------------------------------------------------------------
+    // Evidence with source filter
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn list_evidence_with_filters_returns_200() {
+        let state = make_state();
+        state
+            .store
+            .store_evidence(&crate::testutil::make_evidence())
+            .unwrap();
+        let res = oneshot_get("/api/v1/evidence?source=mock&limit=10", state).await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    // -----------------------------------------------------------------------
+    // Get stored evidence by ID
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn get_evidence_found_returns_200() {
+        let state = make_state();
+        let ev = crate::testutil::make_evidence();
+        let id = ev.id;
+        state.store.store_evidence(&ev).unwrap();
+        let res = oneshot_get(&format!("/api/v1/evidence/{id}"), state).await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    // -----------------------------------------------------------------------
+    // Create schedule with enabled omitted (serde default_true)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn create_schedule_without_enabled_defaults_true() {
+        let state = make_state();
+        let app = router(state);
+        let body = serde_json::to_string(&json!({
+            "cron_expr": "0 * * * *",
+            "modules": ["mock.test"],
+            "max_safety_level": "safe",
+            "environment_scope": "production"
+        }))
+        .unwrap();
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/schedules")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::CREATED);
+        let resp_body = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&resp_body).unwrap();
+        assert_eq!(v["enabled"], true);
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_dt unit tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_dt_rfc3339() {
+        let dt = parse_dt("2024-06-15T12:00:00Z");
+        assert!(dt.is_some());
+    }
+
+    #[test]
+    fn parse_dt_date_only() {
+        let dt = parse_dt("2024-06-15");
+        assert!(dt.is_some());
+    }
+
+    #[test]
+    fn parse_dt_invalid_returns_none() {
+        assert!(parse_dt("not-a-date").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Auth
+    // -----------------------------------------------------------------------
+
     #[tokio::test]
     async fn auth_middleware_accepts_valid_token() {
         let dir = std::env::temp_dir();

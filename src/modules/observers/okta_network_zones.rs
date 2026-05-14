@@ -370,4 +370,72 @@ mod tests {
             .iter()
             .any(|f| f.title == "No IP Allowlist Policy Zone Configured"));
     }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = NetworkZonesObserver;
+        assert_eq!(obs.id(), "okta.network_zones");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "okta");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(creds.len() >= 2);
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn domain_only_uses_https_prefix() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test_token".to_string()),
+            ("OKTA_DOMAIN".to_string(), "localhost".to_string()),
+        ]);
+        let result = NetworkZonesObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn missing_token_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
+        ]);
+        let result = NetworkZonesObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
+    }
+
+    #[test]
+    fn missing_domain_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
+        ]);
+        let result = NetworkZonesObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn api_returns_403_errors() {
+        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let result = NetworkZonesObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("403"));
+    }
+
+    #[test]
+    fn api_connection_refused_returns_error() {
+        let cfg = base_config("http://127.0.0.1:1");
+        let result = NetworkZonesObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_json_array_body_errors() {
+        let srv = mock_server(200, r#""not an array""#);
+        let result = NetworkZonesObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
 }

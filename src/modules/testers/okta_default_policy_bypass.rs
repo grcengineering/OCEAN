@@ -527,4 +527,138 @@ mod tests {
             .to_string()
             .contains("403"));
     }
+
+    /// Test: 401 on policies fetch → Err.
+    #[test]
+    fn api_401_returns_err() {
+        let srv = mock_server(vec![(
+            401,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        )]);
+        let result = DefaultPolicyBypassTester.test(&base_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("401"));
+    }
+
+    /// Test: policies present but no system:true → first policy used as fallback.
+    #[test]
+    fn non_system_policy_used_as_fallback() {
+        let policies_body =
+            r#"[{"id":"pol-fallback","name":"Custom Policy","system":false,"type":"MFA_ENROLL"}]"#;
+        let rules_body = r#"[{"id":"rul1","name":"Default Rule","actions":{"enroll":{"self":"CHALLENGE"}}}]"#;
+        let srv = mock_server(vec![(200, policies_body), (200, rules_body)]);
+        let ev = &DefaultPolicyBypassTester.test(&base_config(&srv)).unwrap()[0];
+        // Falls back to first policy — rules have no bypass → Effective.
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert_eq!(ev.observables[0].value, "pol-fallback");
+    }
+
+    /// Test: policies array is empty (policy_id is empty) → Effective / no assessment.
+    #[test]
+    fn empty_policies_returns_effective_no_assessment() {
+        let srv = mock_server(vec![(200, "[]")]);
+        let ev = &DefaultPolicyBypassTester.test(&base_config(&srv)).unwrap()[0];
+        // Empty array → policy_id empty → inconclusive effective.
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert_eq!(ev.raw_data["policies_found"].as_u64(), Some(0));
+        assert_eq!(ev.raw_data["bypass_detected"].as_bool(), Some(false));
+    }
+
+    /// Test: rules endpoint returns 403 → Err.
+    #[test]
+    fn rules_403_returns_err() {
+        let policies_body =
+            r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
+        let srv = mock_server(vec![
+            (200, policies_body),
+            (403, r#"{"errorCode":"E0000006","errorSummary":"Forbidden"}"#),
+        ]);
+        let result = DefaultPolicyBypassTester.test(&base_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("403"));
+    }
+
+    /// Test: rules endpoint returns 401 → Err.
+    #[test]
+    fn rules_401_returns_err() {
+        let policies_body =
+            r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
+        let srv = mock_server(vec![
+            (200, policies_body),
+            (401, r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#),
+        ]);
+        let result = DefaultPolicyBypassTester.test(&base_config(&srv));
+        assert!(result.is_err());
+    }
+
+    /// Test: raw_data has expected keys on success path.
+    #[test]
+    fn raw_data_has_expected_keys() {
+        let policies_body =
+            r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
+        let rules_body =
+            r#"[{"id":"rul1","name":"Default Rule","actions":{"enroll":{"self":"CHALLENGE"}}}]"#;
+        let srv = mock_server(vec![(200, policies_body), (200, rules_body)]);
+        let ev = &DefaultPolicyBypassTester.test(&base_config(&srv)).unwrap()[0];
+        assert!(ev.raw_data.get("test_scenario").is_some());
+        assert!(ev.raw_data.get("default_policy_id").is_some());
+        assert!(ev.raw_data.get("rules_inspected").is_some());
+        assert!(ev.raw_data.get("bypass_detected").is_some());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = DefaultPolicyBypassTester;
+        assert_eq!(t.id(), "okta.default_policy_bypass");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "okta");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    // ── Missed Module trait fns ──────────────────────────────────────────────
+
+    #[test]
+    fn default_policy_bypass_version() {
+        assert_eq!(DefaultPolicyBypassTester.version(), "0.1.0");
+    }
+
+    #[test]
+    fn default_policy_bypass_source_system() {
+        assert_eq!(DefaultPolicyBypassTester.source_system(), "okta");
+    }
+
+    #[test]
+    fn default_policy_bypass_evidence_types() {
+        assert_eq!(DefaultPolicyBypassTester.evidence_types(), &[1001]);
+    }
+
+    #[test]
+    fn default_policy_bypass_credential_requirements_count() {
+        let reqs = DefaultPolicyBypassTester.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+    }
+
+    // ── Rule with no name defaults to "unknown rule" ─────────────────────────
+
+    #[test]
+    fn bypass_rule_with_no_name_shows_unknown() {
+        let policies_body = r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
+        let rules_body = r#"[{"id":"rul1","actions":{"enroll":{"self":"NOT_ALLOWED"}}}]"#;
+        let srv = mock_server(vec![(200, policies_body), (200, rules_body)]);
+        let ev = &DefaultPolicyBypassTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev.raw_data["bypass_rule"].as_str().unwrap().contains("unknown"));
+    }
 }

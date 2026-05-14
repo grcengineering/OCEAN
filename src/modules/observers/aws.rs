@@ -821,6 +821,27 @@ mod tests {
         format!("http://127.0.0.1:{}/", addr.port())
     }
 
+    fn fresh_keys_xml() -> String {
+        let recent = (Utc::now() - chrono::Duration::days(10))
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        format!(
+            r#"<ListAccessKeysResponse>
+  <ListAccessKeysResult>
+    <AccessKeyMetadata>
+      <member>
+        <AccessKeyId>FRESHKEY</AccessKeyId>
+        <Status>Active</Status>
+        <CreateDate>{}</CreateDate>
+        <UserName>alice</UserName>
+      </member>
+    </AccessKeyMetadata>
+  </ListAccessKeysResult>
+</ListAccessKeysResponse>"#,
+            recent
+        )
+    }
+
     fn base_config(base_url: &str) -> HashMap<String, String> {
         HashMap::from([
             ("AWS_ACCESS_KEY_ID".to_string(), "AKID".to_string()),
@@ -846,7 +867,7 @@ mod tests {
         let srv = mock_server(vec![
             ONE_USER.to_string(),
             MFA_ONE.to_string(),
-            KEYS_FRESH.to_string(),
+            fresh_keys_xml(),
         ]);
         let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
@@ -896,7 +917,7 @@ mod tests {
         let srv = mock_server(vec![
             TWO_USERS.to_string(),
             MFA_ONE.to_string(),    // alice mfa
-            KEYS_FRESH.to_string(), // alice keys
+            fresh_keys_xml(),       // alice keys
             MFA_NONE.to_string(),   // bob mfa (none)
             KEYS_STALE.to_string(), // bob keys (stale)
         ]);
@@ -916,5 +937,18 @@ mod tests {
         assert!(ev.raw_data.get("users_without_mfa").is_some());
         assert!(ev.raw_data.get("stale_access_keys").is_some());
         assert!(ev.raw_data.get("max_key_age_days").is_some());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = IamObserver;
+        assert_eq!(obs.id(), "aws.iam");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "aws");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
     }
 }

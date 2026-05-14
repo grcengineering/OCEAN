@@ -578,4 +578,82 @@ mod tests {
         let id2 = MfaBypassTester.test(&base_config(&srv2)).unwrap()[0].id;
         assert_ne!(id1, id2);
     }
+
+    #[test]
+    fn unexpected_status_no_access_token_is_effective() {
+        // A non-400/401 status with no access token falls into the else branch
+        // (mfa_blocked = false, access_token_present = false → unexpected → Effective).
+        let srv = mock_server(
+            200,
+            r#"{"error":"some_other_error","error_codes":[99999]}"#,
+        );
+        let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
+        // No access_token and error_code not in [50076, 50074, interaction_required, 400, 401]
+        // → mfa_blocked = false, access_token_present = false → else branch → Effective
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert!(ev.findings.iter().any(|f| f.title == "MFA Bypass Blocked"));
+    }
+
+    #[test]
+    fn interaction_required_error_is_effective() {
+        let srv = mock_server(
+            400,
+            r#"{"error":"interaction_required","error_codes":[]}"#,
+        );
+        let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = MfaBypassTester;
+        assert_eq!(t.id(), "azure.mfa_bypass");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "azure");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "AZURE_CLIENT_ID"));
+        assert!(creds.iter().any(|c| c.name == "AZURE_TENANT_ID"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    // ── Missed fn: evidence_types ────────────────────────────────────────────
+
+    #[test]
+    fn azure_mfa_bypass_evidence_types() {
+        assert_eq!(MfaBypassTester.evidence_types(), &[1001]);
+    }
+
+    // ── Connection refused error ─────────────────────────────────────────────
+
+    #[test]
+    fn connection_refused_returns_err() {
+        let config = base_config("http://127.0.0.1:1");
+        let result = MfaBypassTester.test(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Azure ROPC request failed"));
+    }
+
+    // ── Error with string error code (interaction_required via "error" field) ─
+
+    #[test]
+    fn interaction_required_via_error_field_is_effective() {
+        // error_codes is empty array, but "error" field = "interaction_required"
+        // The Err::Status arm falls through to or_else and reads the "error" field.
+        let srv = mock_server(
+            400,
+            r#"{"error":"interaction_required","error_description":"AADSTS65001"}"#,
+        );
+        let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert_eq!(ev.raw_data["error_code"].as_str(), Some("interaction_required"));
+    }
 }

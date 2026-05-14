@@ -676,4 +676,127 @@ mod tests {
         assert_eq!(ev.status_id, StatusId::Unknown);
         assert!(ev.status.contains("skipped"));
     }
+
+    #[test]
+    fn missing_api_token_errors() {
+        let config = HashMap::from([
+            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
+            ("OKTA_TEST_USER".to_string(), "u".to_string()),
+            ("OKTA_TEST_PASSWORD".to_string(), "p".to_string()),
+        ]);
+        let err = PrMfaDowngradeTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("OKTA_API_TOKEN"));
+    }
+
+    #[test]
+    fn missing_domain_errors() {
+        let config = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "tok".to_string()),
+            ("OKTA_TEST_USER".to_string(), "u".to_string()),
+            ("OKTA_TEST_PASSWORD".to_string(), "p".to_string()),
+        ]);
+        let err = PrMfaDowngradeTester.test(&config).unwrap_err();
+        assert!(err.to_string().contains("OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn mfa_challenge_status_with_pr_only_is_effective() {
+        // MFA_CHALLENGE is handled same as MFA_REQUIRED.
+        let srv = mock_server(200, MFA_REQUIRED_WITH_WEBAUTHN_ONLY);
+        let body: serde_json::Value = serde_json::from_str(MFA_REQUIRED_WITH_WEBAUTHN_ONLY).unwrap();
+        // Build body with MFA_CHALLENGE status but same factors.
+        let challenge_body = {
+            let mut b = body.clone();
+            b["status"] = serde_json::json!("MFA_CHALLENGE");
+            b.to_string()
+        };
+        let challenge_str: &'static str = Box::leak(challenge_body.into_boxed_str());
+        let srv2 = mock_server(200, challenge_str);
+        let ev = &PrMfaDowngradeTester.test(&base_config(&srv2)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
+
+    #[test]
+    fn other_status_no_factors_is_effective_no_downgrade() {
+        // An unknown authn_status like "LOCKED_OUT" with HTTP 200 — matches
+        // the `|| http_status == 200` branch with no phishable factors offered,
+        // so downgrade_possible = false → Effective with PR-only finding.
+        let srv = mock_server(200, r#"{"status":"LOCKED_OUT"}"#);
+        let ev = &PrMfaDowngradeTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        // No phishable factors, http_status==200 branch → "Only Phishing-Resistant Factors Offered"
+        assert!(ev.findings.iter().any(|f| f.title == "Only Phishing-Resistant Factors Offered"));
+    }
+
+    #[test]
+    fn non_200_unknown_status_hits_else_branch() {
+        // A non-200/401/403 HTTP status with unrecognized authn_status hits the else branch.
+        // Mock returns 500 with LOCKED_OUT body — ureq treats 500 as Err::Status.
+        // The Err arm sets authn_status from body["status"], http_status=500.
+        // None of the branches match (not 401/403, not SUCCESS, not MFA_ENROLL,
+        // not MFA_REQUIRED/MFA_CHALLENGE/200) → else branch.
+        let srv = mock_server(500, r#"{"status":"LOCKED_OUT"}"#);
+        let ev = &PrMfaDowngradeTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+        assert!(ev.findings.iter().any(|f| f.title == "No Downgrade Path Detected"));
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        use crate::module::Tester;
+        let t = PrMfaDowngradeTester;
+        assert_eq!(t.id(), "okta.pr_mfa_downgrade");
+        assert!(!t.name().is_empty());
+        assert_eq!(t.version(), "0.1.0");
+        assert_eq!(t.source_system(), "okta");
+        assert!(!t.evidence_types().is_empty());
+        let creds = t.credential_requirements();
+        assert!(!creds.is_empty());
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+        // Tester trait methods
+        let _safety = t.safety_class();
+        let _scope = t.environment_scope();
+        let _pre = t.pre_flight_checks();
+        let _cleanup = t.cleanup_procedures();
+    }
+
+    // ── Missed fn: evidence_types ────────────────────────────────────────────
+
+    #[test]
+    fn pr_mfa_downgrade_evidence_types() {
+        assert_eq!(PrMfaDowngradeTester.evidence_types(), &[1001]);
+    }
+
+    // ── MFA_ENROLL status branch ─────────────────────────────────────────────
+
+    #[test]
+    fn mfa_enroll_response_details() {
+        let srv = mock_server(200, MFA_ENROLL_RESPONSE);
+        let ev = &PrMfaDowngradeTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev.findings.iter().any(|f| f.title == "MFA Enrollment Incomplete"));
+        assert_eq!(ev.findings[0].severity_id, 2);
+        assert_eq!(ev.raw_data["authn_status"].as_str(), Some("MFA_ENROLL"));
+    }
+
+    // ── SUCCESS status has downgrade_possible = true ─────────────────────────
+
+    #[test]
+    fn success_response_downgrade_possible_true() {
+        let srv = mock_server(200, SUCCESS_RESPONSE);
+        let ev = &PrMfaDowngradeTester.test(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.raw_data["downgrade_possible"].as_bool(), Some(true));
+    }
+
+    // ── Connection refused ────────────────────────────────────────────────────
+
+    #[test]
+    fn connection_refused_returns_err() {
+        let config = base_config("http://127.0.0.1:1");
+        let result = PrMfaDowngradeTester.test(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Okta authn request failed"));
+    }
 }

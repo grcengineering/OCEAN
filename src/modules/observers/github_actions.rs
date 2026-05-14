@@ -285,4 +285,17 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("GITHUB_ORG"));
     }
+
+    #[test]
+    fn actions_evidence_types() {
+        assert_eq!(ActionsPermissionsObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn actions_credential_requirements() {
+        let reqs = ActionsPermissionsObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
 }

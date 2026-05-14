@@ -228,4 +228,52 @@ mod tests {
         let result = OidcConfigObserver.observe(&test_config_with_org(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn oidc_empty_claim_keys_is_ineffective() {
+        let srv = mock_server(200, r#"{"include_claim_keys":[]}"#);
+        let ev = &OidcConfigObserver
+            .observe(&test_config_with_org(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "OIDC Sub-Claim Not Configured"));
+    }
+
+    #[test]
+    fn oidc_evidence_types() {
+        assert_eq!(OidcConfigObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn oidc_credential_requirements() {
+        let reqs = OidcConfigObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn oidc_missing_token_errors() {
+        let err = OidcConfigObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn oidc_missing_org_errors() {
+        let err = OidcConfigObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }

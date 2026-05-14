@@ -967,4 +967,204 @@ references:
         assert_eq!(ctx["check"]["references"]["soc2"], "CC6.1");
         assert_eq!(ctx["check"]["references"]["nist"], "IA-2");
     }
+
+    // --- format_string_or_vec coverage: None variant ---
+
+    #[test]
+    fn build_context_empty_references_use_none_variant() {
+        let checks_dir = TempDir::new().unwrap();
+        // A check with no references at all
+        write_check(checks_dir.path(), "no-refs.check.yaml", r#"
+id: NO-REFS
+name: No Refs Check
+description: ""
+source: github
+profile: L1
+steps: []
+assertions: []
+"#);
+        let defs = load_definitions_from_dir(checks_dir.path());
+        assert_eq!(defs.len(), 1);
+        let ctx = build_context(&defs[0]);
+        // All reference fields should be empty string (from StringOrVec::None)
+        assert_eq!(ctx["check"]["references"]["cis"], "");
+        assert_eq!(ctx["check"]["references"]["nist"], "");
+        assert_eq!(ctx["check"]["references"]["soc2"], "");
+        assert_eq!(ctx["check"]["references"]["iso27001"], "");
+        assert_eq!(ctx["check"]["references"]["pci_dss"], "");
+    }
+
+    // --- format_string_or_vec: Many variant ---
+
+    #[test]
+    fn build_context_many_references_joined_with_comma() {
+        let checks_dir = TempDir::new().unwrap();
+        write_check(checks_dir.path(), "many-refs.check.yaml", r#"
+id: MANY-REFS
+name: Many Refs Check
+description: ""
+source: github
+profile: L1
+steps: []
+assertions: []
+references:
+  nist: ["IA-2(1)", "IA-2(2)", "IA-3"]
+  cis: "CIS-5.1"
+"#);
+        let defs = load_definitions_from_dir(checks_dir.path());
+        assert_eq!(defs.len(), 1);
+        let ctx = build_context(&defs[0]);
+        let nist = ctx["check"]["references"]["nist"].as_str().unwrap();
+        assert!(nist.contains("IA-2(1)"));
+        assert!(nist.contains("IA-2(2)"));
+        assert!(nist.contains("IA-3"));
+        assert_eq!(ctx["check"]["references"]["cis"], "CIS-5.1");
+    }
+
+    // --- native implementation stub ---
+
+    #[test]
+    fn generate_native_implementation_produces_stub() {
+        let checks_dir = TempDir::new().unwrap();
+        let output_dir = TempDir::new().unwrap();
+
+        // A check marked as native implementation
+        write_check(checks_dir.path(), "native.check.yaml", r#"
+id: GH-NATIVE-01
+name: Native Check
+description: ""
+source: github
+profile: L1
+implementation: native
+steps: []
+assertions: []
+"#);
+
+        let mut out = Vec::new();
+        let count = generate(
+            &mut out,
+            checks_dir.path(),
+            &BuildTarget::ApiScript,
+            output_dir.path(),
+            false,
+            false,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(count, 1);
+        // Should produce a .stub.sh file, not a regular .sh
+        let stub_path = output_dir.path().join("gh-native-01.stub.sh");
+        assert!(stub_path.exists(), "stub file should exist: {:?}", stub_path);
+        let content = std::fs::read_to_string(&stub_path).unwrap();
+        assert!(content.contains("native implementation"));
+        assert!(content.contains("GH-NATIVE-01"));
+    }
+
+    // --- generate: filter by ID prefix ---
+
+    #[test]
+    fn generate_filter_by_id_prefix() {
+        let checks_dir = TempDir::new().unwrap();
+        let output_dir = TempDir::new().unwrap();
+        write_check(checks_dir.path(), "gh-test-01.check.yaml", SIMPLE_CHECK);
+        write_check(checks_dir.path(), "aws-test-01.check.yaml", r#"
+id: AWS-TEST-01
+name: AWS Test
+description: ""
+source: aws
+profile: L1
+steps: []
+assertions: []
+"#);
+
+        let mut out = Vec::new();
+        let count = generate(
+            &mut out,
+            checks_dir.path(),
+            &BuildTarget::ApiScript,
+            output_dir.path(),
+            false,
+            false,
+            Some("GH-"),
+        )
+        .unwrap();
+        // Only the GH- prefixed check should match
+        assert_eq!(count, 1);
+    }
+
+    // --- build_context: remediation_cli present ---
+
+    #[test]
+    fn build_context_remediation_cli_present() {
+        let checks_dir = TempDir::new().unwrap();
+        write_check(checks_dir.path(), "rem.check.yaml", r#"
+id: REM-01
+name: Remediation Check
+description: ""
+source: github
+profile: L1
+steps: []
+assertions: []
+remediation:
+  description: "Fix it"
+  cli:
+    command: "gh org settings update --require-2fa=true"
+  steps:
+    - "Run the command above"
+"#);
+        let defs = load_definitions_from_dir(checks_dir.path());
+        assert_eq!(defs.len(), 1);
+        let ctx = build_context(&defs[0]);
+        let rem_cli = ctx["check"]["remediation_cli"].as_str();
+        assert!(rem_cli.is_some(), "remediation_cli should be Some");
+        assert!(rem_cli.unwrap().contains("require-2fa"));
+    }
+
+    // --- build_context: gh_path stripping ---
+
+    #[test]
+    fn build_context_gh_path_strips_github_api_prefix() {
+        let checks_dir = TempDir::new().unwrap();
+        write_check(checks_dir.path(), "ghpath.check.yaml", r#"
+id: GHPATH-01
+name: GH Path Check
+description: ""
+source: github
+profile: L1
+steps:
+  - id: list_repos
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/myorg/repos"
+      headers: {}
+assertions: []
+"#);
+        let defs = load_definitions_from_dir(checks_dir.path());
+        assert_eq!(defs.len(), 1);
+        let ctx = build_context(&defs[0]);
+        let steps = ctx["check"]["steps"].as_array().unwrap();
+        assert_eq!(steps.len(), 1);
+        let gh_path = steps[0]["gh_path"].as_str().unwrap();
+        // Should strip the "https://api.github.com/" prefix
+        assert_eq!(gh_path, "orgs/myorg/repos");
+    }
+
+    // --- BuildTarget::from_str case insensitivity ---
+
+    #[test]
+    fn build_target_from_str_case_insensitive() {
+        assert_eq!(BuildTarget::from_str("API-SCRIPT").unwrap(), BuildTarget::ApiScript);
+        assert_eq!(BuildTarget::from_str("GH-CLI").unwrap(), BuildTarget::GhCli);
+        assert_eq!(BuildTarget::from_str("TERRAFORM").unwrap(), BuildTarget::Terraform);
+    }
+
+    // --- extension for ApiScript and GhCli ---
+
+    #[test]
+    fn api_script_and_gh_cli_extension_is_sh() {
+        assert_eq!(BuildTarget::ApiScript.extension(), "sh");
+        assert_eq!(BuildTarget::GhCli.extension(), "sh");
+    }
 }

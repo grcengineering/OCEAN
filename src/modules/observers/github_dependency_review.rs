@@ -227,4 +227,72 @@ mod tests {
         let result = DependencyReviewObserver.observe(&test_config(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn dependency_review_evidence_types() {
+        assert_eq!(DependencyReviewObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn dependency_review_credential_requirements() {
+        let reqs = DependencyReviewObserver.credential_requirements();
+        assert_eq!(reqs.len(), 3);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_REPO" && r.required));
+    }
+
+    #[test]
+    fn dependency_review_missing_token_errors() {
+        let err = DependencyReviewObserver
+            .observe(&HashMap::from([
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn dependency_review_missing_owner_errors() {
+        let err = DependencyReviewObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_OWNER"));
+    }
+
+    #[test]
+    fn dependency_review_missing_repo_errors() {
+        let err = DependencyReviewObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_REPO"));
+    }
+
+    #[test]
+    fn dependency_review_connection_refused_errors() {
+        let mut cfg = test_config("placeholder");
+        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        let result = DependencyReviewObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = DependencyReviewObserver;
+        assert_eq!(obs.id(), "github.dependency_review");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "github");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
+    }
 }

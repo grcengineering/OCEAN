@@ -711,4 +711,228 @@ mod tests {
         assert_eq!(decoded.label, "test label");
         assert!(decoded.passed);
     }
+
+    // --- SupersetOf failure branch ---
+
+    #[test]
+    fn cross_check_superset_of_fails_when_missing_required_values() {
+        // Export has IPs that local doesn't cover → superset fails
+        let export_ev = make_evidence_with_observables(
+            3002,
+            1,
+            true,
+            vec![obs("ip_range", "10.0.0.1"), obs("ip_range", "10.0.0.2")],
+        );
+        let local_ev = make_evidence_with_observables(
+            3001,
+            1,
+            true,
+            vec![obs("ip_range", "10.0.0.1")], // missing 10.0.0.2
+        );
+        let mut map = HashMap::new();
+        map.insert((3002, Some(1)), vec![export_ev]);
+        map.insert((3001, Some(1)), vec![local_ev]);
+
+        let components = vec![
+            ComponentSpec {
+                id: "src".to_string(),
+                evidence_class: 3002,
+                activity_id: Some(1),
+                required: true,
+                exports: vec![ExportSpec {
+                    name: "required_ips".to_string(),
+                    obs_type: "ip_range".to_string(),
+                }],
+                cross_checks: vec![],
+            },
+            ComponentSpec {
+                id: "dst".to_string(),
+                evidence_class: 3001,
+                activity_id: Some(1),
+                required: true,
+                exports: vec![],
+                cross_checks: vec![CrossCheck {
+                    uses: "required_ips".to_string(),
+                    obs_type: "ip_range".to_string(),
+                    assertion: CrossCheckAssertion::SupersetOf,
+                    label: "Local must cover all required IPs".to_string(),
+                }],
+            },
+        ];
+
+        let (status, checks) = evaluate_composite_with_components(&components, &map);
+        assert_eq!(status, "ineffective");
+        assert!(!checks[0].passed);
+        assert!(checks[0].reason.contains("not found locally"));
+    }
+
+    // --- ContainsAny failure branch ---
+
+    #[test]
+    fn cross_check_contains_any_fails_when_no_overlap() {
+        let export_ev = make_evidence_with_observables(
+            3002,
+            1,
+            true,
+            vec![obs("domain", "a.example.com")],
+        );
+        let local_ev = make_evidence_with_observables(
+            3001,
+            1,
+            true,
+            vec![obs("domain", "b.different.com")], // no overlap
+        );
+        let mut map = HashMap::new();
+        map.insert((3002, Some(1)), vec![export_ev]);
+        map.insert((3001, Some(1)), vec![local_ev]);
+
+        let components = vec![
+            ComponentSpec {
+                id: "src".to_string(),
+                evidence_class: 3002,
+                activity_id: Some(1),
+                required: true,
+                exports: vec![ExportSpec {
+                    name: "known_domains".to_string(),
+                    obs_type: "domain".to_string(),
+                }],
+                cross_checks: vec![],
+            },
+            ComponentSpec {
+                id: "dst".to_string(),
+                evidence_class: 3001,
+                activity_id: Some(1),
+                required: true,
+                exports: vec![],
+                cross_checks: vec![CrossCheck {
+                    uses: "known_domains".to_string(),
+                    obs_type: "domain".to_string(),
+                    assertion: CrossCheckAssertion::ContainsAny,
+                    label: "Must share at least one domain".to_string(),
+                }],
+            },
+        ];
+
+        let (status, checks) = evaluate_composite_with_components(&components, &map);
+        assert_eq!(status, "ineffective");
+        assert!(!checks[0].passed);
+        assert!(checks[0].reason.contains("no overlap"));
+    }
+
+    // --- cross_check with missing export (uses refers to non-existent export) ---
+
+    #[test]
+    fn cross_check_uses_nonexistent_export_empty_set() {
+        // A cross_check that references an export that was never populated
+        let local_ev = make_evidence_with_observables(
+            3001,
+            1,
+            true,
+            vec![obs("ip_range", "10.0.0.1")],
+        );
+        let mut map = HashMap::new();
+        map.insert((3001, Some(1)), vec![local_ev]);
+
+        let components = vec![ComponentSpec {
+            id: "dst".to_string(),
+            evidence_class: 3001,
+            activity_id: Some(1),
+            required: true,
+            exports: vec![],
+            cross_checks: vec![CrossCheck {
+                uses: "nonexistent_export".to_string(),
+                obs_type: "ip_range".to_string(),
+                assertion: CrossCheckAssertion::SubsetOf,
+                label: "SubsetOf missing export".to_string(),
+            }],
+        }];
+
+        // SubsetOf against empty referenced set: all local values are NOT in the empty set
+        let (status, checks) = evaluate_composite_with_components(&components, &map);
+        // Local has values not in the empty exported set → fails
+        assert_eq!(status, "ineffective");
+        assert!(!checks[0].passed);
+    }
+
+    // --- Component with no activity_id (None key) ---
+
+    #[test]
+    fn component_with_none_activity_id() {
+        let ev = make_evidence(3002, 0, true);
+        let key = (3002, None::<i32>);
+        let mut map = HashMap::new();
+        map.insert(key, vec![ev]);
+
+        let components = vec![ComponentSpec {
+            id: "no-activity".to_string(),
+            evidence_class: 3002,
+            activity_id: None,
+            required: true,
+            exports: vec![],
+            cross_checks: vec![],
+        }];
+
+        let (status, _) = evaluate_composite_with_components(&components, &map);
+        assert_eq!(status, "effective");
+    }
+
+    // --- evaluate_composite: only one component ineffective causes failure ---
+
+    #[test]
+    fn composite_with_three_components_one_missing() {
+        let ctrl = make_composite(vec!["ctrl.a", "ctrl.b", "ctrl.c"]);
+        let results = vec![
+            result("ctrl.a", "effective"),
+            result("ctrl.c", "effective"),
+            // ctrl.b is missing
+        ];
+        assert_eq!(evaluate_composite(&ctrl, &results), "ineffective");
+    }
+
+    // --- Nonempty reason text when export is non-empty ---
+
+    #[test]
+    fn cross_check_nonempty_reason_text_when_passing() {
+        let waf_ev = make_evidence_with_observables(
+            3002,
+            1,
+            true,
+            vec![obs("ip_range", "10.0.0.1"), obs("ip_range", "10.0.0.2")],
+        );
+        let mut map = HashMap::new();
+        map.insert((3002, Some(1)), vec![waf_ev]);
+
+        let components = vec![
+            ComponentSpec {
+                id: "waf".to_string(),
+                evidence_class: 3002,
+                activity_id: Some(1),
+                required: true,
+                exports: vec![ExportSpec {
+                    name: "waf_ips".to_string(),
+                    obs_type: "ip_range".to_string(),
+                }],
+                cross_checks: vec![],
+            },
+            ComponentSpec {
+                id: "checker".to_string(),
+                evidence_class: 3001,
+                activity_id: Some(1),
+                required: false,
+                exports: vec![],
+                cross_checks: vec![CrossCheck {
+                    uses: "waf_ips".to_string(),
+                    obs_type: "ip_range".to_string(),
+                    assertion: CrossCheckAssertion::Nonempty,
+                    label: "WAF IPs non-empty".to_string(),
+                }],
+            },
+        ];
+
+        let (status, checks) = evaluate_composite_with_components(&components, &map);
+        assert_eq!(status, "effective");
+        assert!(checks[0].passed);
+        // Reason should mention count
+        assert!(checks[0].reason.contains("2 values") || checks[0].reason.contains("non-empty"));
+    }
 }

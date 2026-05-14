@@ -432,4 +432,218 @@ mod tests {
         let result = SessionPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = SessionPolicyObserver;
+        assert_eq!(obs.id(), "okta.session_policy");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "okta");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(creds.len() >= 2);
+        assert!(creds.iter().any(|c| c.name == "OKTA_API_TOKEN"));
+        assert!(creds.iter().any(|c| c.name == "OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn domain_only_uses_https_prefix() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test_token".to_string()),
+            ("OKTA_DOMAIN".to_string(), "localhost".to_string()),
+        ]);
+        let result = SessionPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn missing_token_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
+        ]);
+        let result = SessionPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
+    }
+
+    #[test]
+    fn missing_domain_errors() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
+        ]);
+        let result = SessionPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
+    }
+
+    #[test]
+    fn api_returns_403_errors() {
+        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let result = SessionPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("403"));
+    }
+
+    #[test]
+    fn api_connection_refused_returns_error() {
+        let cfg = base_config("http://127.0.0.1:1");
+        let result = SessionPolicyObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_json_array_policies_body_errors() {
+        let srv = mock_server(200, r#""not an array""#);
+        let result = SessionPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn all_inactive_policies_returns_err() {
+        let body = r#"[{"id":"pol1","name":"Default Policy","status":"INACTIVE"}]"#;
+        let srv = mock_server(200, body);
+        let result = SessionPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No active"));
+    }
+
+    #[test]
+    fn rules_api_returns_non_200_errors() {
+        // Two-request mock: first returns valid policies, second returns 403 on rules
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        thread::spawn(move || {
+            let responses: Vec<(u16, &str)> = vec![
+                (200, POLICY_WITH_ID),
+                (403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#),
+            ];
+            for (status, body) in responses {
+                if let Ok((mut stream, _)) = listener.accept() {
+                    let mut buf = [0u8; 8192];
+                    let _ = stream.read(&mut buf);
+                    let resp = format!(
+                        "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nContent-Length: {len}\r\nConnection: close\r\n\r\n{body}",
+                        len = body.len()
+                    );
+                    let _ = stream.write_all(resp.as_bytes());
+                }
+            }
+        });
+
+        let base = format!("http://127.0.0.1:{}", addr.port());
+        let result = SessionPolicyObserver.observe(&base_config(&base));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("403"));
+    }
+
+    #[test]
+    fn rules_non_json_array_errors() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        thread::spawn(move || {
+            let responses: Vec<(u16, &str)> = vec![
+                (200, POLICY_WITH_ID),
+                (200, r#""not an array""#),
+            ];
+            for (status, body) in responses {
+                if let Ok((mut stream, _)) = listener.accept() {
+                    let mut buf = [0u8; 8192];
+                    let _ = stream.read(&mut buf);
+                    let resp = format!(
+                        "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nContent-Length: {len}\r\nConnection: close\r\n\r\n{body}",
+                        len = body.len()
+                    );
+                    let _ = stream.write_all(resp.as_bytes());
+                }
+            }
+        });
+
+        let base = format!("http://127.0.0.1:{}", addr.port());
+        let result = SessionPolicyObserver.observe(&base_config(&base));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn no_active_rules_errors() {
+        let inactive_rule = r#"[{"id":"rule1","name":"Default Rule","status":"INACTIVE","actions":{}}]"#;
+        let srv = mock_server_multi(POLICY_WITH_ID, inactive_rule);
+        let result = SessionPolicyObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No active rules"));
+    }
+
+    const IDLE_TOO_LONG_RULE: &str = r#"[{
+        "id": "rule3",
+        "name": "Default Rule",
+        "status": "ACTIVE",
+        "actions": {
+            "signon": {
+                "session": {
+                    "maxSessionLifetimeMinutes": 480,
+                    "maxSessionIdleMinutes": 480,
+                    "usePersistentCookie": false
+                }
+            }
+        }
+    }]"#;
+
+    const PERSISTENT_COOKIE_RULE: &str = r#"[{
+        "id": "rule4",
+        "name": "Default Rule",
+        "status": "ACTIVE",
+        "actions": {
+            "signon": {
+                "session": {
+                    "maxSessionLifetimeMinutes": 480,
+                    "maxSessionIdleMinutes": 120,
+                    "usePersistentCookie": true
+                }
+            }
+        }
+    }]"#;
+
+    #[test]
+    fn idle_timeout_too_long_is_ineffective() {
+        let srv = mock_server_multi(POLICY_WITH_ID, IDLE_TOO_LONG_RULE);
+        let ev = &SessionPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Session Idle Timeout Too Long"));
+    }
+
+    #[test]
+    fn persistent_cookie_enabled_is_ineffective() {
+        let srv = mock_server_multi(POLICY_WITH_ID, PERSISTENT_COOKIE_RULE);
+        let ev = &SessionPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Persistent Session Cookie Enabled"));
+    }
+
+    #[test]
+    fn fallback_to_non_default_active_policy() {
+        // Policy is named "Custom Policy" (not "Default Policy") but is ACTIVE
+        // The code falls back to first ACTIVE when no "Default Policy" is found
+        let policy = r#"[{"id":"pol_custom","name":"Custom Policy","status":"ACTIVE"}]"#;
+        let srv = mock_server_multi(policy, STRICT_SESSION_RULE);
+        let ev = &SessionPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
 }

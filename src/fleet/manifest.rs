@@ -486,4 +486,211 @@ targets:
         let result = resolve_env_ref("acme-corp").unwrap();
         assert_eq!(result, "acme-corp");
     }
+
+    // ── from_file tests ───────────────────────────────────────────────────────
+
+    #[test]
+    fn from_file_parses_valid_manifest() {
+        std::env::set_var("FILE_TEST_TOKEN", "file_token_value");
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("fleet.yaml");
+        std::fs::write(
+            &path,
+            br#"
+fleet:
+  name: "File Fleet"
+targets:
+  - id: "github-file"
+    source: github
+    credentials:
+      GITHUB_TOKEN: "${FILE_TEST_TOKEN}"
+"#,
+        )
+        .unwrap();
+
+        let manifest = FleetManifest::from_file(&path).unwrap();
+        assert_eq!(manifest.fleet.name, "File Fleet");
+        assert_eq!(manifest.targets.len(), 1);
+        assert_eq!(
+            manifest.targets[0].credentials.get("GITHUB_TOKEN").unwrap(),
+            "file_token_value"
+        );
+    }
+
+    #[test]
+    fn from_file_nonexistent_returns_error() {
+        let err = FleetManifest::from_file(std::path::Path::new("/nonexistent/fleet.yaml"))
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("cannot read fleet manifest"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn from_file_oversized_returns_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("big.yaml");
+        // Write more than 256KB
+        let big_content = vec![b' '; (MAX_MANIFEST_SIZE as usize) + 1];
+        std::fs::write(&path, &big_content).unwrap();
+        let err = FleetManifest::from_file(&path).unwrap_err();
+        assert!(
+            err.to_string().contains("exceeds maximum size"),
+            "unexpected error: {err}"
+        );
+    }
+
+    // ── allowed_credentials source coverage ──────────────────────────────────
+
+    #[test]
+    fn okta_source_credential_allowlist() {
+        std::env::set_var("OKTA_API_TOKEN_TEST", "tok");
+        let yaml = br#"
+fleet:
+  name: "Okta Fleet"
+targets:
+  - id: "okta-main"
+    source: okta
+    credentials:
+      OKTA_API_TOKEN: "${OKTA_API_TOKEN_TEST}"
+"#;
+        std::env::set_var("OKTA_API_TOKEN", "real_okta_tok");
+        let manifest = FleetManifest::from_yaml(yaml).unwrap();
+        assert_eq!(manifest.targets[0].source, "okta");
+    }
+
+    #[test]
+    fn okta_disallows_github_credentials() {
+        let yaml = br#"
+fleet:
+  name: "Okta Bad Cred"
+targets:
+  - id: "okta-bad"
+    source: okta
+    credentials:
+      GITHUB_TOKEN: "somevalue"
+"#;
+        let err = FleetManifest::from_yaml(yaml).unwrap_err();
+        assert!(
+            err.to_string().contains("not allowed for source 'okta'"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn aws_source_credential_allowlist() {
+        std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAFAKE");
+        std::env::set_var("AWS_SECRET_ACCESS_KEY", "fakesecret");
+        let yaml = br#"
+fleet:
+  name: "AWS Fleet"
+targets:
+  - id: "aws-main"
+    source: aws
+    credentials:
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+"#;
+        let manifest = FleetManifest::from_yaml(yaml).unwrap();
+        assert_eq!(manifest.targets[0].source, "aws");
+        assert_eq!(manifest.targets.len(), 1);
+    }
+
+    #[test]
+    fn azure_source_credential_allowlist() {
+        std::env::set_var("AZURE_CLIENT_ID", "fake-client-id");
+        std::env::set_var("AZURE_CLIENT_SECRET", "fake-secret");
+        std::env::set_var("AZURE_TENANT_ID", "fake-tenant");
+        let yaml = br#"
+fleet:
+  name: "Azure Fleet"
+targets:
+  - id: "azure-main"
+    source: azure
+    credentials:
+      AZURE_CLIENT_ID: "${AZURE_CLIENT_ID}"
+      AZURE_CLIENT_SECRET: "${AZURE_CLIENT_SECRET}"
+      AZURE_TENANT_ID: "${AZURE_TENANT_ID}"
+"#;
+        let manifest = FleetManifest::from_yaml(yaml).unwrap();
+        assert_eq!(manifest.targets[0].source, "azure");
+    }
+
+    // ── is_valid_target_id edge cases ─────────────────────────────────────────
+
+    #[test]
+    fn valid_target_ids_accepted() {
+        assert!(is_valid_target_id("a"));
+        assert!(is_valid_target_id("abc123"));
+        assert!(is_valid_target_id("my-target"));
+        assert!(is_valid_target_id("my_target"));
+        assert!(is_valid_target_id("A1"));
+        // max length: 64 chars total (1 start + 63 more)
+        let long_id = "a".repeat(64);
+        assert!(is_valid_target_id(&long_id));
+    }
+
+    #[test]
+    fn invalid_target_ids_rejected() {
+        assert!(!is_valid_target_id("")); // empty
+        assert!(!is_valid_target_id("-start")); // starts with hyphen
+        assert!(!is_valid_target_id("_start")); // starts with underscore — not allowed by regex
+        assert!(!is_valid_target_id("has space"));
+        // 65 chars total — exceeds max
+        let too_long = "a".repeat(65);
+        assert!(!is_valid_target_id(&too_long));
+    }
+
+    // ── manifest without description field ────────────────────────────────────
+
+    #[test]
+    fn manifest_without_description() {
+        std::env::set_var("NODESC_TOKEN", "tok");
+        let yaml = br#"
+fleet:
+  name: "No Desc Fleet"
+targets:
+  - id: "gh-nodesc"
+    source: github
+    credentials:
+      GITHUB_TOKEN: "${NODESC_TOKEN}"
+"#;
+        let manifest = FleetManifest::from_yaml(yaml).unwrap();
+        assert!(manifest.fleet.description.is_none());
+    }
+
+    // ── resolve_env_ref: value that looks like partial ref but isn't ──────────
+
+    #[test]
+    fn value_without_dollar_brace_passes_through() {
+        let result = resolve_env_ref("just_a_string_with_no_refs").unwrap();
+        assert_eq!(result, "just_a_string_with_no_refs");
+    }
+
+    #[test]
+    fn value_with_single_dollar_sign_passes_through() {
+        let result = resolve_env_ref("$NOT_A_REF").unwrap();
+        assert_eq!(result, "$NOT_A_REF");
+    }
+
+    // ── is_valid_env_var_name edge cases ──────────────────────────────────────
+
+    #[test]
+    fn env_var_name_starting_with_digit_rejected() {
+        let err = resolve_env_ref("${1INVALID}").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid env var name"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn env_var_name_with_lowercase_rejected() {
+        let err = resolve_env_ref("${lowercase_var}").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid env var name"),
+            "unexpected error: {err}"
+        );
+    }
 }

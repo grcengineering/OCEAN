@@ -581,4 +581,87 @@ mod tests {
             .iter()
             .any(|f| f.title == "No Status Check Contexts Defined"));
     }
+
+    #[test]
+    fn bp_observer_no_minimum_review_count_finding() {
+        let body = r#"{
+            "required_pull_request_reviews": {
+                "dismiss_stale_reviews": true,
+                "required_approving_review_count": 0
+            },
+            "required_status_checks": { "strict": true, "contexts": ["ci"] },
+            "enforce_admins": { "enabled": true }
+        }"#;
+        let srv = mock_server(200, body);
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "No Minimum Review Count"));
+    }
+
+    #[test]
+    fn bp_observer_status_checks_not_required_finding() {
+        let body = r#"{
+            "required_pull_request_reviews": {
+                "dismiss_stale_reviews": true,
+                "required_approving_review_count": 2
+            },
+            "enforce_admins": { "enabled": true }
+        }"#;
+        let srv = mock_server(200, body);
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Status Checks Not Required"));
+    }
+
+    #[test]
+    fn bp_observer_admin_enforcement_disabled_finding() {
+        let body = r#"{
+            "required_pull_request_reviews": {
+                "dismiss_stale_reviews": true,
+                "required_approving_review_count": 2
+            },
+            "required_status_checks": { "strict": true, "contexts": ["ci"] },
+            "enforce_admins": { "enabled": false }
+        }"#;
+        let srv = mock_server(200, body);
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Admin Enforcement Disabled"));
+    }
+
+    #[test]
+    fn bp_observer_branch_deletion_allowed_finding() {
+        let body = r#"{
+            "required_pull_request_reviews": {
+                "dismiss_stale_reviews": true,
+                "required_approving_review_count": 2
+            },
+            "required_status_checks": { "strict": true, "contexts": ["ci"] },
+            "enforce_admins": { "enabled": true },
+            "allow_force_pushes": { "enabled": false },
+            "allow_deletions": { "enabled": true }
+        }"#;
+        let srv = mock_server(200, body);
+        let ev = &BranchProtectionObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Branch Deletion Allowed"));
+    }
 }

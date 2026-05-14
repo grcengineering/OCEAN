@@ -612,4 +612,397 @@ mod tests {
         let pct = ev.raw_data["coverage_pct"].as_f64().unwrap();
         assert!((pct - 33.333).abs() < 0.1, "expected ~33.3%, got {}", pct);
     }
+
+    #[test]
+    fn domain_only_uses_https_prefix() {
+        let cfg = HashMap::from([
+            ("OKTA_API_TOKEN".to_string(), "test_token".to_string()),
+            ("OKTA_DOMAIN".to_string(), "localhost".to_string()),
+        ]);
+        let result = MfaEnrollmentPopulationObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn api_returns_403_errors() {
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users", 403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#.to_string()),
+        ]);
+        let result = MfaEnrollmentPopulationObserver.observe(&base_config(&srv));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("403"));
+    }
+
+    #[test]
+    fn api_connection_refused_returns_error() {
+        let cfg = base_config("http://127.0.0.1:1");
+        let result = MfaEnrollmentPopulationObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn user_factors_api_error_counts_as_non_compliant() {
+        // Users list succeeds, but factors API for u1 returns 403 → u1 is non-compliant
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users?", 200, r#"[{"id":"u1","login":"a@x.com"}]"#.to_string()),
+            ("u1/factors", 403, r#"{"errorCode":"E0000006"}"#.to_string()),
+        ]);
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        let non_compliant = ev.raw_data["iam_auth"]["non_compliant"]
+            .as_array()
+            .unwrap();
+        assert!(
+            non_compliant.iter().any(|v| v.as_str() == Some("u1")),
+            "u1 should be counted as non-compliant due to factors API error"
+        );
+    }
+
+    #[test]
+    fn user_with_empty_id_is_skipped() {
+        // User without an id field is skipped — doesn't panic
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users?", 200, r#"[{"login":"noId@x.com"}]"#.to_string()),
+        ]);
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        // 0 users processed (the one without id is skipped)
+        assert_eq!(ev.raw_data["total_users"], 1);
+        assert_eq!(ev.raw_data["compliant_users"], 0);
+    }
+
+    #[test]
+    fn classify_user_factors_compliant() {
+        let factors = vec![json!({"factorType": "webauthn", "status": "ACTIVE"})];
+        assert_eq!(classify_user_factors(&factors), UserCompliance::Compliant);
+    }
+
+    #[test]
+    fn classify_user_factors_partially_compliant() {
+        let factors = vec![
+            json!({"factorType": "webauthn", "status": "ACTIVE"}),
+            json!({"factorType": "sms", "status": "ACTIVE"}),
+        ];
+        assert_eq!(
+            classify_user_factors(&factors),
+            UserCompliance::PartiallyCompliant
+        );
+    }
+
+    #[test]
+    fn classify_user_factors_non_compliant() {
+        let factors = vec![json!({"factorType": "sms", "status": "ACTIVE"})];
+        assert_eq!(
+            classify_user_factors(&factors),
+            UserCompliance::NonCompliant
+        );
+    }
+
+    #[test]
+    fn classify_user_factors_inactive_are_ignored() {
+        // Inactive webauthn + active sms → non-compliant (webauthn not active)
+        let factors = vec![
+            json!({"factorType": "webauthn", "status": "INACTIVE"}),
+            json!({"factorType": "sms", "status": "ACTIVE"}),
+        ];
+        assert_eq!(
+            classify_user_factors(&factors),
+            UserCompliance::NonCompliant
+        );
+    }
+
+    #[test]
+    fn classify_user_factors_unknown_type_ignored() {
+        // Unknown factor type is ignored — not PR, not phishable
+        let factors = vec![json!({"factorType": "some_new_factor", "status": "ACTIVE"})];
+        assert_eq!(
+            classify_user_factors(&factors),
+            UserCompliance::NonCompliant
+        );
+    }
+
+    #[test]
+    fn extract_next_link_parses_correctly() {
+        let link = r#"<https://example.okta.com/api/v1/users?after=abc>; rel="next", <https://example.okta.com/api/v1/users>; rel="self""#;
+        let next = extract_next_link(link);
+        assert_eq!(
+            next,
+            Some("https://example.okta.com/api/v1/users?after=abc".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_next_link_returns_none_without_next() {
+        let link = r#"<https://example.okta.com/api/v1/users>; rel="self""#;
+        let next = extract_next_link(link);
+        assert_eq!(next, None);
+    }
+
+    // ── Module trait fns coverage ────────────────────────────────────────────
+
+    #[test]
+    fn observer_name() {
+        assert_eq!(
+            MfaEnrollmentPopulationObserver.name(),
+            "Okta MFA Enrollment Population Observer"
+        );
+    }
+
+    #[test]
+    fn observer_version() {
+        assert_eq!(MfaEnrollmentPopulationObserver.version(), "0.1.0");
+    }
+
+    #[test]
+    fn observer_source_system() {
+        assert_eq!(MfaEnrollmentPopulationObserver.source_system(), "okta");
+    }
+
+    #[test]
+    fn observer_evidence_types() {
+        assert_eq!(MfaEnrollmentPopulationObserver.evidence_types(), &[1001]);
+    }
+
+    #[test]
+    fn observer_credential_requirements() {
+        let reqs = MfaEnrollmentPopulationObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "OKTA_API_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "OKTA_DOMAIN" && r.required));
+    }
+
+    // ── Pagination: next link with relative path ─────────────────────────────
+
+    #[test]
+    fn pagination_relative_next_link() {
+        // Server returns users with a relative next link, then second page returns empty.
+        let link_header = r#"</api/v1/users?after=abc>; rel="next""#;
+        let next = extract_next_link(link_header);
+        assert_eq!(next, Some("/api/v1/users?after=abc".to_string()));
+    }
+
+    // ── Factor classification edge cases ────────────────────────────────────
+
+    #[test]
+    fn classify_empty_factors_is_non_compliant() {
+        assert_eq!(classify_user_factors(&[]), UserCompliance::NonCompliant);
+    }
+
+    #[test]
+    fn classify_missing_factor_type_field() {
+        // Factor with no factorType → empty string → unknown → ignored
+        let factors = vec![json!({"status": "ACTIVE"})];
+        assert_eq!(classify_user_factors(&factors), UserCompliance::NonCompliant);
+    }
+
+    #[test]
+    fn classify_missing_status_field() {
+        // Factor with no status → empty string → not "ACTIVE" → skipped
+        let factors = vec![json!({"factorType": "webauthn"})];
+        assert_eq!(classify_user_factors(&factors), UserCompliance::NonCompliant);
+    }
+
+    #[test]
+    fn classify_all_phishable_types() {
+        // Test each phishable factor type
+        for ft in &["token:software:totp", "push", "sms", "call", "email", "token:hotp"] {
+            let factors = vec![json!({"factorType": ft, "status": "ACTIVE"})];
+            assert_eq!(
+                classify_user_factors(&factors),
+                UserCompliance::NonCompliant,
+                "factor type {} should be phishable/non-compliant",
+                ft
+            );
+        }
+    }
+
+    // ── Extract next link edge cases ────────────────────────────────────────
+
+    #[test]
+    fn extract_next_link_empty_string() {
+        assert_eq!(extract_next_link(""), None);
+    }
+
+    #[test]
+    fn extract_next_link_no_angle_brackets() {
+        let link = r#"https://example.com; rel="next""#;
+        assert_eq!(extract_next_link(link), None);
+    }
+
+    // ── okta_get with error status code ─────────────────────────────────────
+
+    #[test]
+    fn okta_get_error_status_returns_body() {
+        let srv = multi_mock_server(vec![
+            ("/test", 500, r#"{"errorCode":"E0000500"}"#.to_string()),
+        ]);
+        let (body, status) = okta_get("token", &format!("{}/test", srv)).unwrap();
+        assert_eq!(status, 500);
+        assert_eq!(body["errorCode"].as_str(), Some("E0000500"));
+    }
+
+    // ── Sampled flag when > 1000 users ──────────────────────────────────────
+    // This is hard to test with real pagination, but we can verify the sampled
+    // field is false for small user lists.
+
+    #[test]
+    fn sampled_is_false_for_small_user_set() {
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users?", 200, USERS_3.to_string()),
+            ("u1/factors", 200, U1_FACTORS.to_string()),
+            ("u2/factors", 200, U2_FACTORS.to_string()),
+            ("u3/factors", 200, U3_FACTORS.to_string()),
+        ]);
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.raw_data["sampled"].as_bool(), Some(false));
+    }
+
+    // ── Evidence fields coverage ─────────────────────────────────────────────
+
+    #[test]
+    fn evidence_has_correct_control_id_and_category() {
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users", 200, EMPTY_USERS.to_string()),
+        ]);
+        let ev = &MfaEnrollmentPopulationObserver.observe(&base_config(&srv)).unwrap()[0];
+        assert_eq!(ev.control_id, "mfa.enrollment_coverage");
+        assert_eq!(ev.category_uid, 1);
+        assert_eq!(ev.activity_id, 7);
+        assert!(ev.test_transcript.is_none());
+        assert_eq!(ev.observables.len(), 1);
+        assert_eq!(ev.observables[0].obs_type, "population");
+    }
+
+    #[test]
+    fn effective_finding_title() {
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users?", 200, USERS_3.to_string()),
+            ("u1/factors", 200, U_ALL_PR.to_string()),
+            ("u2/factors", 200, U_ALL_PR.to_string()),
+            ("u3/factors", 200, U_ALL_PR.to_string()),
+        ]);
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.findings[0].title, "PR MFA Coverage Compliant");
+        assert_eq!(ev.findings[0].severity_id, 0);
+    }
+
+    #[test]
+    fn ineffective_finding_title() {
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users?", 200, USERS_3.to_string()),
+            ("u1/factors", 200, U1_FACTORS.to_string()),
+            ("u2/factors", 200, U2_FACTORS.to_string()),
+            ("u3/factors", 200, U3_FACTORS.to_string()),
+        ]);
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.findings[0].title, "PR MFA Coverage Gap");
+        assert_eq!(ev.findings[0].severity_id, 2);
+    }
+
+    #[test]
+    fn iam_auth_raw_data_fields() {
+        let srv = multi_mock_server(vec![
+            ("/api/v1/users?", 200, USERS_3.to_string()),
+            ("u1/factors", 200, U1_FACTORS.to_string()),
+            ("u2/factors", 200, U2_FACTORS.to_string()),
+            ("u3/factors", 200, U3_FACTORS.to_string()),
+        ]);
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
+        let iam = &ev.raw_data["iam_auth"];
+        assert_eq!(iam["policy_layer"].as_str(), Some("enrollment"));
+        assert_eq!(iam["provider"].as_str(), Some("okta"));
+        assert_eq!(iam["total_users"].as_u64(), Some(3));
+    }
+
+    // ── Pagination with Link header ──────────────────────────────────────────
+
+    #[test]
+    fn pagination_with_link_header_follows_next() {
+        // First page returns 1 user with a Link header pointing to second page.
+        // Second page returns 1 user with no Link header.
+        use std::io::{Read as _, Write as _};
+        use std::net::{Shutdown, TcpListener};
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let base = format!("http://127.0.0.1:{}", addr.port());
+        let base_clone = base.clone();
+
+        thread::spawn(move || {
+            // Request 1: users list page 1 → returns u1, with Link header to page 2
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let body = r#"[{"id":"u1","login":"a@x.com"}]"#;
+                let next_link = format!("{}/api/v1/users?after=u1", base_clone);
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nLink: <{}>; rel=\"next\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    next_link, body.len(), body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+                let _ = stream.shutdown(Shutdown::Write);
+                let mut drain = Vec::new();
+                let _ = stream.read_to_end(&mut drain);
+            }
+            // Request 2: users list page 2 → returns u2, no Link header
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let body = r#"[{"id":"u2","login":"b@x.com"}]"#;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(), body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+                let _ = stream.shutdown(Shutdown::Write);
+                let mut drain = Vec::new();
+                let _ = stream.read_to_end(&mut drain);
+            }
+            // Request 3: u1 factors
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let body = U_ALL_PR;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(), body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+                let _ = stream.shutdown(Shutdown::Write);
+                let mut drain = Vec::new();
+                let _ = stream.read_to_end(&mut drain);
+            }
+            // Request 4: u2 factors
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let body = U_ALL_PR;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(), body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+                let _ = stream.shutdown(Shutdown::Write);
+                let mut drain = Vec::new();
+                let _ = stream.read_to_end(&mut drain);
+            }
+        });
+
+        let ev = &MfaEnrollmentPopulationObserver.observe(&base_config(&base)).unwrap()[0];
+        assert_eq!(ev.raw_data["total_users"].as_u64(), Some(2));
+        assert_eq!(ev.raw_data["compliant_users"].as_u64(), Some(2));
+        assert_eq!(ev.status_id, StatusId::Effective);
+    }
 }

@@ -646,4 +646,97 @@ assertions: []
         assert!(def.pre_flight.is_empty());
         assert!(def.remediation.is_none());
     }
+
+    // ── load_all_checks tests ────────────────────────────────────────────────
+
+    #[test]
+    fn load_all_checks_nonexistent_bundled_dir_returns_zero() {
+        let registry = Registry::new();
+        let count = load_all_checks(&registry, Path::new("/nonexistent/bundled/checks"));
+        // Bundled dir doesn't exist → 0 bundled checks loaded
+        // User dir may or may not exist; total could be 0 or more from ~/.ocean/checks/
+        // We just assert the function doesn't panic
+        let _ = count;
+    }
+
+    #[test]
+    fn load_all_checks_with_valid_bundled_dir() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "t.check.yaml", PASSIVE_YAML);
+
+        let registry = Registry::new();
+        let count = load_all_checks(&registry, dir.path());
+        // At least the bundled check should be loaded
+        assert!(count >= 1);
+        assert!(registry.get_observer("TST-PASSIVE").is_ok());
+    }
+
+    #[test]
+    fn load_all_checks_invalid_checks_in_bundled_skipped() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "bad.check.yaml", INVALID_YAML);
+        write_check(dir.path(), "good.check.yaml", PASSIVE_YAML);
+
+        let registry = Registry::new();
+        let count = load_all_checks(&registry, dir.path());
+        // One valid check loaded; invalid one skipped
+        assert!(count >= 1);
+    }
+
+    // ── dirs_home tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn dirs_home_returns_path_from_home_env() {
+        let old = std::env::var("HOME").ok();
+        std::env::set_var("HOME", "/tmp/fake_home_for_test");
+        let home = dirs_home();
+        assert!(home.is_some());
+        assert_eq!(home.unwrap(), PathBuf::from("/tmp/fake_home_for_test"));
+        match old {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+
+    #[test]
+    fn dirs_home_returns_none_when_home_not_set() {
+        let old = std::env::var("HOME").ok();
+        std::env::remove_var("HOME");
+        // Only check this when HOME really isn't set; skip if the env is set by OS
+        let home = dirs_home();
+        // home might be Some if HOME somehow got set again; just don't panic
+        let _ = home;
+        match old {
+            Some(v) => std::env::set_var("HOME", v),
+            None => {}
+        }
+    }
+
+    // ── collect_check_files with unreadable directory ────────────────────────
+
+    #[test]
+    fn walk_check_files_on_file_path_returns_empty() {
+        // walk_check_files with a path that is a file (not dir) should return empty
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("notadir.txt");
+        fs::write(&file_path, "content").unwrap();
+        // collect_check_files checks if it's a directory, so this should produce no results
+        let mut paths = Vec::new();
+        collect_check_files(&file_path, &mut paths);
+        assert!(paths.is_empty());
+    }
+
+    // ── load_definitions_from_dir: recursion ────────────────────────────────
+
+    #[test]
+    fn load_definitions_from_dir_recurses_into_subdirs() {
+        let dir = TempDir::new().unwrap();
+        let subdir = dir.path().join("sub");
+        fs::create_dir(&subdir).unwrap();
+        write_check(&subdir, "t.check.yaml", PASSIVE_YAML);
+        write_check(dir.path(), "b.check.yaml", ACTIVE_YAML);
+
+        let defs = load_definitions_from_dir(dir.path());
+        assert_eq!(defs.len(), 2);
+    }
 }

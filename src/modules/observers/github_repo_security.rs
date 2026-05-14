@@ -336,4 +336,94 @@ mod tests {
         let result = RepoSecurityObserver.observe(&test_config(&srv));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn repo_security_secret_scanning_disabled_finding() {
+        let srv = mock_server(
+            200,
+            r#"{
+                "security_and_analysis": {
+                    "secret_scanning": { "status": "disabled" },
+                    "secret_scanning_push_protection": { "status": "enabled" },
+                    "dependabot_security_updates": { "status": "enabled" }
+                }
+            }"#,
+        );
+        let ev = &RepoSecurityObserver
+            .observe(&test_config(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Ineffective);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Secret Scanning Not Enabled"));
+    }
+
+    #[test]
+    fn repo_security_evidence_types() {
+        assert_eq!(RepoSecurityObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn repo_security_credential_requirements() {
+        let reqs = RepoSecurityObserver.credential_requirements();
+        assert_eq!(reqs.len(), 3);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_OWNER" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_REPO" && r.required));
+    }
+
+    #[test]
+    fn repo_security_missing_token_errors() {
+        let err = RepoSecurityObserver
+            .observe(&HashMap::from([
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn repo_security_missing_owner_errors() {
+        let err = RepoSecurityObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_REPO".to_string(), "app".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_OWNER"));
+    }
+
+    #[test]
+    fn repo_security_missing_repo_errors() {
+        let err = RepoSecurityObserver
+            .observe(&HashMap::from([
+                ("GITHUB_TOKEN".to_string(), "tok".to_string()),
+                ("GITHUB_OWNER".to_string(), "acme".to_string()),
+            ]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_REPO"));
+    }
+
+    #[test]
+    fn repo_security_connection_refused_errors() {
+        let mut cfg = test_config("placeholder");
+        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        let result = RepoSecurityObserver.observe(&cfg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metadata_complete() {
+        use crate::module::Module;
+        let obs = RepoSecurityObserver;
+        assert_eq!(obs.id(), "github.repo_security");
+        assert!(!obs.name().is_empty());
+        assert_eq!(obs.version(), "0.1.0");
+        assert_eq!(obs.source_system(), "github");
+        assert!(!obs.evidence_types().is_empty());
+        let creds = obs.credential_requirements();
+        assert!(!creds.is_empty());
+    }
 }

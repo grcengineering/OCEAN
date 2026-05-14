@@ -254,4 +254,62 @@ mod tests {
             .iter()
             .any(|f| f.title == "Copilot Not Enabled"));
     }
+
+    #[test]
+    fn copilot_unrecognized_setting_is_unknown() {
+        let srv = mock_server(
+            200,
+            r#"{"seat_management_setting":"disabled"}"#,
+        );
+        let ev = &CopilotGovernanceObserver
+            .observe(&test_config_with_org(&srv))
+            .unwrap()[0];
+        assert_eq!(ev.status_id, StatusId::Unknown);
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Copilot Seat Setting Unrecognized"));
+    }
+
+    #[test]
+    fn copilot_unexpected_status_returns_err() {
+        let srv = mock_server(500, r#"{"message":"Internal Server Error"}"#);
+        let result = CopilotGovernanceObserver.observe(&test_config_with_org(&srv));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn copilot_evidence_types() {
+        assert_eq!(CopilotGovernanceObserver.evidence_types(), &[1003]);
+    }
+
+    #[test]
+    fn copilot_credential_requirements() {
+        let reqs = CopilotGovernanceObserver.credential_requirements();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_TOKEN" && r.required));
+        assert!(reqs.iter().any(|r| r.name == "GITHUB_ORG" && r.required));
+    }
+
+    #[test]
+    fn copilot_missing_token_errors() {
+        let err = CopilotGovernanceObserver
+            .observe(&HashMap::from([(
+                "GITHUB_ORG".to_string(),
+                "org".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_TOKEN"));
+    }
+
+    #[test]
+    fn copilot_missing_org_errors() {
+        let err = CopilotGovernanceObserver
+            .observe(&HashMap::from([(
+                "GITHUB_TOKEN".to_string(),
+                "tok".to_string(),
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("GITHUB_ORG"));
+    }
 }
