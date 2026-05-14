@@ -1722,6 +1722,28 @@ fn cmd_harden<W: Write>(
     Ok(())
 }
 
+/// Internal: prompt for fleet-hardening confirmation. Extracted so unit
+/// tests can supply a fake `BufRead` instead of mocking stdin. Returns
+/// `Ok(true)` to proceed, `Ok(false)` to abort.
+fn confirm_fleet_with_reader<W: Write, R: std::io::BufRead>(
+    out: &mut W,
+    reader: &mut R,
+    target_count: usize,
+) -> Result<bool> {
+    write!(
+        out,
+        "About to execute fleet hardening across {target_count} target(s). Continue? [y/N] ",
+    )?;
+    std::io::Write::flush(out)?;
+    let mut input = String::new();
+    reader.read_line(&mut input)?;
+    if !input.trim().eq_ignore_ascii_case("y") {
+        writeln!(out, "Aborted.")?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 // ─── ocean harden --fleet ─────────────────────────────────────────────────────
 
 fn cmd_harden_fleet<W: Write>(
@@ -1793,19 +1815,10 @@ fn cmd_harden_fleet<W: Write>(
     }
 
     // Confirmation prompt for fleet mode (TH-2a)
-    if !confirm {
-        write!(
-            out,
-            "About to execute fleet hardening across {} target(s). Continue? [y/N] ",
-            manifest.targets.len()
-        )?;
-        std::io::Write::flush(out)?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        if !input.trim().eq_ignore_ascii_case("y") {
-            writeln!(out, "Aborted.")?;
-            return Ok(());
-        }
+    if !confirm
+        && !confirm_fleet_with_reader(out, &mut std::io::stdin().lock(), manifest.targets.len())?
+    {
+        return Ok(());
     }
 
     // Execute fleet via tokio runtime
@@ -5234,6 +5247,40 @@ remediation:
             s.contains("Fleet Summary"),
             "expected 'Fleet Summary' in output, got: {s}"
         );
+    }
+
+    #[test]
+    fn confirm_fleet_with_reader_user_accepts() {
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"y\n");
+        let result = confirm_fleet_with_reader(&mut out, &mut reader, 3).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn confirm_fleet_with_reader_user_accepts_uppercase() {
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"Y\n");
+        let result = confirm_fleet_with_reader(&mut out, &mut reader, 1).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn confirm_fleet_with_reader_user_rejects() {
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"n\n");
+        let result = confirm_fleet_with_reader(&mut out, &mut reader, 1).unwrap();
+        assert!(!result);
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Aborted"));
+    }
+
+    #[test]
+    fn confirm_fleet_with_reader_empty_input_rejects() {
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"\n");
+        let result = confirm_fleet_with_reader(&mut out, &mut reader, 1).unwrap();
+        assert!(!result);
     }
 
     #[test]

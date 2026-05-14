@@ -504,6 +504,19 @@ pub fn confirm_apply<W: Write>(
     config: &HashMap<String, String>,
     auto_confirm: bool,
 ) -> Result<bool> {
+    confirm_apply_with_reader(out, &mut std::io::stdin().lock(), plans, config, auto_confirm)
+}
+
+/// Internal variant of `confirm_apply` that reads the confirmation answer
+/// from any `BufRead`. Extracted so unit tests can supply a fake reader
+/// instead of mocking stdin.
+pub fn confirm_apply_with_reader<W: Write, R: std::io::BufRead>(
+    out: &mut W,
+    reader: &mut R,
+    plans: &[RemediationPlan],
+    config: &HashMap<String, String>,
+    auto_confirm: bool,
+) -> Result<bool> {
     let mask = CredentialMask::from_config(config);
 
     writeln!(out, "\n⚠ APPLY MODE — the following API calls will be executed:\n")?;
@@ -535,7 +548,7 @@ pub fn confirm_apply<W: Write>(
     out.flush()?;
 
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input)?;
+    reader.read_line(&mut input)?;
     let answer = input.trim().to_lowercase();
     Ok(answer == "y" || answer == "yes")
 }
@@ -2605,6 +2618,66 @@ remediation:
             let _ = print_results(&mut w, &results, "json", &empty_config());
             let _ = print_results(&mut w, &results, "table", &empty_config());
         }
+    }
+
+    #[test]
+    fn confirm_apply_with_reader_user_accepts() {
+        let plans = vec![full_plan()];
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"y\n");
+        let result = confirm_apply_with_reader(
+            &mut out, &mut reader, &plans, &empty_config(), false,
+        )
+        .unwrap();
+        assert!(result, "user typed 'y' → should proceed");
+    }
+
+    #[test]
+    fn confirm_apply_with_reader_user_accepts_yes() {
+        let plans = vec![full_plan()];
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"yes\n");
+        let result = confirm_apply_with_reader(
+            &mut out, &mut reader, &plans, &empty_config(), false,
+        )
+        .unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn confirm_apply_with_reader_user_rejects() {
+        let plans = vec![full_plan()];
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"n\n");
+        let result = confirm_apply_with_reader(
+            &mut out, &mut reader, &plans, &empty_config(), false,
+        )
+        .unwrap();
+        assert!(!result, "user typed 'n' → should NOT proceed");
+    }
+
+    #[test]
+    fn confirm_apply_with_reader_empty_input_rejects() {
+        let plans = vec![full_plan()];
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b"\n");
+        let result = confirm_apply_with_reader(
+            &mut out, &mut reader, &plans, &empty_config(), false,
+        )
+        .unwrap();
+        assert!(!result, "empty input → should default to no");
+    }
+
+    #[test]
+    fn confirm_apply_with_reader_auto_confirm_skips_prompt() {
+        let plans = vec![full_plan()];
+        let mut out = Vec::new();
+        let mut reader = std::io::Cursor::new(b""); // empty — should not be read
+        let result = confirm_apply_with_reader(
+            &mut out, &mut reader, &plans, &empty_config(), true,
+        )
+        .unwrap();
+        assert!(result);
     }
 
     #[test]
