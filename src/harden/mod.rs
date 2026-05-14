@@ -1398,7 +1398,6 @@ remediation:
     }
 
     #[test]
-    #[ignore] // Pending F-001 fix in GRC-58 — un-ignore after is_okta_url/is_aws_url use host parsing
     fn sec_h014_url_allowlist_rejects_path_embedded_domains() {
         // SEC-H014 (CISO F-001): URL allowlist must reject URLs that embed trusted
         // domain strings in the PATH component, not the host. e.g.,
