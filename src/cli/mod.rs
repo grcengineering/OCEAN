@@ -3336,6 +3336,96 @@ controls:
         assert!(result.is_ok());
     }
 
+    fn store_control_status(db: &str, control_id: &str, status: &str) {
+        use crate::control::ControlStatus;
+        let store = open_store(db).unwrap();
+        let cs = ControlStatus {
+            id: uuid::Uuid::new_v4(),
+            control_id: control_id.to_string(),
+            timestamp: Utc::now(),
+            status: status.to_string(),
+            confidence: "high".to_string(),
+            evidence_ids: vec![],
+            evaluation_details: String::new(),
+        };
+        store.store_control_status(&cs).unwrap();
+    }
+
+    fn write_three_status_framework(path: &std::path::Path) {
+        std::fs::write(
+            path,
+            r#"
+id: status-framework
+name: Status Framework
+version: "1.0"
+controls:
+  - ref: P1
+    title: Passing
+    description: p
+    ocean_control_ids: [iam.passing]
+  - ref: F1
+    title: Failing
+    description: f
+    ocean_control_ids: [iam.failing]
+  - ref: U1
+    title: Unknown
+    description: u
+    ocean_control_ids: [iam.weird, iam.missing]
+"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn cmd_compliance_status_branches_markdown() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        store_control_status(&db, "iam.passing", "effective");
+        store_control_status(&db, "iam.failing", "ineffective");
+        store_control_status(&db, "iam.weird", "stale-data");
+        // iam.missing has no status -> Err branch
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let fwpath = dir.path().join("fw.yaml");
+        write_three_status_framework(&fwpath);
+        let mut out = Vec::new();
+        let result = cmd_compliance(
+            &mut out,
+            &db,
+            Some(fwpath.to_str().unwrap()),
+            cdir.to_str().unwrap(),
+            "markdown",
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        // Hits passing/failing/unknown branches and the markdown writer.
+        assert!(s.contains("Compliance Report"));
+        assert!(s.contains("Passing"));
+        assert!(s.contains("Failing"));
+    }
+
+    #[test]
+    fn cmd_compliance_status_branches_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        store_control_status(&db, "iam.passing", "effective");
+        store_control_status(&db, "iam.failing", "ineffective");
+        store_control_status(&db, "iam.weird", "stale-data");
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let fwpath = dir.path().join("fw.yaml");
+        write_three_status_framework(&fwpath);
+        let mut out = Vec::new();
+        let result = cmd_compliance(
+            &mut out,
+            &db,
+            Some(fwpath.to_str().unwrap()),
+            cdir.to_str().unwrap(),
+            "json",
+        );
+        assert!(result.is_ok());
+    }
+
     #[test]
     fn cmd_compliance_with_explicit_framework_path() {
         let dir = tempfile::tempdir().unwrap();
