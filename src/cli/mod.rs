@@ -4443,6 +4443,155 @@ assertions:
     }
 
     #[test]
+    fn cmd_report_framework_sarif_with_passing_check() {
+        // SARIF executor.execute_observer returns Ok with Effective evidence.
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![
+            (200, r#"{"x": "ok"}"#.to_string()),
+        ]);
+        std::fs::write(
+            checks.join("PASS.check.yaml"),
+            format!(
+                r#"id: PASS-1
+name: Passing Check
+description: passes
+source: github
+profile: L1
+severity: medium
+tags: [test]
+references:
+  soc2: CC6.1
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == 'ok'"
+    severity: medium
+    title: t
+    pass_message: ok
+    fail_message: fail
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("PASS-1"));
+    }
+
+    #[test]
+    fn cmd_report_framework_sarif_with_tag_filter() {
+        // Drives the check_filter.matches() closure (L1596).
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        std::fs::write(
+            checks.join("TAGGED.check.yaml"),
+            r#"id: TAGGED
+name: Tagged Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [my-tag]
+references:
+  soc2: CC6.1
+credentials: {}
+inputs: {}
+steps: []
+assertions: []
+"#,
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        // Non-empty filter — drives the else branch of check_filter.is_empty().
+        let filter = crate::cli::filter::CheckFilter {
+            tags: vec!["my-tag".to_string()],
+            severities: vec![],
+            profile: None,
+        };
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_report_framework_sarif_with_filter_excludes_all() {
+        // Filter excludes everything → defs.is_empty() → "No checks found".
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        std::fs::write(
+            checks.join("FILTERED.check.yaml"),
+            r#"id: FILTERED
+name: Filtered Check
+description: t
+source: github
+profile: L1
+severity: low
+tags: [other]
+references:
+  soc2: CC6.1
+credentials: {}
+inputs: {}
+steps: []
+assertions: []
+"#,
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter {
+            tags: vec!["nope-no-match".to_string()],
+            severities: vec![],
+            profile: None,
+        };
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("No checks found"));
+    }
+
+    #[test]
     fn cmd_report_framework_sarif_with_passive_check_not_matching_framework() {
         // Check exists but its reference is for "nist" not "soc2" → filtered out.
         let dir = tempfile::tempdir().unwrap();
