@@ -2864,6 +2864,47 @@ classification:
         assert!(s.contains("test-sched"));
     }
 
+    // --- cmd_evaluate ---
+    #[test]
+    fn cmd_evaluate_missing_control_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "nonexistent.control",
+            None,
+            cdir.to_str().unwrap(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_evaluate_simple_control_no_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "mock.test",
+            None,
+            cdir.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        // Output is a ControlStatus serialized as JSON
+        let _: serde_json::Value = serde_json::from_str(&s).unwrap();
+    }
+
     // --- cmd_observe_path ---
     fn write_simple_control_yaml(dir: &std::path::Path, file: &str, control_id: &str, module_id: &str) {
         let yaml = format!(
