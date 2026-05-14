@@ -647,7 +647,7 @@ mod tests {
     /// Mock that returns a valid HTTP 200 but with an error body (no access_token).
     fn mock_server_token_error() -> String {
         use std::io::{Read, Write};
-        use std::net::TcpListener;
+        use std::net::{Shutdown, TcpListener};
         use std::thread;
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -663,6 +663,10 @@ mod tests {
                     body.len(), body
                 );
                 let _ = stream.write_all(resp.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Write);
+                let mut drain = [0u8; 256];
+                while matches!(stream.read(&mut drain), Ok(n) if n > 0) {}
             }
         });
 

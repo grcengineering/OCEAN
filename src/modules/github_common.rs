@@ -30,7 +30,7 @@ pub fn github_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16
 #[cfg(test)]
 pub fn mock_server(status: u16, body: &str) -> String {
     use std::io::{Read, Write};
-    use std::net::TcpListener;
+    use std::net::{Shutdown, TcpListener};
     use std::thread;
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -46,6 +46,12 @@ pub fn mock_server(status: u16, body: &str) -> String {
                 len = body.len()
             );
             let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.flush();
+            // Graceful shutdown to avoid client-side partial-read races under
+            // coverage instrumentation.
+            let _ = stream.shutdown(Shutdown::Write);
+            let mut drain = [0u8; 256];
+            while matches!(stream.read(&mut drain), Ok(n) if n > 0) {}
         }
     });
 
