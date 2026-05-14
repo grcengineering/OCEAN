@@ -3669,6 +3669,224 @@ classification:
         let _ = run_with(&mut out, cli);
     }
 
+    // --- cmd_report with stored evidence (covers markdown/csv loop bodies) ---
+    fn store_one_evidence(db: &str) {
+        let store = open_store(db).unwrap();
+        let ev = crate::testutil::make_evidence();
+        store.store_evidence(&ev).unwrap();
+    }
+
+    #[test]
+    fn cmd_report_markdown_with_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        store_one_evidence(&db);
+        let mut out = Vec::new();
+        let result = cmd_report(&mut out, &db, "2020-01-01:2030-12-31", "markdown", None);
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("# OCEAN Compliance Report"));
+        assert!(s.contains("| ID | Module"));
+    }
+
+    #[test]
+    fn cmd_report_csv_with_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        store_one_evidence(&db);
+        let mut out = Vec::new();
+        let result = cmd_report(&mut out, &db, "2020-01-01:2030-12-31", "csv", None);
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("id,module,status,time"));
+        // Stored row should produce a non-header line.
+        assert!(s.lines().count() > 1);
+    }
+
+    // --- cmd_report_framework_sarif via a real check def ---
+    #[test]
+    fn cmd_report_framework_sarif_with_real_check_def() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        std::fs::write(
+            checks.join("dummy.check.yaml"),
+            r#"id: DUMMY-1
+name: Dummy
+description: A dummy check for SARIF test
+source: mock
+profile: L1
+credentials: {}
+inputs: {}
+steps: []
+assertions: []
+references:
+  soc2: CC6.1
+"#,
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_report_framework(
+            &mut out,
+            checks.to_str().unwrap(),
+            &["soc2".to_string()],
+            true,
+            "sarif",
+            &filter,
+            None,
+            None,
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("DUMMY-1") || s.contains("sarif") || s.contains("schema") || s.contains("version"));
+    }
+
+    // --- cmd_harden_fleet ---
+    fn write_valid_fleet_manifest(path: &std::path::Path) {
+        std::env::set_var("OCEAN_TEST_FLEET_TOKEN", "tok123");
+        std::env::set_var("OCEAN_TEST_FLEET_ORG", "acme");
+        let yaml = r#"
+fleet:
+  name: "Test Fleet"
+  description: "A test fleet"
+targets:
+  - id: "github-main"
+    source: github
+    credentials:
+      GITHUB_TOKEN: "${OCEAN_TEST_FLEET_TOKEN}"
+      GITHUB_ORG: "${OCEAN_TEST_FLEET_ORG}"
+"#;
+        std::fs::write(path, yaml).unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn cmd_harden_fleet_invalid_mode_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out");
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden_fleet(
+            &mut out,
+            &fleet,
+            checks.to_str().unwrap(),
+            "definitely-not-a-mode",
+            false,
+            true,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+            2,
+            false,
+            &outd,
+            false,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn cmd_harden_fleet_missing_file_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out");
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden_fleet(
+            &mut out,
+            std::path::Path::new("/definitely/does/not/exist.yaml"),
+            checks.to_str().unwrap(),
+            "api",
+            false,
+            true,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+            2,
+            false,
+            &outd,
+            false,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn cmd_harden_fleet_dry_run_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out");
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden_fleet(
+            &mut out,
+            &fleet,
+            checks.to_str().unwrap(),
+            "api",
+            false,
+            true,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+            2,
+            false,
+            &outd,
+            true, // dry_run = true
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Test Fleet"));
+        assert!(s.contains("Dry run"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn cmd_harden_fleet_no_apply_prints_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out");
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden_fleet(
+            &mut out,
+            &fleet,
+            checks.to_str().unwrap(),
+            "api",
+            false, // apply = false
+            true,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+            2,
+            false,
+            &outd,
+            false,
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Fleet dry-run plan"));
+    }
+
     #[test]
     fn run_with_build_dispatches() {
         let dir = tempfile::tempdir().unwrap();
