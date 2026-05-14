@@ -5284,6 +5284,16 @@ remediation:
     }
 
     #[test]
+    fn confirm_fleet_with_reader_fault_injection() {
+        // Drive ? error paths for write! and writeln! macros.
+        for n in 0..10 {
+            let mut w = crate::testutil::FailingWriter::new(n);
+            let mut reader = std::io::Cursor::new(b"n\n");
+            let _ = confirm_fleet_with_reader(&mut w, &mut reader, 1);
+        }
+    }
+
+    #[test]
     #[serial_test::serial]
     fn cmd_harden_fleet_apply_aborts_without_continue_on_error() {
         // continue_on_error=false → execute_fleet returns Err → ? propagates

@@ -2669,6 +2669,18 @@ remediation:
     }
 
     #[test]
+    fn confirm_apply_with_reader_fault_injection() {
+        let plans = vec![full_plan()];
+        for n in 0..40 {
+            let mut w = crate::testutil::FailingWriter::new(n);
+            let mut reader = std::io::Cursor::new(b"n\n");
+            let _ = confirm_apply_with_reader(
+                &mut w, &mut reader, &plans, &empty_config(), false,
+            );
+        }
+    }
+
+    #[test]
     fn confirm_apply_with_reader_auto_confirm_skips_prompt() {
         let plans = vec![full_plan()];
         let mut out = Vec::new();
