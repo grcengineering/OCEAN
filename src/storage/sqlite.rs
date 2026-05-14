@@ -1453,4 +1453,24 @@ mod tests {
     fn parse_rfc3339_invalid() {
         assert!(parse_rfc3339("not-a-date").is_err());
     }
+
+    // ----- open() parent-dir error path (line 30) -----
+    #[test]
+    fn open_parent_dir_creation_failure() {
+        // Path with a file blocking the parent directory creation forces
+        // create_dir_all to fail, exercising the ? on line 30.
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("blocker");
+        std::fs::write(&file_path, b"x").unwrap();
+        let blocked = file_path.join("nested").join("db.sqlite");
+        assert!(SqliteStore::open(&blocked).is_err());
+    }
+
+    // ----- close() smoke (line 427-430) -----
+    #[test]
+    fn close_returns_ok() {
+        let (store, _dir) = open_store();
+        assert!(store.close().is_ok());
+    }
+
 }
