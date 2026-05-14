@@ -1216,4 +1216,132 @@ references:
         assert_eq!(status_csv(&ControlStatus::Partial), "partial");
         assert_eq!(status_csv(&ControlStatus::NoData), "no_data");
     }
+
+    // ─── generate_report full coverage: passive check that fails ───────────────
+
+    fn write_failing_soc2_check(dir: &std::path::Path, mock_url: &str) {
+        std::fs::write(
+            dir.join("SOC2-FAIL.check.yaml"),
+            format!(
+                r#"
+id: SOC2-FAIL
+name: SOC2 Failing Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+references:
+  soc2: CC6.1
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{mock_url}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_passing_soc2_check(dir: &std::path::Path, mock_url: &str) {
+        std::fs::write(
+            dir.join("SOC2-PASS.check.yaml"),
+            format!(
+                r#"
+id: SOC2-PASS
+name: SOC2 Passing Check
+description: t
+source: github
+profile: L1
+severity: medium
+tags: [test]
+references:
+  soc2: CC6.2
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{mock_url}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == 'ok'"
+    severity: medium
+    title: t
+    pass_message: ok
+    fail_message: fail
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn generate_report_with_failing_check_marks_control_failing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        write_failing_soc2_check(tmp.path(), &srv.base_url);
+        let report = generate_report(tmp.path(), "soc2", &HashMap::new(), None, None).unwrap();
+        assert_eq!(report.framework, "soc2");
+        // CC6.1 should appear in the controls list with a non-NoData status now.
+        let cc61 = report
+            .controls
+            .iter()
+            .find(|c| c.control_id == "CC6.1")
+            .expect("CC6.1 must exist in catalog");
+        assert!(
+            matches!(cc61.status, ControlStatus::Fail | ControlStatus::Partial),
+            "CC6.1 should be failing or partial when its mapped check fails; got {:?}",
+            cc61.status
+        );
+        assert!(!cc61.mapped_checks.is_empty(), "CC6.1 should have a mapped check");
+    }
+
+    #[test]
+    fn generate_report_with_passing_check_marks_control_passing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![
+            (200, r#"{"x": "ok"}"#.to_string()),
+        ]);
+        write_passing_soc2_check(tmp.path(), &srv.base_url);
+        let report = generate_report(tmp.path(), "soc2", &HashMap::new(), None, None).unwrap();
+        let cc62 = report
+            .controls
+            .iter()
+            .find(|c| c.control_id == "CC6.2")
+            .expect("CC6.2 must exist in catalog");
+        assert!(
+            matches!(cc62.status, ControlStatus::Pass),
+            "CC6.2 should pass; got {:?}",
+            cc62.status
+        );
+    }
+
+    #[test]
+    fn generate_report_source_filter_excludes_other_sources() {
+        let tmp = tempfile::tempdir().unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        write_failing_soc2_check(tmp.path(), &srv.base_url);
+        // Filter for "aws" — our github check should be excluded.
+        let report = generate_report(tmp.path(), "soc2", &HashMap::new(), Some("aws"), None).unwrap();
+        // All controls should be NoData since no aws-source checks exist.
+        assert!(report.controls.iter().all(|c| c.status == ControlStatus::NoData));
+    }
 }
