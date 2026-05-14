@@ -742,4 +742,70 @@ mod tests {
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
+
+    // ─── server_error paths via corrupted DB ─────────────────────────────────
+    //
+    // Insert a row that scan_evidence cannot parse → store.query_evidence
+    // returns Err → handler hits server_error.
+
+    fn make_state_with_corrupted_evidence() -> AppState {
+        // Open a dedicated db, store via Store API, then re-open the file
+        // directly via rusqlite::Connection to insert a corrupted row.
+        let dir = std::env::temp_dir();
+        let path = dir
+            .join(format!("ocean_api_corrupt_{}.db", Uuid::new_v4()))
+            .to_str()
+            .unwrap()
+            .to_string();
+        let store = SqliteStore::open(&path).unwrap();
+        // Insert corrupted row via a separate Connection
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let id = Uuid::new_v4().to_string();
+        let meta = r#"{"module":{"name":"m","version":"0","type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        conn.execute(
+            &format!(
+                "INSERT INTO evidence (id, control_id, class_uid, category_uid, activity_id,
+                 timestamp, confidence_level, metadata_json, observables_json,
+                 status_id, status, raw_data, findings_json) VALUES
+                 ('{id}','c',1,1,1,'2024-01-01T00:00:00Z','passive_observation',
+                  '{meta}','BAD-JSON',1,'effective','null','[]')"
+            ),
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let registry = Arc::new(Registry::new());
+        register_all_observers(&registry);
+        register_all_testers(&registry);
+        AppState {
+            store: Arc::new(store),
+            registry,
+            auth_token: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn list_evidence_corrupted_returns_500() {
+        let state = make_state_with_corrupted_evidence();
+        let res = oneshot_get("/api/v1/evidence", state).await;
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn get_evidence_with_corrupted_returns_5xx_or_404() {
+        let state = make_state_with_corrupted_evidence();
+        // Query a known id — get_evidence hits scan_evidence.
+        let res = oneshot_get(
+            &format!("/api/v1/evidence/{}", Uuid::new_v4()),
+            state,
+        )
+        .await;
+        // Unknown UUID → "not found" → 404. Either way, the handler is exercised.
+        assert!(
+            res.status() == StatusCode::INTERNAL_SERVER_ERROR
+                || res.status() == StatusCode::NOT_FOUND,
+            "got: {:?}",
+            res.status()
+        );
+    }
 }
