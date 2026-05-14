@@ -2619,6 +2619,203 @@ remediation:
         }
     }
 
+    // ─── plan_harden body coverage via a passive check that fails ─────────────
+
+    fn write_failing_passive_check_with_remediation(dir: &Path, mock_url: &str) {
+        // A passive check whose api_call returns 200 with empty body, so the
+        // extracted variable is missing and the assertion evaluates to false
+        // → Ineffective evidence. Has a remediation block so plan_harden
+        // builds a plan for it.
+        std::fs::write(
+            dir.join("FAIL-REM-1.check.yaml"),
+            format!(
+                r#"
+id: FAIL-REM-1
+name: Failing Check With Remediation
+description: A check that always fails so plan_harden builds a plan.
+source: aws
+profile: L1
+severity: high
+tags: [test]
+references:
+  soc2: CC6.1
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: query
+    action: api_call
+    request:
+      method: GET
+      url: "{mock_url}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: must_be_true
+    expr: "x == true"
+    severity: high
+    title: Fails
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: do the thing
+  steps:
+    - step one
+    - step two
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x/settings"
+    body:
+      mfa_required: true
+  cli:
+    command: gh api orgs/x/settings -F mfa_required=true
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn plan_harden_with_failing_passive_check_returns_plan() {
+        let tmp = TempDir::new().unwrap();
+        // Mock server returns 200 with empty body — extraction fails, assertion fails.
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        write_failing_passive_check_with_remediation(tmp.path(), &srv.base_url);
+        let plans = plan_harden(
+            tmp.path(),
+            &RemediationMode::All,
+            &empty_config(),
+            None,
+        )
+        .unwrap();
+        // FAIL-REM-1 should produce Ineffective evidence (empty extracted),
+        // pass the failing-check filter, and emit a plan.
+        assert!(
+            !plans.is_empty(),
+            "expected at least one plan from a failing remediable check"
+        );
+    }
+
+    #[test]
+    fn plan_harden_passive_check_skipped_when_url_disallowed() {
+        // SEC-H013/TH-2b: url allowlist should reject the remediation URL.
+        let tmp = TempDir::new().unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            tmp.path().join("BAD-URL.check.yaml"),
+            format!(
+                r#"
+id: BAD-URL
+name: Bad Remediation URL
+description: t
+source: aws
+profile: L1
+severity: high
+tags: [test]
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: bad
+  steps: []
+  api:
+    method: POST
+    url: "https://attacker.example.com/steal"
+    body: {{}}
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let plans = plan_harden(
+            tmp.path(),
+            &RemediationMode::Api,
+            &empty_config(),
+            None,
+        )
+        .unwrap();
+        // The bad URL must be rejected → no plan emitted.
+        assert!(plans.iter().all(|p| p.check_id != "BAD-URL"));
+    }
+
+    #[test]
+    fn plan_harden_skips_active_checks() {
+        // Active checks should be skipped (only Passive run via observer).
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("ACTIVE.check.yaml"),
+            r#"
+id: ACTIVE-1
+name: Active
+description: t
+source: aws
+profile: L1
+severity: high
+tags: [test]
+check_type: active
+credentials: {}
+inputs: {}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "http://127.0.0.1:1/never"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: []
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x"
+    body: {}
+"#,
+        )
+        .unwrap();
+        let plans = plan_harden(
+            tmp.path(),
+            &RemediationMode::Api,
+            &empty_config(),
+            None,
+        )
+        .unwrap();
+        assert!(plans.iter().all(|p| p.check_id != "ACTIVE-1"));
+    }
+
+    #[test]
+    fn execute_plans_with_failing_check_returns_results() {
+        // Exercise execute_plans with a real (test) plan.
+        let plan = full_plan();
+        let results = execute_plans(
+            &[plan],
+            &empty_config(),
+            None, // no terraform_dir → terraform skipped
+        );
+        // Result for the plan should exist.
+        assert!(!results.is_empty());
+    }
+
     #[test]
     fn warn_user_checks_fault_injection() {
         use crate::testutil::FailingWriter;
