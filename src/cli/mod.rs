@@ -2598,4 +2598,150 @@ controls:
         assert!(s.contains("# Compliance Report: ISO 27001"));
         assert!(s.contains("**Summary:**"));
     }
+
+    // --- target_matches_module ---
+    #[test]
+    fn target_matches_module_wildcard() {
+        assert!(target_matches_module("*", "anything.at.all"));
+        assert!(target_matches_module("*", ""));
+    }
+
+    #[test]
+    fn target_matches_module_prefix() {
+        assert!(target_matches_module("github", "github.org_mfa"));
+        assert!(target_matches_module("okta", "okta.password_policy"));
+    }
+
+    #[test]
+    fn target_matches_module_no_match() {
+        assert!(!target_matches_module("github", "okta.password_policy"));
+        assert!(!target_matches_module("", "github.org_mfa"));
+    }
+
+    // --- load_control: file-based, exercises both naming conventions ---
+    #[test]
+    fn load_control_flat_naming() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctrl_path = dir.path().join("iam.test.yaml");
+        std::fs::write(
+            &ctrl_path,
+            r#"
+id: iam.test
+name: Test Control
+description: A test control
+modules:
+  - mock.test
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: [test]
+    rationale: testing
+"#,
+        )
+        .unwrap();
+        let result = load_control("iam.test", dir.path().to_str().unwrap(), None);
+        assert!(result.is_ok());
+        let ctrl = result.unwrap();
+        assert_eq!(ctrl.id, "iam.test");
+    }
+
+    #[test]
+    fn load_control_namespaced_naming() {
+        let dir = tempfile::tempdir().unwrap();
+        let ns_dir = dir.path().join("iam");
+        std::fs::create_dir_all(&ns_dir).unwrap();
+        let ctrl_path = ns_dir.join("test.yaml");
+        std::fs::write(
+            &ctrl_path,
+            r#"
+id: iam.test
+name: Test Control
+description: A test control
+modules:
+  - mock.test
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: [test]
+    rationale: testing
+"#,
+        )
+        .unwrap();
+        let result = load_control("iam.test", dir.path().to_str().unwrap(), None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn load_control_missing_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = load_control("nonexistent.control", dir.path().to_str().unwrap(), None);
+        assert!(result.is_err());
+    }
+
+    // --- resolve_controls: directory walker ---
+    #[test]
+    fn resolve_controls_missing_dir_returns_err() {
+        let result = resolve_controls("/definitely/nonexistent/path/xyz", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn resolve_controls_walks_yaml_and_yml() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = r#"
+id: x.y
+name: Test
+description: t
+modules: [mock.test]
+status_id: 1
+classification:
+  ocean:
+    severity: low
+    profile: starter
+    tags: []
+    rationale: r
+"#;
+        std::fs::write(dir.path().join("a.yaml"), yaml.replace("x.y", "a.alpha")).unwrap();
+        std::fs::write(dir.path().join("b.yml"), yaml.replace("x.y", "a.beta")).unwrap();
+        std::fs::create_dir_all(dir.path().join("nested")).unwrap();
+        std::fs::write(
+            dir.path().join("nested").join("c.yaml"),
+            yaml.replace("x.y", "a.gamma"),
+        )
+        .unwrap();
+        // Non-yaml should be skipped
+        std::fs::write(dir.path().join("d.txt"), "not yaml").unwrap();
+
+        let result = resolve_controls(dir.path().to_str().unwrap(), "a").unwrap();
+        // All three a.* controls match "a" prefix
+        assert!(result.len() >= 3, "expected ≥3 matches, got {}", result.len());
+    }
+
+    #[test]
+    fn resolve_controls_no_match_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.yaml"),
+            r#"
+id: zebra.thing
+name: Z
+description: z
+modules: [mock.test]
+status_id: 1
+classification:
+  ocean:
+    severity: low
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let result = resolve_controls(dir.path().to_str().unwrap(), "iam");
+        assert!(result.is_err());
+    }
 }
