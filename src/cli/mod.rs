@@ -4225,6 +4225,45 @@ remediation:
     }
 
     #[test]
+    fn run_with_report_with_tags_and_severity_filter() {
+        // Drive the .map(|t| parse_csv(&t)) closures in the Report dispatcher
+        // arm (L538-540).
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let cli = parse_args(&[
+            "ocean", "report",
+            "--framework", "soc2",
+            "--checks-dir", checks.to_str().unwrap(),
+            "--tags", "iam,mfa",
+            "--severity", "critical,high",
+            "--profile", "L1",
+            "--source", "github",
+            "--include-passing",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_harden_with_tags_filter() {
+        // Drive the harden tag/severity filter closures (L578-580).
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let cli = parse_args(&[
+            "ocean", "harden",
+            "--checks-dir", checks.to_str().unwrap(),
+            "--mode", "api",
+            "--tags", "iam",
+            "--severity", "high",
+            "--profile", "L1",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
     fn run_with_report_framework_dispatches() {
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
