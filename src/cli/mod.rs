@@ -3353,6 +3353,56 @@ classification:
     }
 
     #[test]
+    fn cmd_harden_apply_no_plans_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            true, // apply = true
+            true, // confirm = true (skip prompt)
+            None,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_harden_apply_with_check_filter() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter {
+            tags: vec!["nonexistent".to_string()],
+            severities: vec![],
+            profile: None,
+        };
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            true,
+            true,
+            None,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn cmd_harden_invalid_mode_returns_err() {
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
