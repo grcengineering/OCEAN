@@ -2864,6 +2864,142 @@ classification:
         assert!(s.contains("test-sched"));
     }
 
+    // --- cmd_observe_path ---
+    fn write_simple_control_yaml(dir: &std::path::Path, file: &str, control_id: &str, module_id: &str) {
+        let yaml = format!(
+            r#"
+id: {control_id}
+name: {control_id}
+description: t
+observers:
+  - module_id: {module_id}
+modules: [{module_id}]
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: [test]
+    rationale: testing
+"#
+        );
+        std::fs::write(dir.join(file), yaml).unwrap();
+    }
+
+    #[test]
+    fn cmd_observe_path_runs_matching_observers() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_observe_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "mock",
+            cdir.to_str().unwrap(),
+            false,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_observe_path_with_store_persists_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_observe_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "mock",
+            cdir.to_str().unwrap(),
+            true,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_observe_path_target_filter_excludes() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        // target "github" doesn't match module "mock.test" — observer is filtered out
+        let result = cmd_observe_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "github",
+            "mock",
+            cdir.to_str().unwrap(),
+            false,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_observe_path_missing_controls_dir_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_observe_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "mock",
+            "/definitely/missing/path/xyz",
+            false,
+        );
+        assert!(result.is_err());
+    }
+
+    // --- cmd_test (single module) ---
+    #[test]
+    fn cmd_test_invalid_env_scope_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        // "invalid_scope" is not a valid env scope
+        let result = cmd_test(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "mock.safety_test",
+            "invalid_scope",
+            false,
+            false,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_test_unknown_tester_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_test(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "absolutely.nonexistent.tester",
+            "production",
+            false,
+            false,
+        );
+        assert!(result.is_err());
+    }
+
     // --- cmd_observe ---
     #[test]
     fn cmd_observe_unknown_module_returns_err() {
