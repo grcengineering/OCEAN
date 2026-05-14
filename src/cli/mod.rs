@@ -5077,6 +5077,28 @@ remediation:
     }
 
     #[test]
+    fn cmd_serve_bad_db_errors() {
+        // Passing a directory as the db path makes the store fail to open
+        // inside serve. Drives cmd_serve's tokio runtime + the ? on serve().
+        let dir = tempfile::tempdir().unwrap();
+        let bad_db = dir.path().to_str().unwrap();
+        let result = cmd_serve(0, None, bad_db);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn run_with_serve_dispatches_bad_db_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad_db = dir.path().to_str().unwrap();
+        let cli = parse_args(&[
+            "ocean", "--db", bad_db, "serve",
+            "--port", "0",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
     fn run_with_dashboard_dispatches_bad_db_errors() {
         // run_with's Dashboard arm: open_store fails on a directory path
         // → return Err before crate::dashboard::run is called.
