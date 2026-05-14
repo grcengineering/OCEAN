@@ -169,6 +169,64 @@ mod tests {
         assert_eq!(cfg.controls_dir, "controls");
     }
 
+    // Exercises the default-path closure at lines 103-108: when no path is
+    // passed and OCEAN_CONFIG isn't set, load() computes
+    // `${HOME}/.ocean/config.yaml`. We don't assert on the result (the file
+    // probably doesn't exist in CI, so defaults will be returned) — the test
+    // just guarantees the closure runs.
+    #[test]
+    fn load_default_path_closure_runs_when_no_path_and_no_env() {
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // Save / unset OCEAN_CONFIG so the second branch fires.
+        let saved = std::env::var("OCEAN_CONFIG").ok();
+        std::env::remove_var("OCEAN_CONFIG");
+
+        let _ = load(None);
+
+        if let Some(v) = saved {
+            std::env::set_var("OCEAN_CONFIG", v);
+        }
+    }
+
+    #[test]
+    fn load_default_path_closure_with_userprofile_fallback() {
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // Exercises the .or_else(|_| std::env::var("USERPROFILE")) branch.
+        // Save current HOME / OCEAN_CONFIG, unset HOME, set USERPROFILE.
+        let saved_home = std::env::var("HOME").ok();
+        let saved_userprofile = std::env::var("USERPROFILE").ok();
+        let saved_ocean = std::env::var("OCEAN_CONFIG").ok();
+        std::env::remove_var("OCEAN_CONFIG");
+        std::env::remove_var("HOME");
+        std::env::set_var("USERPROFILE", "/tmp/_ocean_userprofile_only");
+
+        let _ = load(None);
+
+        // Restore.
+        std::env::remove_var("USERPROFILE");
+        if let Some(v) = saved_userprofile { std::env::set_var("USERPROFILE", v); }
+        if let Some(v) = saved_home { std::env::set_var("HOME", v); }
+        if let Some(v) = saved_ocean { std::env::set_var("OCEAN_CONFIG", v); }
+    }
+
+    #[test]
+    fn load_default_path_closure_with_no_home_no_userprofile() {
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // Final fallback: "." when neither HOME nor USERPROFILE is set.
+        let saved_home = std::env::var("HOME").ok();
+        let saved_userprofile = std::env::var("USERPROFILE").ok();
+        let saved_ocean = std::env::var("OCEAN_CONFIG").ok();
+        std::env::remove_var("OCEAN_CONFIG");
+        std::env::remove_var("HOME");
+        std::env::remove_var("USERPROFILE");
+
+        let _ = load(None);
+
+        if let Some(v) = saved_userprofile { std::env::set_var("USERPROFILE", v); }
+        if let Some(v) = saved_home { std::env::set_var("HOME", v); }
+        if let Some(v) = saved_ocean { std::env::set_var("OCEAN_CONFIG", v); }
+    }
+
     #[test]
     fn load_parses_yaml_file() {
         let dir = std::env::temp_dir();
