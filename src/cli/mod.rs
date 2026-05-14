@@ -4366,4 +4366,401 @@ targets:
         let mut out = Vec::new();
         let _ = run_with(&mut out, cli);
     }
+
+    // ─── Fault-injection: cover `?` continuations after writeln!/write! ────
+    //
+    // Each handler that writes via `?` has a region for the early-return on
+    // Err. With Vec<u8> the writer never errors, so those regions stay
+    // uncovered. FailingWriter::new(N) fails on the Nth write_fmt call;
+    // looping N over a generous range exercises every `?` in the chain.
+
+    fn fault_inject<F>(max_n: usize, mut call: F)
+    where
+        F: FnMut(crate::testutil::FailingWriter),
+    {
+        use crate::testutil::FailingWriter;
+        for n in 0..max_n {
+            call(FailingWriter::new(n));
+        }
+    }
+
+    #[test]
+    fn cmd_version_fault_injection() {
+        fault_inject(20, |mut w| {
+            let _ = cmd_version(&mut w, OutputFormat::Json);
+            let _ = cmd_version(&mut w, OutputFormat::Yaml);
+        });
+    }
+
+    #[test]
+    fn cmd_observe_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(20, |mut w| {
+            let _ = cmd_observe(&mut w, OutputFormat::Json, &db, "mock.test", false);
+        });
+    }
+
+    #[test]
+    fn cmd_observe_path_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(40, |mut w| {
+            let _ = cmd_observe_path(
+                &mut w, OutputFormat::Json, &db, "*", "mock", cdir.to_str().unwrap(), false,
+            );
+            let _ = cmd_observe_path(
+                &mut w, OutputFormat::Yaml, &db, "*", "mock", cdir.to_str().unwrap(), false,
+            );
+        });
+    }
+
+    #[test]
+    fn cmd_test_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(20, |mut w| {
+            let _ = cmd_test(
+                &mut w, OutputFormat::Json, &db, "mock.safety_test", "production", false, false,
+            );
+        });
+    }
+
+    #[test]
+    fn cmd_test_path_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        std::fs::write(
+            cdir.join("mock.safety.yaml"),
+            r#"
+id: mock.safety
+name: Safety
+description: t
+testers:
+  - module_id: mock.safety_test
+modules: [mock.safety_test]
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(40, |mut w| {
+            let _ = cmd_test_path(
+                &mut w, OutputFormat::Json, &db, "*", "mock", "production",
+                cdir.to_str().unwrap(), false, false,
+            );
+            let _ = cmd_test_path(
+                &mut w, OutputFormat::Yaml, &db, "*", "mock", "production",
+                cdir.to_str().unwrap(), false, false,
+            );
+        });
+    }
+
+    #[test]
+    fn cmd_modules_list_fault_injection() {
+        fault_inject(20, |mut w| {
+            let _ = cmd_modules_list(&mut w, OutputFormat::Json, None);
+            let _ = cmd_modules_list(&mut w, OutputFormat::Json, Some("observer"));
+            let _ = cmd_modules_list(&mut w, OutputFormat::Json, Some("tester"));
+        });
+    }
+
+    #[test]
+    fn cmd_modules_validate_fault_injection() {
+        fault_inject(20, |mut w| {
+            let _ = cmd_modules_validate(&mut w, OutputFormat::Json, "mock.test");
+        });
+    }
+
+    #[test]
+    fn cmd_evaluate_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(20, |mut w| {
+            let _ = cmd_evaluate(
+                &mut w, OutputFormat::Json, &db, "mock.test", None, cdir.to_str().unwrap(),
+            );
+        });
+    }
+
+    #[test]
+    fn cmd_evaluate_path_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(40, |mut w| {
+            let _ = cmd_evaluate_path(
+                &mut w, OutputFormat::Json, &db, "*", "mock", cdir.to_str().unwrap(),
+            );
+            let _ = cmd_evaluate_path(
+                &mut w, OutputFormat::Yaml, &db, "*", "mock", cdir.to_str().unwrap(),
+            );
+        });
+    }
+
+    #[test]
+    fn cmd_history_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(20, |mut w| {
+            let _ = cmd_history(&mut w, OutputFormat::Json, &db, "iam.test", 30, None, None);
+        });
+    }
+
+    #[test]
+    fn cmd_report_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        store_one_evidence(&db);
+        fault_inject(40, |mut w| {
+            let _ = cmd_report(&mut w, &db, "2020-01-01:2030-12-31", "json", None);
+            let _ = cmd_report(&mut w, &db, "2020-01-01:2030-12-31", "markdown", None);
+            let _ = cmd_report(&mut w, &db, "2020-01-01:2030-12-31", "csv", None);
+        });
+    }
+
+    #[test]
+    fn cmd_compliance_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        store_control_status(&db, "iam.passing", "effective");
+        store_control_status(&db, "iam.failing", "ineffective");
+        store_control_status(&db, "iam.weird", "stale-data");
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let fwpath = dir.path().join("fw.yaml");
+        write_three_status_framework(&fwpath);
+        fault_inject(80, |mut w| {
+            let _ = cmd_compliance(
+                &mut w, &db, Some(fwpath.to_str().unwrap()), cdir.to_str().unwrap(), "markdown",
+            );
+            let _ = cmd_compliance(
+                &mut w, &db, Some(fwpath.to_str().unwrap()), cdir.to_str().unwrap(), "json",
+            );
+        });
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn cmd_harden_fleet_fault_injection_dry_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out");
+        let filter = crate::cli::filter::CheckFilter::default();
+        fault_inject(40, |mut w| {
+            let _ = cmd_harden_fleet(
+                &mut w, &fleet, checks.to_str().unwrap(), "api", false, true,
+                tf.to_str().unwrap(), "json", &filter, 2, false, &outd, true, // dry_run
+            );
+            let _ = cmd_harden_fleet(
+                &mut w, &fleet, checks.to_str().unwrap(), "api", false, true,
+                tf.to_str().unwrap(), "json", &filter, 2, false, &outd, false, // !apply
+            );
+        });
+    }
+
+    #[test]
+    fn cmd_schedule_list_fault_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        fault_inject(20, |mut w| {
+            let _ = cmd_schedule_list(&mut w, OutputFormat::Json, &db);
+        });
+    }
+
+    // ─── open_store failure paths ──────────────────────────────────────────
+    //
+    // Passing a directory as the db path makes SqliteStore::open return Err.
+    // This drives the `?` on every cmd_* function's `open_store(db)?` call.
+
+    fn bad_db_path() -> (tempfile::TempDir, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().to_str().unwrap().to_string(); // a directory, not a file
+        (dir, db)
+    }
+
+    #[test]
+    fn cmd_observe_open_store_err() {
+        let (_d, db) = bad_db_path();
+        let mut out = Vec::new();
+        assert!(cmd_observe(&mut out, OutputFormat::Json, &db, "mock.test", true).is_err());
+    }
+
+    #[test]
+    fn cmd_test_open_store_err() {
+        let (_d, db) = bad_db_path();
+        let mut out = Vec::new();
+        assert!(cmd_test(
+            &mut out, OutputFormat::Json, &db, "mock.safety_test", "production", true, false,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn cmd_evaluate_open_store_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let bad_db = dir.path().to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        assert!(cmd_evaluate(
+            &mut out, OutputFormat::Json, &bad_db, "mock.test", None, cdir.to_str().unwrap(),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn cmd_evaluate_path_open_store_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let bad_db = dir.path().to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        assert!(cmd_evaluate_path(
+            &mut out, OutputFormat::Json, &bad_db, "*", "mock", cdir.to_str().unwrap(),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn cmd_observe_path_open_store_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let bad_db = dir.path().to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        assert!(cmd_observe_path(
+            &mut out, OutputFormat::Json, &bad_db, "*", "mock", cdir.to_str().unwrap(), true,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn cmd_test_path_open_store_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let bad_db = dir.path().to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        assert!(cmd_test_path(
+            &mut out, OutputFormat::Json, &bad_db, "*", "mock", "production",
+            cdir.to_str().unwrap(), true, false,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn cmd_history_open_store_err() {
+        let (_d, db) = bad_db_path();
+        let mut out = Vec::new();
+        assert!(cmd_history(&mut out, OutputFormat::Json, &db, "iam.test", 30, None, None).is_err());
+    }
+
+    #[test]
+    fn cmd_report_open_store_err() {
+        let (_d, db) = bad_db_path();
+        let mut out = Vec::new();
+        assert!(cmd_report(&mut out, &db, "2024-01-01:2024-12-31", "json", None).is_err());
+    }
+
+    #[test]
+    fn cmd_schedule_list_open_store_err() {
+        let (_d, db) = bad_db_path();
+        let mut out = Vec::new();
+        assert!(cmd_schedule_list(&mut out, OutputFormat::Json, &db).is_err());
+    }
+
+    #[test]
+    fn cmd_schedule_remove_open_store_err() {
+        let (_d, db) = bad_db_path();
+        assert!(cmd_schedule_remove(&db, "x").is_err());
+    }
+
+    #[test]
+    fn cmd_schedule_status_open_store_err() {
+        let (_d, db) = bad_db_path();
+        let mut out = Vec::new();
+        assert!(cmd_schedule_status(&mut out, OutputFormat::Json, &db, "x").is_err());
+    }
+
+    #[test]
+    fn cmd_schedule_add_open_store_err() {
+        let (_d, db) = bad_db_path();
+        let mut out = Vec::new();
+        assert!(cmd_schedule_add(
+            &mut out, OutputFormat::Json, &db, Some("iam.test"),
+            "0 * * * *", &["mock.test".to_string()], "safe", "production", true, false,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn cmd_compliance_open_store_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let fwpath = dir.path().join("fw.yaml");
+        write_three_status_framework(&fwpath);
+        // Use a subdirectory as bad db path
+        let bad_db_dir = dir.path().join("bad_db_subdir");
+        std::fs::create_dir_all(&bad_db_dir).unwrap();
+        let bad_db = bad_db_dir.to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_compliance(
+            &mut out, &bad_db, Some(fwpath.to_str().unwrap()), cdir.to_str().unwrap(), "json",
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_schedule_status_fault_injection() {
+        use crate::scheduler::Schedule;
+        use chrono::Utc;
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let store = open_store(&db).unwrap();
+        let now = Utc::now();
+        let sched = Schedule {
+            id: "fault-inject".to_string(),
+            control_id: "iam.test".to_string(),
+            cron_expr: "0 * * * *".to_string(),
+            modules: vec!["mock.test".to_string()],
+            max_safety_level: "safe".to_string(),
+            environment_scope: "production".to_string(),
+            enabled: true,
+            catch_up: false,
+            last_run: None,
+            next_run: None,
+            created_at: now,
+            updated_at: now,
+        };
+        store.store_schedule(&sched).unwrap();
+        fault_inject(20, |mut w| {
+            let _ = cmd_schedule_status(&mut w, OutputFormat::Json, &db, "fault-inject");
+        });
+    }
 }

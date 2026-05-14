@@ -2557,4 +2557,77 @@ remediation:
         assert!(result.actions_taken.is_empty(), "no actions taken");
         assert!(result.errors.is_empty(), "no errors");
     }
+
+    // ─── Fault-injection: write-error `?` paths ──────────────────────────────
+
+    fn full_plan() -> RemediationPlan {
+        RemediationPlan {
+            check_id: "GH-X".to_string(),
+            check_name: "Full Plan".to_string(),
+            description: "desc".to_string(),
+            steps: vec!["step1".to_string(), "step2".to_string()],
+            api_action: Some(ApiAction {
+                method: "POST".to_string(),
+                url: "https://api.github.com/orgs/x".to_string(),
+                body: Some(serde_json::json!({"k": "v"})),
+            }),
+            cli_action: Some("gh api x".to_string()),
+            terraform_resources: vec![serde_json::json!({"type": "github_organization"})],
+        }
+    }
+
+    fn full_result(success: bool) -> RemediationResult {
+        RemediationResult {
+            check_id: "GH-X".to_string(),
+            success,
+            actions_taken: vec!["did thing".to_string()],
+            errors: if success { vec![] } else { vec!["err1".to_string()] },
+        }
+    }
+
+    #[test]
+    fn print_dry_run_fault_injection() {
+        use crate::testutil::FailingWriter;
+        let plans = vec![full_plan()];
+        for n in 0..60 {
+            let mut w = FailingWriter::new(n);
+            let _ = print_dry_run(&mut w, &plans, "json", &empty_config());
+            let _ = print_dry_run(&mut w, &plans, "table", &empty_config());
+            let _ = print_dry_run(&mut w, &[], "table", &empty_config());
+        }
+    }
+
+    #[test]
+    fn print_results_fault_injection() {
+        use crate::testutil::FailingWriter;
+        let results = vec![full_result(true), full_result(false)];
+        for n in 0..60 {
+            let mut w = FailingWriter::new(n);
+            let _ = print_results(&mut w, &results, "json", &empty_config());
+            let _ = print_results(&mut w, &results, "table", &empty_config());
+        }
+    }
+
+    #[test]
+    fn confirm_apply_fault_injection_auto_confirm() {
+        use crate::testutil::FailingWriter;
+        let plans = vec![full_plan()];
+        for n in 0..60 {
+            let mut w = FailingWriter::new(n);
+            // auto_confirm=true skips stdin read, exercises all writelns.
+            let _ = confirm_apply(&mut w, &plans, &empty_config(), true);
+        }
+    }
+
+    #[test]
+    fn warn_user_checks_fault_injection() {
+        use crate::testutil::FailingWriter;
+        // Need a dir that triggers the warning. Use ~/.ocean/checks if it
+        // exists, else just fault-inject without expecting the branch.
+        let tmp = TempDir::new().unwrap();
+        for n in 0..20 {
+            let mut w = FailingWriter::new(n);
+            warn_user_checks(&mut w, tmp.path(), &[]);
+        }
+    }
 }
