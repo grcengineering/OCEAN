@@ -3876,6 +3876,95 @@ references:
         assert!(s.contains("DUMMY-1") || s.contains("sarif") || s.contains("schema") || s.contains("version"));
     }
 
+    // --- cmd_history with explicit from/to ---
+    #[test]
+    fn cmd_history_with_from_to_dates() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_history(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "iam.test",
+            30,
+            Some("2024-01-01"),
+            Some("2024-12-31"),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_history_invalid_from_date_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_history(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "iam.test",
+            30,
+            Some("garbage"),
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    // --- run_with: Schedule sub-arms, Harden --fleet ---
+    #[test]
+    fn run_with_schedule_add_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "schedule", "add",
+            "--control", "iam.test",
+            "--cron", "0 * * * *",
+            "--modules", "mock.test",
+        ]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
+    }
+
+    #[test]
+    fn run_with_schedule_remove_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&["ocean", "--db", &db, "schedule", "remove", "nonexistent"]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
+    }
+
+    #[test]
+    fn run_with_schedule_status_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&["ocean", "--db", &db, "schedule", "status", "nonexistent"]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn run_with_harden_fleet_dispatches_dry_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let outd = dir.path().join("out");
+        let cli = parse_args(&[
+            "ocean", "harden",
+            "--fleet", fleet.to_str().unwrap(),
+            "--checks-dir", checks.to_str().unwrap(),
+            "--mode", "api",
+            "--output", outd.to_str().unwrap(),
+            "--dry-run",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
     // --- cmd_harden_fleet ---
     fn write_valid_fleet_manifest(path: &std::path::Path) {
         std::env::set_var("OCEAN_TEST_FLEET_TOKEN", "tok123");
