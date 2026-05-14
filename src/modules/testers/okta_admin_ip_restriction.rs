@@ -338,7 +338,7 @@ impl Tester for AdminIpRestrictionTester {
 
 fn build_evidence(
     now: chrono::DateTime<Utc>,
-    domain: &str,
+    _domain: &str,
     policies_endpoint: &str,
     status_id: StatusId,
     status_text: String,

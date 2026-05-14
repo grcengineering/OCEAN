@@ -702,7 +702,6 @@ mod tests {
     #[test]
     fn mfa_challenge_status_with_pr_only_is_effective() {
         // MFA_CHALLENGE is handled same as MFA_REQUIRED.
-        let srv = mock_server(200, MFA_REQUIRED_WITH_WEBAUTHN_ONLY);
         let body: serde_json::Value = serde_json::from_str(MFA_REQUIRED_WITH_WEBAUTHN_ONLY).unwrap();
         // Build body with MFA_CHALLENGE status but same factors.
         let challenge_body = {
