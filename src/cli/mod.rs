@@ -3669,6 +3669,140 @@ classification:
         let _ = run_with(&mut out, cli);
     }
 
+    // --- cmd_test_path with Yaml format (covers yaml output branch) ---
+    #[test]
+    fn cmd_test_path_yaml_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        std::fs::write(
+            cdir.join("mock.safety.yaml"),
+            r#"
+id: mock.safety
+name: Safety
+description: t
+testers:
+  - module_id: mock.safety_test
+modules: [mock.safety_test]
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_test_path(
+            &mut out,
+            OutputFormat::Yaml,
+            &db,
+            "*",
+            "mock",
+            "production",
+            cdir.to_str().unwrap(),
+            true, // store = true
+            false,
+        );
+        assert!(result.is_ok());
+    }
+
+    // --- cmd_evaluate composite-control branch ---
+    #[test]
+    fn cmd_evaluate_composite_controls_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        // Parent control with component_controls referencing a child that does exist.
+        std::fs::write(
+            cdir.join("parent.ctrl.yaml"),
+            r#"
+id: parent.ctrl
+name: Parent Control
+description: composite parent
+component_controls: [child.ok, child.missing]
+modules: []
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            cdir.join("child.ok.yaml"),
+            r#"
+id: child.ok
+name: Child OK
+description: child
+modules: []
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "parent.ctrl",
+            None,
+            cdir.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+    }
+
+    // --- cmd_evaluate_path with control that has testers (covers tester branch) ---
+    #[test]
+    fn cmd_evaluate_path_runs_testers() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        std::fs::write(
+            cdir.join("mock.safety.yaml"),
+            r#"
+id: mock.safety
+name: Safety
+description: t
+testers:
+  - module_id: mock.safety_test
+modules: [mock.safety_test]
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "mock",
+            cdir.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+    }
+
     // --- cmd_report with stored evidence (covers markdown/csv loop bodies) ---
     fn store_one_evidence(db: &str) {
         let store = open_store(db).unwrap();
