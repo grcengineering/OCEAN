@@ -190,6 +190,50 @@ mod tests {
     }
 
     #[test]
+    fn print_evaluation_table_fault_injection_covers_write_errors() {
+        // Drive every `?` continuation in print_evaluation_table by failing
+        // at write N for N = 0..50. Each invocation exits via a different ?.
+        use crate::testutil::FailingWriter;
+        let results = vec![
+            EvaluationResult {
+                control_id: "iam.full".to_string(),
+                control_name: "Full".to_string(),
+                target: "github".to_string(),
+                status: "ineffective".to_string(),
+                confidence: "high".to_string(),
+                framework: "soc2 CC6.1".to_string(),
+                module_runs: vec![
+                    make_module_run("a.run", "OK", Some("disk full")),
+                    make_module_run("b.fail", "FAIL", None),
+                ],
+                findings: vec!["bad config".to_string(), "another finding".to_string()],
+            },
+        ];
+        // n=0 should fail immediately at the header writeln.
+        let mut w0 = FailingWriter::new(0);
+        let r0 = print_evaluation_table(&mut w0, &results);
+        assert!(r0.is_err(), "expected Err when writer fails on first write");
+        // n=1..50: succeed through some prefix, then fail.
+        for n in 1..50 {
+            let mut w = FailingWriter::new(n);
+            let _ = print_evaluation_table(&mut w, &results);
+        }
+    }
+
+    #[test]
+    fn print_output_fault_injection_covers_write_errors() {
+        use crate::testutil::FailingWriter;
+        for n in 0..20 {
+            let mut w = FailingWriter::new(n);
+            let _ = print_output(&mut w, &serde_json::json!({"k": "v"}), OutputFormat::Json);
+        }
+        for n in 0..20 {
+            let mut w = FailingWriter::new(n);
+            let _ = print_output(&mut w, &serde_json::json!({"k": "v"}), OutputFormat::Yaml);
+        }
+    }
+
+    #[test]
     fn print_evaluation_table_empty() {
         let mut buf = Vec::new();
         print_evaluation_table(&mut buf, &[]).unwrap();

@@ -341,6 +341,68 @@ impl Authorizer for DenyAuthorizer {
 }
 
 // ---------------------------------------------------------------------------
+// FailingWriter
+// ---------------------------------------------------------------------------
+
+/// A `Write` impl that succeeds for the first `succeed_before_fail` calls
+/// to `write_fmt` (i.e. the first N `writeln!`/`write!` macro invocations),
+/// then returns `Err` for every subsequent macro invocation. Used to drive
+/// the `?` continuation paths after each `writeln!`/`write!` in handler
+/// code that would otherwise be unreachable when writing to a `Vec<u8>`.
+///
+/// Counts at the `write_fmt` level (not raw `write`) because each
+/// `writeln!` typically expands into many small `write` calls — one per
+/// format token. Failing per macro-invocation gives stable test semantics.
+pub struct FailingWriter {
+    pub succeed_before_fail: usize,
+    pub call_count: usize,
+}
+
+impl FailingWriter {
+    pub fn new(succeed_before_fail: usize) -> Self {
+        Self {
+            succeed_before_fail,
+            call_count: 0,
+        }
+    }
+
+    /// Always fail on the very first write_fmt.
+    pub fn always() -> Self {
+        Self::new(0)
+    }
+}
+
+impl std::io::Write for FailingWriter {
+    /// Underlying byte-level write. Always succeeds — failure decision lives
+    /// at the `write_fmt` boundary.
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        if self.call_count < self.succeed_before_fail {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "FailingWriter: simulated flush failure",
+            ))
+        }
+    }
+    fn write_fmt(&mut self, _args: std::fmt::Arguments<'_>) -> std::io::Result<()> {
+        let n = self.call_count;
+        self.call_count += 1;
+        if n < self.succeed_before_fail {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "FailingWriter: simulated write_fmt failure",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // MockHTTPServer
 // ---------------------------------------------------------------------------
 
@@ -416,6 +478,46 @@ mod tests {
         assert_eq!(ev.class_uid, 1001);
         assert!(!ev.observables.is_empty());
         assert!(!ev.findings.is_empty());
+    }
+
+    // ── FailingWriter ────────────────────────────────────────────────────────
+
+    #[test]
+    fn failing_writer_fails_first_writeln() {
+        use std::io::Write;
+        let mut w = FailingWriter::always();
+        let r = writeln!(w, "hi");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn failing_writer_succeeds_then_fails() {
+        use std::io::Write;
+        let mut w = FailingWriter::new(2);
+        assert!(writeln!(w, "a").is_ok());
+        assert!(writeln!(w, "b").is_ok());
+        assert!(writeln!(w, "c").is_err());
+    }
+
+    #[test]
+    fn failing_writer_flush_ok_when_under_limit() {
+        use std::io::Write;
+        let mut w = FailingWriter::new(5);
+        assert!(w.flush().is_ok());
+    }
+
+    #[test]
+    fn failing_writer_flush_err_when_at_limit() {
+        use std::io::Write;
+        let mut w = FailingWriter::always();
+        assert!(w.flush().is_err());
+    }
+
+    #[test]
+    fn failing_writer_byte_write_always_succeeds() {
+        use std::io::Write;
+        let mut w = FailingWriter::always();
+        assert_eq!(w.write(b"hi").unwrap(), 2);
     }
 
     // ── MockObserver constructors ─────────────────────────────────────────────
