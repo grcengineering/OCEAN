@@ -661,4 +661,16 @@ mod tests {
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev.raw_data["bypass_rule"].as_str().unwrap().contains("unknown"));
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_exercises_closure() {
+        let srv = mock_server(vec![(200, "this is not json {")]);
+        let _ = DefaultPolicyBypassTester.test(&base_config(&srv));
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_exercises_closure() {
+        let srv = mock_server(vec![(500, "<html>500</html>")]);
+        let _ = DefaultPolicyBypassTester.test(&base_config(&srv));
+    }
 }

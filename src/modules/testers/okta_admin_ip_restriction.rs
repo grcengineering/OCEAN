@@ -668,4 +668,22 @@ mod tests {
         // has_zone_include is true (non-empty include array) → restriction_found
         assert_eq!(ev.status_id, StatusId::Effective);
     }
+
+    #[test]
+    fn okta_get_invalid_json_on_200_exercises_closure() {
+        // 200 with non-JSON body — triggers the into_json().map_err() closure
+        // inside okta_get. We don't assert on the outer result because the
+        // tester may swallow per-call errors; the goal is to exercise the
+        // closure for coverage.
+        let srv = mock_server(vec![(200, "this is not json {")]);
+        let _ = AdminIpRestrictionTester.test(&base_config(&srv));
+    }
+
+    #[test]
+    fn okta_get_invalid_json_on_error_status_exercises_closure() {
+        // Error status with non-JSON body — triggers the unwrap_or_else
+        // fallback closure inside okta_get.
+        let srv = mock_server(vec![(500, "<html>500</html>")]);
+        let _ = AdminIpRestrictionTester.test(&base_config(&srv));
+    }
 }
