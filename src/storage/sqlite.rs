@@ -1473,4 +1473,14 @@ mod tests {
         assert!(store.close().is_ok());
     }
 
+    // ----- open() Connection::open error path -----
+    #[test]
+    fn open_directory_path_fails() {
+        // Pass a directory path to SqliteStore::open. rusqlite will fail
+        // to open it as a database file → triggers the with_context on L33.
+        let dir = TempDir::new().unwrap();
+        // The directory itself, not a file inside it.
+        let result = SqliteStore::open(dir.path());
+        assert!(result.is_err());
+    }
 }
