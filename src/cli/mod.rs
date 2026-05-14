@@ -3934,6 +3934,75 @@ remediation:
     }
 
     #[test]
+    fn cmd_harden_with_non_empty_check_filter_and_real_check() {
+        // Drive the check_filter.matches() closure (L1688) with a check def
+        // that has matching tags.
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            checks.join("TAGGED.check.yaml"),
+            format!(
+                r#"id: TAGGED-1
+name: Tagged
+description: t
+source: github
+profile: L1
+severity: high
+tags: [iam]
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: []
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x/settings"
+    body: {{}}
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter {
+            tags: vec!["iam".to_string()],
+            severities: vec![],
+            profile: None,
+        };
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            false,
+            false,
+            None,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn cmd_harden_apply_with_check_filter() {
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
