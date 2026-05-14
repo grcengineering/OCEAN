@@ -5477,6 +5477,20 @@ classification:
     }
 
     #[test]
+    fn cmd_test_with_store_persists_evidence() {
+        // Drive the store branch (L895-901) of cmd_test.
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_test(
+            &mut out, OutputFormat::Json, &db, "mock.safety_test", "production",
+            true, // store = true
+            false,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn cmd_test_open_store_err() {
         let (_d, db) = bad_db_path();
         let mut out = Vec::new();

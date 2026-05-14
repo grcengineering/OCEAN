@@ -2893,6 +2893,27 @@ remediation:
     }
 
     #[test]
+    #[serial_test::serial]
+    fn warn_user_checks_fires_for_home_relative_dir() {
+        // Override HOME to a temp dir, then call warn_user_checks with a
+        // path under $HOME/.ocean/checks/. This drives the if-branch body.
+        let saved = std::env::var("HOME").ok();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HOME", tmp.path().to_str().unwrap());
+        let user_dir = tmp.path().join(".ocean").join("checks");
+        std::fs::create_dir_all(&user_dir).unwrap();
+        let mut out = Vec::new();
+        warn_user_checks(&mut out, &user_dir, &[]);
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("not verified"), "expected warning, got: {s}");
+        if let Some(h) = saved {
+            std::env::set_var("HOME", h);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+
+    #[test]
     fn warn_user_checks_fault_injection() {
         use crate::testutil::FailingWriter;
         // Need a dir that triggers the warning. Use ~/.ocean/checks if it
