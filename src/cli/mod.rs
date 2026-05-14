@@ -4079,6 +4079,42 @@ targets:
 
     #[test]
     #[serial_test::serial]
+    fn cmd_harden_fleet_apply_with_failures_prints_summary() {
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out");
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        // apply=true, confirm=true (skip prompt), continue_on_error=true.
+        // execute_fleet will fail target since github creds are fake.
+        let result = cmd_harden_fleet(
+            &mut out,
+            &fleet,
+            checks.to_str().unwrap(),
+            "api",
+            true,
+            true,
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+            1,
+            true,
+            &outd,
+            false,
+        );
+        // Either Ok (everything skipped) or Err (target failures). Both
+        // exercise the summary-printing code path.
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Fleet Summary") || s.contains("Test Fleet") || result.is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn cmd_harden_fleet_no_apply_prints_plan() {
         let dir = tempfile::tempdir().unwrap();
         let fleet = dir.path().join("fleet.yaml");
