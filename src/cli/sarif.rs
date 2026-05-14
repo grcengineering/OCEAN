@@ -312,6 +312,32 @@ assertions:
     }
 
     #[test]
+    fn severity_mapping_unknown_falls_back_to_warning() {
+        assert_eq!(ocean_severity_to_sarif_level("anything-else"), "warning");
+        assert_eq!(ocean_severity_to_sarif_level(""), "warning");
+    }
+
+    #[test]
+    fn severity_to_score_full_mapping() {
+        assert_eq!(ocean_severity_to_score("critical"), "9.0");
+        assert_eq!(ocean_severity_to_score("high"), "7.0");
+        assert_eq!(ocean_severity_to_score("medium"), "5.0");
+        assert_eq!(ocean_severity_to_score("low"), "3.0");
+        assert_eq!(ocean_severity_to_score("info"), "1.0");
+        assert_eq!(ocean_severity_to_score("anything-else"), "5.0");
+    }
+
+    #[test]
+    fn build_sarif_with_empty_description_omits_full_description_and_help() {
+        let mut def = sample_def();
+        def.description = String::new();
+        let sarif = build_sarif(&[def], &[]);
+        let rule = &sarif.runs[0].tool.driver.rules[0];
+        assert!(rule.full_description.is_none());
+        assert!(rule.help.is_none());
+    }
+
+    #[test]
     fn write_sarif_produces_valid_json() {
         let def = sample_def();
         let sarif = build_sarif(&[def], &[]);
