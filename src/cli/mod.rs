@@ -3641,6 +3641,85 @@ remediation:
     }
 
     #[test]
+    fn cmd_harden_fault_injection_apply_path() {
+        // Fault-inject across cmd_harden's apply path (drives confirm_apply +
+        // print_results writelns).
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            checks.join("FAULT-FAIL.check.yaml"),
+            format!(
+                r#"
+id: FAULT-FAIL
+name: Fault-Inject Failing Check
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: [s1]
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x/settings"
+    body: {{}}
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let filter = crate::cli::filter::CheckFilter::default();
+        for n in 0..50 {
+            let mut w = crate::testutil::FailingWriter::new(n);
+            let _ = cmd_harden(
+                &mut w,
+                checks.to_str().unwrap(),
+                "api",
+                true, // apply
+                true, // confirm
+                None,
+                tf.to_str().unwrap(),
+                "json",
+                &filter,
+            );
+            let mut w = crate::testutil::FailingWriter::new(n);
+            let _ = cmd_harden(
+                &mut w,
+                checks.to_str().unwrap(),
+                "api",
+                false, // dry-run
+                false,
+                None,
+                tf.to_str().unwrap(),
+                "table",
+                &filter,
+            );
+        }
+    }
+
+    #[test]
     fn cmd_harden_apply_no_plans_ok() {
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
@@ -4611,7 +4690,46 @@ remediation:
         // Whether it ends Ok or Err, the summary code paths get exercised.
         let _ = result;
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("Fleet Summary") || s.contains("Test Fleet"));
+        assert!(
+            s.contains("Fleet Summary"),
+            "expected 'Fleet Summary' in output, got: {s}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn cmd_harden_fleet_apply_fault_injection() {
+        // Drive each `?` continuation in the summary printing after a
+        // successful execute_fleet.
+        let dir = tempfile::tempdir().unwrap();
+        let fleet = dir.path().join("fleet.yaml");
+        write_valid_fleet_manifest(&fleet);
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        write_failing_aws_check_for_fleet(&checks, &srv.base_url);
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let outd = dir.path().join("out-faulty");
+        let filter = crate::cli::filter::CheckFilter::default();
+        for n in 0..60 {
+            let mut w = crate::testutil::FailingWriter::new(n);
+            let _ = cmd_harden_fleet(
+                &mut w,
+                &fleet,
+                checks.to_str().unwrap(),
+                "api",
+                true,
+                true,
+                tf.to_str().unwrap(),
+                "json",
+                &filter,
+                1,
+                true,
+                &outd,
+                false,
+            );
+        }
     }
 
     #[test]
