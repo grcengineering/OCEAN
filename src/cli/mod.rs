@@ -2905,6 +2905,124 @@ classification:
         let _: serde_json::Value = serde_json::from_str(&s).unwrap();
     }
 
+    // --- cmd_evaluate_path / cmd_test_path / cmd_report ---
+    #[test]
+    fn cmd_evaluate_path_runs_pipeline_on_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "mock",
+            cdir.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_evaluate_path_missing_dir_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "anything",
+            "/definitely/missing/dir",
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_evaluate_path_yaml_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate_path(
+            &mut out,
+            OutputFormat::Yaml,
+            &db,
+            "*",
+            "mock",
+            cdir.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_test_path_runs_on_safety_test() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        // A control with a tester reference.
+        std::fs::write(
+            cdir.join("mock.safety.yaml"),
+            r#"
+id: mock.safety
+name: Safety
+description: t
+testers:
+  - module_id: mock.safety_test
+modules: [mock.safety_test]
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_test_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "mock",
+            "production",
+            cdir.to_str().unwrap(),
+            false,
+            false,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_test_path_invalid_scope_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_test_path(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "mock",
+            "bogus_scope",
+            cdir.to_str().unwrap(),
+            false,
+            false,
+        );
+        assert!(result.is_err());
+    }
+
     // --- cmd_observe_path ---
     fn write_simple_control_yaml(dir: &std::path::Path, file: &str, control_id: &str, module_id: &str) {
         let yaml = format!(
