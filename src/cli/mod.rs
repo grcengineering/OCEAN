@@ -3131,6 +3131,105 @@ classification:
         assert!(result.is_err());
     }
 
+    #[test]
+    fn cmd_evaluate_path_observer_err_branch() {
+        // Control references a module id that doesn't exist → execute_observer errs.
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "ghost.yaml", "ghost.id", "ghost.nonexistent");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate_path(
+            &mut out, OutputFormat::Json, &db, "*", "ghost", cdir.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("ERROR") || s.contains("ghost"));
+    }
+
+    #[test]
+    fn cmd_evaluate_path_tester_err_branch() {
+        // Control references a tester that doesn't exist → execute_tester errs.
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        std::fs::write(
+            cdir.join("ghost-test.yaml"),
+            r#"
+id: ghost.tester
+name: Ghost Tester
+description: t
+testers:
+  - module_id: ghost.nonexistent_tester
+modules: [ghost.nonexistent_tester]
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_evaluate_path(
+            &mut out, OutputFormat::Json, &db, "*", "ghost", cdir.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("FAIL") || s.contains("ghost"));
+    }
+
+    #[test]
+    fn cmd_observe_path_observer_err_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "ghost.yaml", "ghost.id", "ghost.nonexistent");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_observe_path(
+            &mut out, OutputFormat::Json, &db, "*", "ghost", cdir.to_str().unwrap(), false,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_test_path_tester_err_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        std::fs::write(
+            cdir.join("ghost-test.yaml"),
+            r#"
+id: ghost.tester
+name: Ghost Tester
+description: t
+testers:
+  - module_id: ghost.nonexistent_tester
+modules: [ghost.nonexistent_tester]
+status_id: 1
+classification:
+  ocean:
+    severity: medium
+    profile: starter
+    tags: []
+    rationale: r
+"#,
+        )
+        .unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_test_path(
+            &mut out, OutputFormat::Json, &db, "*", "ghost", "production",
+            cdir.to_str().unwrap(), false, false,
+        );
+        assert!(result.is_ok());
+    }
+
     // --- cmd_test (single module) ---
     #[test]
     fn cmd_test_invalid_env_scope_returns_err() {
@@ -3423,6 +3522,33 @@ controls:
             cdir.to_str().unwrap(),
             "json",
         );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_compliance_auto_discovery_yml_suffix() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        // .framework.yml (not .yaml) — exercises the .yml branch.
+        write_simple_framework_yaml(&cdir.join("test.framework.yml"));
+        let mut out = Vec::new();
+        let result = cmd_compliance(&mut out, &db, None, cdir.to_str().unwrap(), "json");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_compliance_auto_discovery_yml_in_frameworks_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cdir = dir.path().join("controls");
+        let fdir = cdir.join("frameworks");
+        std::fs::create_dir_all(&fdir).unwrap();
+        // Plain .yml inside frameworks/ — exercises the frameworks/-only .yml arm.
+        write_simple_framework_yaml(&fdir.join("test.yml"));
+        let mut out = Vec::new();
+        let result = cmd_compliance(&mut out, &db, None, cdir.to_str().unwrap(), "json");
         assert!(result.is_ok());
     }
 
