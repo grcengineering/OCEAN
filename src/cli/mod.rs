@@ -2864,6 +2864,36 @@ classification:
         assert!(s.contains("test-sched"));
     }
 
+    // --- cmd_observe ---
+    #[test]
+    fn cmd_observe_unknown_module_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_observe(&mut out, OutputFormat::Json, &db, "nonexistent.observer", false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cmd_observe_mock_success_no_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_observe(&mut out, OutputFormat::Json, &db, "mock.test", false);
+        assert!(result.is_ok());
+        let s = String::from_utf8(out).unwrap();
+        assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn cmd_observe_mock_success_with_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let mut out = Vec::new();
+        let result = cmd_observe(&mut out, OutputFormat::Json, &db, "mock.test", true);
+        assert!(result.is_ok());
+    }
+
     #[test]
     fn cmd_schedule_remove_existing_succeeds() {
         use crate::scheduler::Schedule;
