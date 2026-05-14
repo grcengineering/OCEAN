@@ -484,6 +484,24 @@ assertions: []
     }
 
     #[test]
+    fn load_checks_from_dir_nonexistent_returns_zero() {
+        let registry = Registry::new();
+        let result = load_checks_from_dir(&registry, Path::new("/definitely-does-not-exist"));
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn load_checks_from_dir_skips_invalid_file_logs_warn() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "good.check.yaml", PASSIVE_YAML);
+        write_check(dir.path(), "bad.check.yaml", INVALID_YAML);
+        let registry = Registry::new();
+        let result = load_checks_from_dir(&registry, dir.path());
+        // Bad file skipped (warn!), good file registered → count=1.
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
     fn load_definitions_from_dir_skips_invalid_files() {
         let dir = TempDir::new().unwrap();
         write_check(dir.path(), "good.check.yaml", PASSIVE_YAML);
