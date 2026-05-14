@@ -1118,7 +1118,7 @@ mod tests {
     fn scan_evidence_bad_observables_json_errors() {
         let (store, _dir) = open_store();
         let id = Uuid::new_v4().to_string();
-        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let meta = r#"{"module":{"name":"m","version":"0","type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
         let conn = store.conn.lock().unwrap();
         conn.execute(
             &format!(
@@ -1140,7 +1140,7 @@ mod tests {
     fn scan_evidence_bad_raw_data_errors() {
         let (store, _dir) = open_store();
         let id = Uuid::new_v4().to_string();
-        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let meta = r#"{"module":{"name":"m","version":"0","type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
         let conn = store.conn.lock().unwrap();
         conn.execute(
             &format!(
@@ -1162,7 +1162,7 @@ mod tests {
     fn scan_evidence_bad_findings_json_errors() {
         let (store, _dir) = open_store();
         let id = Uuid::new_v4().to_string();
-        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let meta = r#"{"module":{"name":"m","version":"0","type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
         let conn = store.conn.lock().unwrap();
         conn.execute(
             &format!(
@@ -1184,7 +1184,7 @@ mod tests {
     fn scan_evidence_bad_transcript_json_errors() {
         let (store, _dir) = open_store();
         let id = Uuid::new_v4().to_string();
-        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let meta = r#"{"module":{"name":"m","version":"0","type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
         let conn = store.conn.lock().unwrap();
         conn.execute(
             &format!(
@@ -1206,7 +1206,7 @@ mod tests {
     fn scan_evidence_bad_enrichments_json_errors() {
         let (store, _dir) = open_store();
         let id = Uuid::new_v4().to_string();
-        let meta = r#"{"module":{"name":"m","version":"0","module_type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
+        let meta = r#"{"module":{"name":"m","version":"0","type":"observer"},"source":{"system":"s","api_version":"v1","endpoint":"e"},"original_time":null,"processed_time":"2024-01-01T00:00:00Z","safety_classification":null}"#;
         let conn = store.conn.lock().unwrap();
         conn.execute(
             &format!(
