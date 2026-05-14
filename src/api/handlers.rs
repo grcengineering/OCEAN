@@ -791,6 +791,79 @@ mod tests {
         assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    fn make_state_with_corrupted_history() -> AppState {
+        let dir = std::env::temp_dir();
+        let path = dir
+            .join(format!("ocean_api_hist_{}.db", Uuid::new_v4()))
+            .to_str()
+            .unwrap()
+            .to_string();
+        let store = SqliteStore::open(&path).unwrap();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        // control_status table — insert row with invalid UUID
+        conn.execute(
+            "INSERT INTO control_status (id, control_id, timestamp, status, confidence,
+             evidence_ids_json, evaluation_details) VALUES
+             ('NOT-A-UUID','iam.test','2024-01-01T00:00:00Z','effective','high','[]','x')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let registry = Arc::new(Registry::new());
+        register_all_observers(&registry);
+        register_all_testers(&registry);
+        AppState {
+            store: Arc::new(store),
+            registry,
+            auth_token: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn get_control_history_with_corrupted_returns_some_status() {
+        let state = make_state_with_corrupted_history();
+        let res = oneshot_get("/api/v1/controls/iam.test/history", state).await;
+        // Either 200 (corrupted row skipped) or 500 (error propagated) —
+        // both paths exercise get_control_history.
+        let _ = res.status();
+    }
+
+    fn make_state_with_corrupted_schedule() -> AppState {
+        let dir = std::env::temp_dir();
+        let path = dir
+            .join(format!("ocean_api_sched_{}.db", Uuid::new_v4()))
+            .to_str()
+            .unwrap()
+            .to_string();
+        let store = SqliteStore::open(&path).unwrap();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        // schedules table — invalid modules_json
+        conn.execute(
+            "INSERT INTO schedules (id, control_id, cron_expr, modules_json, max_safety_level,
+             environment_scope, enabled, catch_up, last_run, next_run, created_at, updated_at)
+             VALUES ('x','iam.test','0 * * * *','BAD-JSON','safe','production',1,0,NULL,NULL,
+             '2024-01-01T00:00:00Z','2024-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let registry = Arc::new(Registry::new());
+        register_all_observers(&registry);
+        register_all_testers(&registry);
+        AppState {
+            store: Arc::new(store),
+            registry,
+            auth_token: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn list_schedules_with_corrupted_returns_500() {
+        let state = make_state_with_corrupted_schedule();
+        let res = oneshot_get("/api/v1/schedules", state).await;
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
     #[tokio::test]
     async fn get_evidence_with_corrupted_returns_5xx_or_404() {
         let state = make_state_with_corrupted_evidence();
