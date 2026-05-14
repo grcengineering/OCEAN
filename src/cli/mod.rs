@@ -418,9 +418,17 @@ pub enum ScheduleCmd {
 
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
-    let format = OutputFormat::from_str(&cli.format);
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
+    run_with(&mut out, cli)
+}
+
+/// Dispatch a parsed `Cli` to the appropriate handler.
+///
+/// Split from `run()` so tests can exercise the dispatcher with an in-memory
+/// writer and `Cli::try_parse_from(...)`.
+pub fn run_with<W: Write>(out: &mut W, cli: Cli) -> Result<()> {
+    let format = OutputFormat::from_str(&cli.format);
 
     let command = cli.command.unwrap_or(Commands::Dashboard {
         refresh: 30,
@@ -428,7 +436,7 @@ pub fn run() -> Result<()> {
     });
 
     match command {
-        Commands::Version => cmd_version(&mut out, format),
+        Commands::Version => cmd_version(out, format),
         Commands::Observe {
             module,
             target,
@@ -441,9 +449,9 @@ pub fn run() -> Result<()> {
                 let p = control.as_deref().ok_or_else(|| {
                     anyhow!("--control/-c is required when using --target/-t")
                 })?;
-                cmd_observe_path(&mut out, format, &cli.db, t, p, &controls_dir, !no_store)
+                cmd_observe_path(out, format, &cli.db, t, p, &controls_dir, !no_store)
             } else if let Some(m) = module.as_deref() {
-                cmd_observe(&mut out, format, &cli.db, m, !no_store)
+                cmd_observe(out, format, &cli.db, m, !no_store)
             } else {
                 Err(anyhow!(
                     "Specify a module ID or use --target/-t and --control/-c"
@@ -464,9 +472,9 @@ pub fn run() -> Result<()> {
                 let p = control.as_deref().ok_or_else(|| {
                     anyhow!("--control/-c is required when using --target/-t")
                 })?;
-                cmd_test_path(&mut out, format, &cli.db, t, p, &env, &controls_dir, !no_store, confirm)
+                cmd_test_path(out, format, &cli.db, t, p, &env, &controls_dir, !no_store, confirm)
             } else if let Some(m) = module.as_deref() {
-                cmd_test(&mut out, format, &cli.db, m, &env, !no_store, confirm)
+                cmd_test(out, format, &cli.db, m, &env, !no_store, confirm)
             } else {
                 Err(anyhow!(
                     "Specify a module ID or use --target/-t and --control/-c"
@@ -475,9 +483,9 @@ pub fn run() -> Result<()> {
         }
         Commands::Modules { cmd } => match cmd {
             ModulesCmd::List { module_type } => {
-                cmd_modules_list(&mut out, format, module_type.as_deref())
+                cmd_modules_list(out, format, module_type.as_deref())
             }
-            ModulesCmd::Validate { id } => cmd_modules_validate(&mut out, format, &id),
+            ModulesCmd::Validate { id } => cmd_modules_validate(out, format, &id),
         },
         Commands::Evaluate {
             control,
@@ -491,9 +499,9 @@ pub fn run() -> Result<()> {
                 let p = control_path.as_deref().ok_or_else(|| {
                     anyhow!("--control/-c is required when using --target/-t")
                 })?;
-                cmd_evaluate_path(&mut out, format, &cli.db, t, p, &controls_dir)
+                cmd_evaluate_path(out, format, &cli.db, t, p, &controls_dir)
             } else if let Some(ctrl) = control.as_deref() {
-                cmd_evaluate(&mut out, format, &cli.db, ctrl, cel.as_deref(), &controls_dir)
+                cmd_evaluate(out, format, &cli.db, ctrl, cel.as_deref(), &controls_dir)
             } else {
                 Err(anyhow!(
                     "Specify a control ID or use --target/-t and --control/-c"
@@ -506,7 +514,7 @@ pub fn run() -> Result<()> {
             from,
             to,
         } => cmd_history(
-            &mut out,
+            out,
             format,
             &cli.db,
             &control,
@@ -533,7 +541,7 @@ pub fn run() -> Result<()> {
             };
             if let Some(frameworks) = framework {
                 cmd_report_framework(
-                    &mut out,
+                    out,
                     &checks_dir,
                     &frameworks,
                     include_passing,
@@ -546,7 +554,7 @@ pub fn run() -> Result<()> {
                 let p = period.ok_or_else(|| {
                     anyhow!("--period YYYY-MM-DD:YYYY-MM-DD is required when --framework is not specified")
                 })?;
-                cmd_report(&mut out, &cli.db, &p, &rep_fmt, control.as_deref())
+                cmd_report(out, &cli.db, &p, &rep_fmt, control.as_deref())
             }
         }
         Commands::Harden {
@@ -575,7 +583,7 @@ pub fn run() -> Result<()> {
             if let Some(fleet_path) = fleet {
                 // Fleet mode: multi-target hardening
                 cmd_harden_fleet(
-                    &mut out,
+                    out,
                     &fleet_path,
                     &checks_dir,
                     &mode,
@@ -592,7 +600,7 @@ pub fn run() -> Result<()> {
             } else {
                 // Single-target mode (existing behavior)
                 cmd_harden(
-                    &mut out,
+                    out,
                     &checks_dir,
                     &mode,
                     apply,
@@ -612,7 +620,7 @@ pub fn run() -> Result<()> {
             diff,
             filter,
         } => cmd_build(
-            &mut out,
+            out,
             &source,
             &target,
             output.as_deref(),
@@ -630,7 +638,7 @@ pub fn run() -> Result<()> {
                 enabled,
                 catch_up,
             } => cmd_schedule_add(
-                &mut out,
+                out,
                 format,
                 &cli.db,
                 control.as_deref(),
@@ -641,9 +649,9 @@ pub fn run() -> Result<()> {
                 enabled,
                 catch_up,
             ),
-            ScheduleCmd::List => cmd_schedule_list(&mut out, format, &cli.db),
+            ScheduleCmd::List => cmd_schedule_list(out, format, &cli.db),
             ScheduleCmd::Remove { id } => cmd_schedule_remove(&cli.db, &id),
-            ScheduleCmd::Status { id } => cmd_schedule_status(&mut out, format, &cli.db, &id),
+            ScheduleCmd::Status { id } => cmd_schedule_status(out, format, &cli.db, &id),
         },
         Commands::Serve { port, auth_token } => {
             let db_path = resolve_db_path(&cli.db);
@@ -660,7 +668,7 @@ pub fn run() -> Result<()> {
             framework,
             controls_dir,
             format: fmt,
-        } => cmd_compliance(&mut out, &cli.db, framework.as_deref(), &controls_dir, &fmt),
+        } => cmd_compliance(out, &cli.db, framework.as_deref(), &controls_dir, &fmt),
     }
 }
 
@@ -3468,5 +3476,212 @@ classification:
             None,
         );
         assert!(result.is_ok());
+    }
+
+    // --- run_with dispatcher ---
+    fn parse_args(args: &[&str]) -> Cli {
+        Cli::try_parse_from(args).unwrap()
+    }
+
+    #[test]
+    fn run_with_version_ok() {
+        let cli = parse_args(&["ocean", "version"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_observe_no_module_or_target_errors() {
+        let cli = parse_args(&["ocean", "observe"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
+    fn run_with_observe_target_without_control_errors() {
+        let cli = parse_args(&["ocean", "observe", "--target", "okta"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
+    fn run_with_observe_module_dispatches_to_cmd_observe() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&["ocean", "--db", &db, "observe", "mock.test", "--no-store"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_observe_target_control_dispatches_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "observe",
+            "--target", "*",
+            "--control", "mock",
+            "--controls-dir", cdir.to_str().unwrap(),
+            "--no-store",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_test_no_module_errors() {
+        let cli = parse_args(&["ocean", "test"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
+    fn run_with_test_target_without_control_errors() {
+        let cli = parse_args(&["ocean", "test", "--target", "okta"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
+    fn run_with_test_module_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "test", "mock.safety_test",
+            "--env", "production", "--no-store",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_modules_list_dispatches() {
+        let cli = parse_args(&["ocean", "modules", "list"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_modules_validate_dispatches() {
+        let cli = parse_args(&["ocean", "modules", "validate", "mock.test"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_evaluate_no_args_errors() {
+        let cli = parse_args(&["ocean", "evaluate"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
+    fn run_with_evaluate_target_without_control_errors() {
+        let cli = parse_args(&["ocean", "evaluate", "--target", "okta"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
+    fn run_with_history_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "history",
+            "--control", "iam.test",
+        ]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
+    }
+
+    #[test]
+    fn run_with_report_no_args_errors() {
+        let cli = parse_args(&["ocean", "report"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_err());
+    }
+
+    #[test]
+    fn run_with_report_with_period_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "report",
+            "--period", "2024-01-01:2024-12-31",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_report_framework_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let cli = parse_args(&[
+            "ocean", "report",
+            "--framework", "soc2",
+            "--checks-dir", checks.to_str().unwrap(),
+            "--include-passing",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_harden_dispatches_dry_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let cli = parse_args(&[
+            "ocean", "harden",
+            "--checks-dir", checks.to_str().unwrap(),
+            "--mode", "api",
+        ]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_schedule_list_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cli = parse_args(&["ocean", "--db", &db, "schedule", "list"]);
+        let mut out = Vec::new();
+        assert!(run_with(&mut out, cli).is_ok());
+    }
+
+    #[test]
+    fn run_with_compliance_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let cli = parse_args(&[
+            "ocean", "--db", &db, "compliance",
+            "--controls-dir", cdir.to_str().unwrap(),
+            "--format", "json",
+        ]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
+    }
+
+    #[test]
+    fn run_with_build_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        let out_dir = dir.path().join("out");
+        let cli = parse_args(&[
+            "ocean", "build",
+            "--target", "soc2",
+            "--source", source.to_str().unwrap(),
+            "--output", out_dir.to_str().unwrap(),
+        ]);
+        let mut out = Vec::new();
+        let _ = run_with(&mut out, cli);
     }
 }
