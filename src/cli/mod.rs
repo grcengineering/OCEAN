@@ -3290,6 +3290,71 @@ classification:
         assert!(result.is_err());
     }
 
+    fn write_simple_framework_yaml(path: &std::path::Path) {
+        std::fs::write(
+            path,
+            r#"
+id: test.framework
+name: Test Framework
+version: "1.0"
+controls:
+  - ref: T1
+    title: First Test Control
+    description: t1
+    ocean_control_ids: [iam.test]
+  - ref: T2
+    title: No Mapping
+    description: t2
+    ocean_control_ids: []
+"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn cmd_compliance_auto_discovery_in_frameworks_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cdir = dir.path().join("controls");
+        let fdir = cdir.join("frameworks");
+        std::fs::create_dir_all(&fdir).unwrap();
+        write_simple_framework_yaml(&fdir.join("test.yaml"));
+        let mut out = Vec::new();
+        let result = cmd_compliance(&mut out, &db, None, cdir.to_str().unwrap(), "json");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_compliance_auto_discovery_top_level_framework_suffix() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        write_simple_framework_yaml(&cdir.join("soc2.framework.yaml"));
+        let mut out = Vec::new();
+        let result = cmd_compliance(&mut out, &db, None, cdir.to_str().unwrap(), "json");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_compliance_with_explicit_framework_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
+        let cdir = dir.path().join("controls");
+        std::fs::create_dir_all(&cdir).unwrap();
+        let fwpath = dir.path().join("my-framework.yaml");
+        write_simple_framework_yaml(&fwpath);
+        let mut out = Vec::new();
+        let result = cmd_compliance(
+            &mut out,
+            &db,
+            Some(fwpath.to_str().unwrap()),
+            cdir.to_str().unwrap(),
+            "markdown",
+        );
+        assert!(result.is_ok());
+    }
+
     #[test]
     fn cmd_compliance_bad_framework_path_returns_err() {
         let dir = tempfile::tempdir().unwrap();
