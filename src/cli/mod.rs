@@ -3846,6 +3846,71 @@ remediation:
     }
 
     #[test]
+    fn cmd_harden_with_matching_id_filter() {
+        // Drive the id_filter validation closure (L1676) with a checks dir
+        // containing a def whose id matches.
+        let dir = tempfile::tempdir().unwrap();
+        let checks = dir.path().join("checks");
+        std::fs::create_dir_all(&checks).unwrap();
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
+        std::fs::write(
+            checks.join("MATCH.check.yaml"),
+            format!(
+                r#"id: MATCH-1
+name: Match
+description: t
+source: github
+profile: L1
+severity: high
+tags: [test]
+credentials: {{}}
+inputs: {{}}
+steps:
+  - id: q
+    action: api_call
+    request:
+      method: GET
+      url: "{}"
+    extract:
+      x: "$.x"
+assertions:
+  - id: a
+    expr: "x == true"
+    severity: high
+    title: t
+    pass_message: ok
+    fail_message: fail
+remediation:
+  description: r
+  steps: []
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/x/settings"
+    body: {{}}
+"#,
+                srv.base_url
+            ),
+        )
+        .unwrap();
+        let tf = dir.path().join("tf");
+        std::fs::create_dir_all(&tf).unwrap();
+        let mut out = Vec::new();
+        let filter = crate::cli::filter::CheckFilter::default();
+        let result = cmd_harden(
+            &mut out,
+            checks.to_str().unwrap(),
+            "api",
+            false,
+            false,
+            Some("MATCH-1"), // id_filter exact match
+            tf.to_str().unwrap(),
+            "json",
+            &filter,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn cmd_harden_apply_no_plans_ok() {
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
@@ -5230,6 +5295,15 @@ classification:
             let _ = cmd_modules_list(&mut w, OutputFormat::Json, Some("observer"));
             let _ = cmd_modules_list(&mut w, OutputFormat::Json, Some("tester"));
         });
+    }
+
+    #[test]
+    fn cmd_modules_validate_tester_id() {
+        // Drive the tester branch (L932): info.module_type != "observer".
+        let mut buf = Vec::new();
+        cmd_modules_validate(&mut buf, OutputFormat::Json, "mock.safety_test").unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("mock.safety_test"));
     }
 
     #[test]
