@@ -109,7 +109,11 @@ test-e2e:
 
 test-all: test-unit test-integration test-e2e
 
+# Coverage PRIME DIRECTIVE: 95% lines / 95% functions (see CLAUDE.md).
+# Must stay in sync with .github/workflows/ci.yml. 100% is explicitly NOT
+# a goal — the residual is genuinely-unreachable defensive code.
 coverage-check:
 	cargo llvm-cov \
 		--ignore-filename-regex '$(STUB_REGEX)' \
-		--fail-under-lines 80
+		--fail-under-lines 95 \
+		--fail-under-functions 95

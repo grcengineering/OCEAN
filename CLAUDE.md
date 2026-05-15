@@ -101,11 +101,20 @@ The project uses GitHub Spec-Kit. Key commands:
 After completing ANY feature, bug fix, or refactoring work:
 
 1. Run `make test-unit` and verify exit code 0. Do NOT claim work is complete if tests fail.
-2. Run `make coverage-check` and verify coverage meets the threshold. If coverage dropped, write additional tests before proceeding.
+2. Run `make coverage-check` and verify coverage meets the threshold. If coverage dropped below the threshold, write additional tests before proceeding.
 3. If you modified or created integration-level code (database interactions, multi-package pipelines, module registration), also run `make test-integration`.
 4. Run `go vet ./...` to catch static analysis issues.
 
 Never skip these steps. Never say "tests should be run" — actually run them and report the results.
+
+### Code Coverage Requirement (PRIME DIRECTIVE)
+
+**The code coverage requirement is 95% lines and 95% functions. This is the floor, not a target to exceed at all costs.**
+
+- The CI gate (`.github/workflows/ci.yml`) and `make coverage-check` both enforce `--fail-under-lines 95 --fail-under-functions 95`, with `--ignore-filename-regex` excluding structurally untestable infrastructure (TUI event loop, HTTP server bootstrap, secrets providers requiring live services, the CLI `main` entry point).
+- **100% is explicitly NOT a goal.** It was attempted (GRC-144) and proven not worthwhile: the last ~1% is genuinely-unreachable defensive code — `?` continuations on `.with_context()`/`.map_err()` for errors that cannot occur (an in-memory writer never fails, serde never fails to serialize a valid struct, poisoned-mutex fallbacks can't be triggered deterministically), and dead match arms like ureq's "2xx in `Err::Status`" branch. Pushing past ~99% only incentivises deleting graceful error handling, which is a net negative for code quality.
+- **Do not lower the gate** to make a change pass. If a change drops coverage below 95%, write tests for the new code. If 95% genuinely cannot be met because the new code is untestable infrastructure, add it to the `--ignore-filename-regex` with a comment explaining why — do not weaken the percentage.
+- **Do not chase 100%.** Once a module's reachable code is covered and the suite is green at ≥95%, stop. Time spent fighting unreachable `?` branches is better spent elsewhere.
 
 ### 2. Every Code Change Requires Corresponding Test Changes
 

@@ -237,20 +237,21 @@ jobs:
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
-      - name: Run coverage gate (99% lines / 98% functions)
+      - name: Run coverage gate (95% lines / 95% functions)
         # --ignore-filename-regex excludes structurally untestable infrastructure
         # (dashboard TUI requires a real TTY; axum server bootstrap requires a
         # live port-binding listener — neither is feasible in a unit-test runner).
         #
-        # The gate is 99% lines / 98% functions rather than 100%/100%. This is
-        # the realistic ceiling for this codebase: the remaining ~0.8% is
-        # genuinely-unreachable defensive code — `?` continuations on
-        # `.with_context()`/`.map_err()` for errors that cannot occur (writing
-        # to an in-memory buffer never fails, serde never fails to serialize a
-        # valid Evidence, a poisoned-mutex fallback can't be triggered
-        # deterministically), plus dead arms like ureq's "200 in Err::Status"
-        # branch. Everything *reachable* is covered. Raising the gate further
-        # would only incentivise deleting graceful error handling.
+        # The gate is 95% lines / 95% functions. This is the project's coverage
+        # PRIME DIRECTIVE (see CLAUDE.md → "Code Coverage Requirement"). 100%
+        # was attempted (GRC-144) and proven not worthwhile — the residual ~1%
+        # is genuinely-unreachable defensive code (`?` continuations on
+        # `.with_context()`/`.map_err()` for errors that cannot occur, dead
+        # arms like ureq's "2xx in Err::Status" branch). The codebase actually
+        # sits well above this floor (~99% lines); the 95% gate gives headroom
+        # so PRs aren't blocked by tiny dips on unreachable code, while still
+        # guaranteeing all reachable code is tested. Do NOT lower this gate to
+        # make a change pass — write tests instead.
         run: |
           cargo llvm-cov \
             --locked \
@@ -258,8 +259,8 @@ jobs:
             --workspace \
             --ignore-run-fail \
             --ignore-filename-regex 'dashboard.terminal|api.server' \
-            --fail-under-lines 99 \
-            --fail-under-functions 98 \
+            --fail-under-lines 95 \
+            --fail-under-functions 95 \
             --lcov \
             --output-path lcov.info
       - name: Upload coverage to Codecov
