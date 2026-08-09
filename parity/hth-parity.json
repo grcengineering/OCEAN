@@ -6,8 +6,8 @@
     "controls": 1719,
     "pack_vendors": 71,
     "pack_sections": 602,
-    "checks": 108,
-    "controls_covered": 44
+    "checks": 161,
+    "controls_covered": 80
   },
   "vendors": [
     {
@@ -1944,352 +1944,402 @@
         {
           "id": "GH-1.01",
           "file": "checks/github/GH-1.01-org-mfa.check.yaml",
-          "section": "1.01"
+          "section": "1.1"
         },
         {
           "id": "GH-1.02",
           "file": "checks/github/GH-1.02-org-base-permissions.check.yaml",
-          "section": "1.02"
+          "section": "1.2"
         },
         {
           "id": "GH-1.03",
           "file": "checks/github/GH-1.03-saml-sso.check.yaml",
-          "section": "1.03"
+          "section": "1.3"
         },
         {
           "id": "GH-1.04",
           "file": "checks/github/GH-1.04-admin-audit.check.yaml",
-          "section": "1.04"
+          "section": "1.4"
         },
         {
           "id": "GH-1.05",
           "file": "checks/github/GH-1.05-ip-allow-list.check.yaml",
-          "section": "1.05"
+          "section": "1.5"
         },
         {
           "id": "GH-1.07",
           "file": "checks/github/GH-1.07-pat-policy.check.yaml",
-          "section": "1.07"
+          "section": "1.7"
         },
         {
           "id": "GH-1.08",
           "file": "checks/github/GH-1.08-repo-creation.check.yaml",
-          "section": "1.08"
+          "section": "1.2"
         },
         {
           "id": "GH-2.01",
           "file": "checks/github/GH-2.01-secret-scanning.check.yaml",
-          "section": "2.01"
+          "section": "2.2"
         },
         {
           "id": "GH-2.02",
           "file": "checks/github/GH-2.02-dependabot.check.yaml",
-          "section": "2.02"
+          "section": "2.2"
         },
         {
           "id": "GH-2.03",
           "file": "checks/github/GH-2.03-org-rulesets.check.yaml",
-          "section": "2.03"
+          "section": "2.3"
         },
         {
           "id": "GH-2.04",
           "file": "checks/github/GH-2.04-commit-signing.check.yaml",
-          "section": "2.04"
+          "section": "2.4"
         },
         {
           "id": "GH-2.05",
           "file": "checks/github/GH-2.05-branch-protection.check.yaml",
-          "section": "2.05"
+          "section": "2.1"
         },
         {
           "id": "GH-2.06",
           "file": "checks/github/GH-2.06-vulnerability-reporting.check.yaml",
-          "section": "2.06"
+          "section": "2.8"
         },
         {
           "id": "GH-2.07",
           "file": "checks/github/GH-2.07-dependency-graph.check.yaml",
-          "section": "2.07"
+          "section": "2.2"
         },
         {
           "id": "GH-3.01",
           "file": "checks/github/GH-3.01-actions-allowed.check.yaml",
-          "section": "3.01"
+          "section": "3.1"
         },
         {
           "id": "GH-3.02",
           "file": "checks/github/GH-3.02-workflow-permissions.check.yaml",
-          "section": "3.02"
+          "section": "3.2"
         },
         {
           "id": "GH-3.03",
           "file": "checks/github/GH-3.03-code-scanning.check.yaml",
-          "section": "3.03"
+          "section": "2.2"
         },
         {
           "id": "GH-3.04",
           "file": "checks/github/GH-3.04-runner-config.check.yaml",
-          "section": "3.04"
+          "section": "3.4"
         },
         {
           "id": "GH-3.05",
           "file": "checks/github/GH-3.05-environment-protection.check.yaml",
-          "section": "3.05"
+          "section": "5.1"
         },
         {
           "id": "GH-3.06",
           "file": "checks/github/GH-3.06-oidc-config.check.yaml",
-          "section": "3.06"
+          "section": "3.6"
         },
         {
           "id": "GH-3.07",
           "file": "checks/github/GH-3.07-codeowners.check.yaml",
-          "section": "3.07"
+          "section": "3.11"
         },
         {
           "id": "GH-4.01",
           "file": "checks/github/GH-4.01-oauth-apps.check.yaml",
-          "section": "4.01"
+          "section": "4.1"
         },
         {
           "id": "GH-4.02",
           "file": "checks/github/GH-4.02-installed-apps.check.yaml",
-          "section": "4.02"
+          "section": "4.2"
         },
         {
           "id": "GH-4.03",
           "file": "checks/github/GH-4.03-vulnerability-alerts.check.yaml",
-          "section": "4.03"
+          "section": "6.1"
         },
         {
           "id": "GH-5.01",
           "file": "checks/github/GH-5.01-org-webhooks.check.yaml",
-          "section": "5.01"
+          "section": "none"
         },
         {
           "id": "GH-5.02",
           "file": "checks/github/GH-5.02-outside-collaborators.check.yaml",
-          "section": "5.02"
+          "section": "5.8"
         },
         {
           "id": "GH-5.03",
           "file": "checks/github/GH-5.03-custom-secret-patterns.check.yaml",
-          "section": "5.03"
+          "section": "5.4"
+        },
+        {
+          "id": "GH-5.06",
+          "file": "checks/github/GH-5.06-repo-custom-properties.check.yaml",
+          "section": "5.6"
+        },
+        {
+          "id": "GH-6.05",
+          "file": "checks/github/GH-6.05-dependency-review-ruleset.check.yaml",
+          "section": "6.5"
         },
         {
           "id": "GH-7.01",
           "file": "checks/github/GH-7.01-copilot-governance.check.yaml",
-          "section": "7.01"
+          "section": "7.1"
+        },
+        {
+          "id": "GH-7.02",
+          "file": "checks/github/GH-7.02-custom-repository-roles.check.yaml",
+          "section": "7.2"
+        },
+        {
+          "id": "GH-7.03",
+          "file": "checks/github/GH-7.03-required-workflow-rulesets.check.yaml",
+          "section": "7.3"
         },
         {
           "id": "GH-8.01",
           "file": "checks/github/GH-8.01-audit-log-streaming.check.yaml",
-          "section": "8.01"
+          "section": "8.1"
+        },
+        {
+          "id": "GH-8.02",
+          "file": "checks/github/GH-8.02-security-overview-dashboard.check.yaml",
+          "section": "8.2"
         },
         {
           "id": "GH-8.03",
           "file": "checks/github/GH-8.03-security-config.check.yaml",
-          "section": "8.03"
+          "section": "8.3"
         },
         {
           "id": "GH-TEST-01",
           "file": "checks/github/GH-TEST-01-secret-push.check.yaml",
-          "section": null
+          "section": "2.2"
         },
         {
           "id": "GH-TEST-02",
           "file": "checks/github/GH-TEST-02-branch-bypass.check.yaml",
-          "section": null
+          "section": "2.1"
         },
         {
           "id": "GH-TEST-03",
           "file": "checks/github/GH-TEST-03-action-pin-audit.check.yaml",
-          "section": null
+          "section": "3.10"
         },
         {
           "id": "GH-TEST-04",
           "file": "checks/github/GH-TEST-04-unsigned-commit.check.yaml",
-          "section": null
+          "section": "2.4"
         },
         {
           "id": "GH-TEST-05",
           "file": "checks/github/GH-TEST-05-workflow-injection.check.yaml",
-          "section": null
+          "section": "3.13"
         },
         {
           "id": "GH-1.01",
           "file": "checks/github/GH-1.01-org-mfa.check.yaml",
-          "section": "1.01"
+          "section": "1.1"
         },
         {
           "id": "GH-1.02",
           "file": "checks/github/GH-1.02-org-base-permissions.check.yaml",
-          "section": "1.02"
+          "section": "1.2"
         },
         {
           "id": "GH-1.03",
           "file": "checks/github/GH-1.03-saml-sso.check.yaml",
-          "section": "1.03"
+          "section": "1.3"
         },
         {
           "id": "GH-1.04",
           "file": "checks/github/GH-1.04-admin-audit.check.yaml",
-          "section": "1.04"
+          "section": "1.4"
         },
         {
           "id": "GH-1.05",
           "file": "checks/github/GH-1.05-ip-allow-list.check.yaml",
-          "section": "1.05"
+          "section": "1.5"
         },
         {
           "id": "GH-1.07",
           "file": "checks/github/GH-1.07-pat-policy.check.yaml",
-          "section": "1.07"
+          "section": "1.7"
         },
         {
           "id": "GH-1.08",
           "file": "checks/github/GH-1.08-repo-creation.check.yaml",
-          "section": "1.08"
+          "section": "1.2"
         },
         {
           "id": "GH-2.01",
           "file": "checks/github/GH-2.01-secret-scanning.check.yaml",
-          "section": "2.01"
+          "section": "2.2"
         },
         {
           "id": "GH-2.02",
           "file": "checks/github/GH-2.02-dependabot.check.yaml",
-          "section": "2.02"
+          "section": "2.2"
         },
         {
           "id": "GH-2.03",
           "file": "checks/github/GH-2.03-org-rulesets.check.yaml",
-          "section": "2.03"
+          "section": "2.3"
         },
         {
           "id": "GH-2.04",
           "file": "checks/github/GH-2.04-commit-signing.check.yaml",
-          "section": "2.04"
+          "section": "2.4"
         },
         {
           "id": "GH-2.05",
           "file": "checks/github/GH-2.05-branch-protection.check.yaml",
-          "section": "2.05"
+          "section": "2.1"
         },
         {
           "id": "GH-2.06",
           "file": "checks/github/GH-2.06-vulnerability-reporting.check.yaml",
-          "section": "2.06"
+          "section": "2.8"
         },
         {
           "id": "GH-2.07",
           "file": "checks/github/GH-2.07-dependency-graph.check.yaml",
-          "section": "2.07"
+          "section": "2.2"
         },
         {
           "id": "GH-3.01",
           "file": "checks/github/GH-3.01-actions-allowed.check.yaml",
-          "section": "3.01"
+          "section": "3.1"
         },
         {
           "id": "GH-3.02",
           "file": "checks/github/GH-3.02-workflow-permissions.check.yaml",
-          "section": "3.02"
+          "section": "3.2"
         },
         {
           "id": "GH-3.03",
           "file": "checks/github/GH-3.03-code-scanning.check.yaml",
-          "section": "3.03"
+          "section": "2.2"
         },
         {
           "id": "GH-3.04",
           "file": "checks/github/GH-3.04-runner-config.check.yaml",
-          "section": "3.04"
+          "section": "3.4"
         },
         {
           "id": "GH-3.05",
           "file": "checks/github/GH-3.05-environment-protection.check.yaml",
-          "section": "3.05"
+          "section": "5.1"
         },
         {
           "id": "GH-3.06",
           "file": "checks/github/GH-3.06-oidc-config.check.yaml",
-          "section": "3.06"
+          "section": "3.6"
         },
         {
           "id": "GH-3.07",
           "file": "checks/github/GH-3.07-codeowners.check.yaml",
-          "section": "3.07"
+          "section": "3.11"
         },
         {
           "id": "GH-4.01",
           "file": "checks/github/GH-4.01-oauth-apps.check.yaml",
-          "section": "4.01"
+          "section": "4.1"
         },
         {
           "id": "GH-4.02",
           "file": "checks/github/GH-4.02-installed-apps.check.yaml",
-          "section": "4.02"
+          "section": "4.2"
         },
         {
           "id": "GH-4.03",
           "file": "checks/github/GH-4.03-vulnerability-alerts.check.yaml",
-          "section": "4.03"
+          "section": "6.1"
         },
         {
           "id": "GH-5.01",
           "file": "checks/github/GH-5.01-org-webhooks.check.yaml",
-          "section": "5.01"
+          "section": "none"
         },
         {
           "id": "GH-5.02",
           "file": "checks/github/GH-5.02-outside-collaborators.check.yaml",
-          "section": "5.02"
+          "section": "5.8"
         },
         {
           "id": "GH-5.03",
           "file": "checks/github/GH-5.03-custom-secret-patterns.check.yaml",
-          "section": "5.03"
+          "section": "5.4"
+        },
+        {
+          "id": "GH-5.06",
+          "file": "checks/github/GH-5.06-repo-custom-properties.check.yaml",
+          "section": "5.6"
+        },
+        {
+          "id": "GH-6.05",
+          "file": "checks/github/GH-6.05-dependency-review-ruleset.check.yaml",
+          "section": "6.5"
         },
         {
           "id": "GH-7.01",
           "file": "checks/github/GH-7.01-copilot-governance.check.yaml",
-          "section": "7.01"
+          "section": "7.1"
+        },
+        {
+          "id": "GH-7.02",
+          "file": "checks/github/GH-7.02-custom-repository-roles.check.yaml",
+          "section": "7.2"
+        },
+        {
+          "id": "GH-7.03",
+          "file": "checks/github/GH-7.03-required-workflow-rulesets.check.yaml",
+          "section": "7.3"
         },
         {
           "id": "GH-8.01",
           "file": "checks/github/GH-8.01-audit-log-streaming.check.yaml",
-          "section": "8.01"
+          "section": "8.1"
+        },
+        {
+          "id": "GH-8.02",
+          "file": "checks/github/GH-8.02-security-overview-dashboard.check.yaml",
+          "section": "8.2"
         },
         {
           "id": "GH-8.03",
           "file": "checks/github/GH-8.03-security-config.check.yaml",
-          "section": "8.03"
+          "section": "8.3"
         },
         {
           "id": "GH-TEST-01",
           "file": "checks/github/GH-TEST-01-secret-push.check.yaml",
-          "section": null
+          "section": "2.2"
         },
         {
           "id": "GH-TEST-02",
           "file": "checks/github/GH-TEST-02-branch-bypass.check.yaml",
-          "section": null
+          "section": "2.1"
         },
         {
           "id": "GH-TEST-03",
           "file": "checks/github/GH-TEST-03-action-pin-audit.check.yaml",
-          "section": null
+          "section": "3.10"
         },
         {
           "id": "GH-TEST-04",
           "file": "checks/github/GH-TEST-04-unsigned-commit.check.yaml",
-          "section": null
+          "section": "2.4"
         },
         {
           "id": "GH-TEST-05",
           "file": "checks/github/GH-TEST-05-workflow-injection.check.yaml",
-          "section": null
+          "section": "3.13"
         }
       ],
       "controls_covered": [
@@ -2299,35 +2349,37 @@
         "1.4",
         "1.5",
         "1.7",
-        "1.8",
         "2.1",
         "2.2",
         "2.3",
         "2.4",
-        "2.5",
-        "2.6",
-        "2.7",
+        "2.8",
         "3.1",
         "3.2",
-        "3.3",
         "3.4",
-        "3.5",
         "3.6",
-        "3.7",
+        "3.10",
+        "3.11",
+        "3.13",
         "4.1",
         "4.2",
-        "4.3",
         "5.1",
-        "5.2",
-        "5.3",
+        "5.4",
+        "5.6",
+        "5.8",
+        "6.1",
+        "6.5",
         "7.1",
+        "7.2",
+        "7.3",
         "8.1",
+        "8.2",
         "8.3"
       ]
     },
     {
       "vendor": "gitlab",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 19,
       "controls": [
         "1.1",
@@ -2387,8 +2439,34 @@
           "sigma"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "GITLAB-1.03",
+          "file": "checks/gitlab/GITLAB-1.03-pat-policy.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "GITLAB-2.01",
+          "file": "checks/gitlab/GITLAB-2.01-protect-cicd-variables.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "GITLAB-4.01",
+          "file": "checks/gitlab/GITLAB-4.01-push-rules.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "GITLAB-6.01",
+          "file": "checks/gitlab/GITLAB-6.01-audit-events.check.yaml",
+          "section": "6.1"
+        }
+      ],
+      "controls_covered": [
+        "1.3",
+        "2.1",
+        "4.1",
+        "6.1"
+      ]
     },
     {
       "vendor": "gmail",
@@ -3382,22 +3460,52 @@
         {
           "id": "AZURE-AAD-1.01",
           "file": "checks/azure/AZURE-AAD-1.01-security-defaults.check.yaml",
-          "section": "1.01"
+          "section": "2.2"
         },
         {
           "id": "AZURE-AAD-2.01",
           "file": "checks/azure/AZURE-AAD-2.01-legacy-auth.check.yaml",
-          "section": "2.01"
+          "section": "2.1"
         },
         {
           "id": "AZURE-AAD-3.01",
           "file": "checks/azure/AZURE-AAD-3.01-privileged-roles.check.yaml",
-          "section": "3.01"
+          "section": "3.1"
+        },
+        {
+          "id": "AZURE-APP-4.01",
+          "file": "checks/azure/AZURE-APP-4.01-restrict-user-consent.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "AZURE-APP-4.03",
+          "file": "checks/azure/AZURE-APP-4.03-retire-azure-ad-graph.check.yaml",
+          "section": "4.3"
         },
         {
           "id": "AZURE-CA-1.01",
           "file": "checks/azure/AZURE-CA-1.01-conditional-access.check.yaml",
-          "section": "1.01"
+          "section": "2.2"
+        },
+        {
+          "id": "AZURE-CA-1.02",
+          "file": "checks/azure/AZURE-CA-1.02-emergency-access-exclusion.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "AZURE-CA-2.03",
+          "file": "checks/azure/AZURE-CA-2.03-compliant-device-admins.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "AZURE-CA-2.04",
+          "file": "checks/azure/AZURE-CA-2.04-block-high-risk-signins.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "AZURE-CA-2.06",
+          "file": "checks/azure/AZURE-CA-2.06-block-device-code-flow.check.yaml",
+          "section": "2.6"
         },
         {
           "id": "AZURE-KV-1.01",
@@ -3412,18 +3520,49 @@
         {
           "id": "AZURE-MFA-1.01",
           "file": "checks/azure/AZURE-MFA-1.01-mfa-bypass.check.yaml",
-          "section": "1.01"
+          "section": "2.2"
+        },
+        {
+          "id": "AZURE-MON-5.01",
+          "file": "checks/azure/AZURE-MON-5.01-export-signin-audit-logs.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "AZURE-MON-5.02",
+          "file": "checks/azure/AZURE-MON-5.02-identity-secure-score.check.yaml",
+          "section": "5.2"
         },
         {
           "id": "AZURE-NSG-1.01",
           "file": "checks/azure/AZURE-NSG-1.01-unrestricted-inbound.check.yaml",
           "section": "1.01"
+        },
+        {
+          "id": "AZURE-PIM-3.02",
+          "file": "checks/azure/AZURE-PIM-3.02-access-reviews.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "AZURE-PIM-3.03",
+          "file": "checks/azure/AZURE-PIM-3.03-restricted-management-au.check.yaml",
+          "section": "3.3"
         }
       ],
       "controls_covered": [
         "1.1",
+        "1.2",
         "2.1",
-        "3.1"
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.3",
+        "5.1",
+        "5.2"
       ]
     },
     {
@@ -3903,166 +4042,312 @@
         {
           "id": "OKTA-1.02",
           "file": "checks/okta/OKTA-1.02-admin-roles.check.yaml",
-          "section": "1.02"
+          "section": "1.2"
+        },
+        {
+          "id": "OKTA-1.03",
+          "file": "checks/okta/OKTA-1.03-hardware-bound-tokens.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "OKTA-1.05",
+          "file": "checks/okta/OKTA-1.05-account-lockout.check.yaml",
+          "section": "1.5"
         },
         {
           "id": "OKTA-1.07",
           "file": "checks/okta/OKTA-1.07-authenticators.check.yaml",
-          "section": "1.07"
+          "section": "1.1"
         },
         {
           "id": "OKTA-1.08",
           "file": "checks/okta/OKTA-1.08-inactive-admins.check.yaml",
-          "section": "1.08"
+          "section": "1.6"
         },
         {
           "id": "OKTA-1.09",
           "file": "checks/okta/OKTA-1.09-super-admin-count.check.yaml",
-          "section": "1.09"
+          "section": "7.3"
+        },
+        {
+          "id": "OKTA-1.11",
+          "file": "checks/okta/OKTA-1.11-security-notifications.check.yaml",
+          "section": "1.11"
+        },
+        {
+          "id": "OKTA-1.70",
+          "file": "checks/okta/OKTA-1.70-piv-cac-smartcard.check.yaml",
+          "section": "1.7"
+        },
+        {
+          "id": "OKTA-1.80",
+          "file": "checks/okta/OKTA-1.80-fips-authenticators.check.yaml",
+          "section": "1.8"
+        },
+        {
+          "id": "OKTA-1.90",
+          "file": "checks/okta/OKTA-1.90-default-auth-policy.check.yaml",
+          "section": "1.9"
         },
         {
           "id": "OKTA-2.01",
           "file": "checks/okta/OKTA-2.01-network-zones.check.yaml",
-          "section": "2.01"
+          "section": "2.1"
+        },
+        {
+          "id": "OKTA-2.03",
+          "file": "checks/okta/OKTA-2.03-anonymizer-blocking.check.yaml",
+          "section": "2.3"
         },
         {
           "id": "OKTA-3.01",
           "file": "checks/okta/OKTA-3.01-oauth-app-policy.check.yaml",
-          "section": "3.01"
+          "section": "3.1"
+        },
+        {
+          "id": "OKTA-3.02",
+          "file": "checks/okta/OKTA-3.02-scim-inventory.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "OKTA-3.03",
+          "file": "checks/okta/OKTA-3.03-oauth-app-allowlisting.check.yaml",
+          "section": "3.3"
         },
         {
           "id": "OKTA-4.01",
           "file": "checks/okta/OKTA-4.01-api-token-rotation.check.yaml",
-          "section": "4.01"
+          "section": "3.4"
+        },
+        {
+          "id": "OKTA-4.02",
+          "file": "checks/okta/OKTA-4.02-session-persistence.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "OKTA-4.03",
+          "file": "checks/okta/OKTA-4.03-admin-session-security.check.yaml",
+          "section": "4.3"
         },
         {
           "id": "OKTA-5.01",
           "file": "checks/okta/OKTA-5.01-log-streaming.check.yaml",
-          "section": "5.01"
+          "section": "5.1"
         },
         {
           "id": "OKTA-5.02",
           "file": "checks/okta/OKTA-5.02-threat-insight.check.yaml",
-          "section": "5.02"
+          "section": "5.2"
         },
         {
           "id": "OKTA-5.04",
           "file": "checks/okta/OKTA-5.04-behavior-detection.check.yaml",
-          "section": "5.04"
+          "section": "5.4"
+        },
+        {
+          "id": "OKTA-5.05",
+          "file": "checks/okta/OKTA-5.05-cross-tenant-impersonation.check.yaml",
+          "section": "5.5"
         },
         {
           "id": "OKTA-6.01",
           "file": "checks/okta/OKTA-6.01-password-policy.check.yaml",
-          "section": "6.01"
+          "section": "1.4"
         },
         {
           "id": "OKTA-6.02",
           "file": "checks/okta/OKTA-6.02-recovery-policy.check.yaml",
-          "section": "6.02"
+          "section": "1.10"
         },
         {
           "id": "OKTA-6.03",
           "file": "checks/okta/OKTA-6.03-session-policy.check.yaml",
-          "section": "6.03"
+          "section": "4.1"
         },
         {
           "id": "OKTA-7.01",
           "file": "checks/okta/OKTA-7.01-mfa-enrollment.check.yaml",
-          "section": "7.01"
+          "section": "5.6"
+        },
+        {
+          "id": "OKTA-7.04",
+          "file": "checks/okta/OKTA-7.04-change-management.check.yaml",
+          "section": "7.4"
         },
         {
           "id": "OKTA-8.01",
           "file": "checks/okta/OKTA-8.01-threat-insight-block.check.yaml",
-          "section": "8.01"
+          "section": "5.2"
         },
         {
           "id": "OKTA-1.02",
           "file": "checks/okta/OKTA-1.02-admin-roles.check.yaml",
-          "section": "1.02"
+          "section": "1.2"
+        },
+        {
+          "id": "OKTA-1.03",
+          "file": "checks/okta/OKTA-1.03-hardware-bound-tokens.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "OKTA-1.05",
+          "file": "checks/okta/OKTA-1.05-account-lockout.check.yaml",
+          "section": "1.5"
         },
         {
           "id": "OKTA-1.07",
           "file": "checks/okta/OKTA-1.07-authenticators.check.yaml",
-          "section": "1.07"
+          "section": "1.1"
         },
         {
           "id": "OKTA-1.08",
           "file": "checks/okta/OKTA-1.08-inactive-admins.check.yaml",
-          "section": "1.08"
+          "section": "1.6"
         },
         {
           "id": "OKTA-1.09",
           "file": "checks/okta/OKTA-1.09-super-admin-count.check.yaml",
-          "section": "1.09"
+          "section": "7.3"
+        },
+        {
+          "id": "OKTA-1.11",
+          "file": "checks/okta/OKTA-1.11-security-notifications.check.yaml",
+          "section": "1.11"
+        },
+        {
+          "id": "OKTA-1.70",
+          "file": "checks/okta/OKTA-1.70-piv-cac-smartcard.check.yaml",
+          "section": "1.7"
+        },
+        {
+          "id": "OKTA-1.80",
+          "file": "checks/okta/OKTA-1.80-fips-authenticators.check.yaml",
+          "section": "1.8"
+        },
+        {
+          "id": "OKTA-1.90",
+          "file": "checks/okta/OKTA-1.90-default-auth-policy.check.yaml",
+          "section": "1.9"
         },
         {
           "id": "OKTA-2.01",
           "file": "checks/okta/OKTA-2.01-network-zones.check.yaml",
-          "section": "2.01"
+          "section": "2.1"
+        },
+        {
+          "id": "OKTA-2.03",
+          "file": "checks/okta/OKTA-2.03-anonymizer-blocking.check.yaml",
+          "section": "2.3"
         },
         {
           "id": "OKTA-3.01",
           "file": "checks/okta/OKTA-3.01-oauth-app-policy.check.yaml",
-          "section": "3.01"
+          "section": "3.1"
+        },
+        {
+          "id": "OKTA-3.02",
+          "file": "checks/okta/OKTA-3.02-scim-inventory.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "OKTA-3.03",
+          "file": "checks/okta/OKTA-3.03-oauth-app-allowlisting.check.yaml",
+          "section": "3.3"
         },
         {
           "id": "OKTA-4.01",
           "file": "checks/okta/OKTA-4.01-api-token-rotation.check.yaml",
-          "section": "4.01"
+          "section": "3.4"
+        },
+        {
+          "id": "OKTA-4.02",
+          "file": "checks/okta/OKTA-4.02-session-persistence.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "OKTA-4.03",
+          "file": "checks/okta/OKTA-4.03-admin-session-security.check.yaml",
+          "section": "4.3"
         },
         {
           "id": "OKTA-5.01",
           "file": "checks/okta/OKTA-5.01-log-streaming.check.yaml",
-          "section": "5.01"
+          "section": "5.1"
         },
         {
           "id": "OKTA-5.02",
           "file": "checks/okta/OKTA-5.02-threat-insight.check.yaml",
-          "section": "5.02"
+          "section": "5.2"
         },
         {
           "id": "OKTA-5.04",
           "file": "checks/okta/OKTA-5.04-behavior-detection.check.yaml",
-          "section": "5.04"
+          "section": "5.4"
+        },
+        {
+          "id": "OKTA-5.05",
+          "file": "checks/okta/OKTA-5.05-cross-tenant-impersonation.check.yaml",
+          "section": "5.5"
         },
         {
           "id": "OKTA-6.01",
           "file": "checks/okta/OKTA-6.01-password-policy.check.yaml",
-          "section": "6.01"
+          "section": "1.4"
         },
         {
           "id": "OKTA-6.02",
           "file": "checks/okta/OKTA-6.02-recovery-policy.check.yaml",
-          "section": "6.02"
+          "section": "1.10"
         },
         {
           "id": "OKTA-6.03",
           "file": "checks/okta/OKTA-6.03-session-policy.check.yaml",
-          "section": "6.03"
+          "section": "4.1"
         },
         {
           "id": "OKTA-7.01",
           "file": "checks/okta/OKTA-7.01-mfa-enrollment.check.yaml",
-          "section": "7.01"
+          "section": "5.6"
+        },
+        {
+          "id": "OKTA-7.04",
+          "file": "checks/okta/OKTA-7.04-change-management.check.yaml",
+          "section": "7.4"
         },
         {
           "id": "OKTA-8.01",
           "file": "checks/okta/OKTA-8.01-threat-insight-block.check.yaml",
-          "section": "8.01"
+          "section": "5.2"
         }
       ],
       "controls_covered": [
+        "1.1",
         "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
         "1.7",
         "1.8",
         "1.9",
+        "1.10",
+        "1.11",
         "2.1",
+        "2.3",
         "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
         "4.1",
+        "4.2",
+        "4.3",
         "5.1",
         "5.2",
         "5.4",
-        "7.1"
+        "5.5",
+        "5.6",
+        "7.3",
+        "7.4"
       ]
     },
     {
@@ -4819,7 +5104,7 @@
     },
     {
       "vendor": "slack",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 15,
       "controls": [
         "1.1",
@@ -4856,8 +5141,28 @@
           "siem"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "SLACK-1.02",
+          "file": "checks/slack/SLACK-1.02-scim-provisioning.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "SLACK-3.01",
+          "file": "checks/slack/SLACK-3.01-app-approval.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "SLACK-5.01",
+          "file": "checks/slack/SLACK-5.01-audit-logging.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "3.1",
+        "5.1"
+      ]
     },
     {
       "vendor": "smartsheet",

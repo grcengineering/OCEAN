@@ -120,6 +120,10 @@ def validate(manifest_path: Path) -> int:
         known = {norm_section(c) for c in by_vendor[slug]["controls"]}
         for chk in vendor_checks:
             sec = norm_section(chk["section"])
+            # "vendor:none" is the explicit no-current-HTH-section sentinel
+            # (e.g. GH-5.01 org-webhooks) — deliberately unmapped, never an error.
+            if sec == "none":
+                continue
             if sec and known and sec not in known:
                 errors.append(
                     f"{chk['file']}: references section {sec} not in HTH {slug} controls"

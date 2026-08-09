@@ -313,3 +313,23 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # -------------------------------------------------------------------------
+  # HTH parity manifest consistency (no HTH checkout needed — validates the
+  # committed parity/hth-parity.json against checks/ + references.hth)
+  # -------------------------------------------------------------------------
+  parity:
+    name: HTH Parity Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml
+      - run: python3 scripts/hth_parity.py --validate
