@@ -30,6 +30,7 @@ references:
     - AC-3
     - IA-2
   soc2: CC6.1
+  hth: "microsoft-entra-id:2.2"
 
 steps:
   - id: get_conditional_access_policies

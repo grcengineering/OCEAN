@@ -1,0 +1,80 @@
+id: AZURE-MON-5.02
+name: Monitor Identity Secure Score
+description: |
+  Verifies the tenant's Microsoft Secure Score is at or above the 70%
+  target the guide recommends. Identity Secure Score surfaces concrete,
+  prioritized gaps in MFA, legacy authentication, and privileged access
+  configuration, and tracking the score over time catches configuration
+  drift and regressions before attackers can exploit them.
+source: azure
+profile: L1
+severity: medium
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+  min_secure_score_percent:
+    description: Minimum acceptable Secure Score as a fraction of max (e.g. "0.70" for 70%)
+    default: "0.70"
+    required: false
+
+references:
+  cis: "4.1"
+  nist: CA-7
+  hth: "microsoft-entra-id:5.2"
+
+steps:
+  - id: get_secure_score
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/security/secureScores?$top=1"
+    extract:
+      scores: "$.value"
+
+assertions:
+  - id: secure_score_above_target
+    expr: >-
+      scores.exists(s, has(s.currentScore) && has(s.maxScore) &&
+        s.maxScore > 0.0 && (s.currentScore / s.maxScore) >= 0.70)
+    severity: medium
+    title: Secure Score Above Target
+    pass_message: "The most recent Secure Score is at or above the 70% target"
+    fail_message: "The most recent Secure Score is below the 70% target, or no score was found"
+    finding:
+      description: |
+        The tenant's most recent Microsoft Secure Score is below the 70%
+        target (or no score snapshot was available). Secure Score
+        aggregates identity, device, app, and data signals into a single
+        trackable number; a low or declining score indicates unaddressed
+        gaps in MFA coverage, legacy authentication exposure, or
+        privileged access configuration that the rest of this guide's
+        controls close individually.
+
+remediation:
+  description: |
+    Review current Secure Score recommendations and implement the
+    highest-impact items, then track the score over time.
+  manual:
+    - "Navigate to Protection > Identity Secure Score"
+    - "Review current score and recommendations"
+    - "Implement high-impact recommendations: enable MFA for all users, block legacy authentication, enable risk policies, use PIM for admin roles"
+    - "Target a score above 70%"
+
+tags:
+  - monitoring
+  - secure-score
+  - azure

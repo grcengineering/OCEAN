@@ -1,0 +1,82 @@
+id: AZURE-APP-4.01
+name: Restrict User Consent to Applications
+description: |
+  Verifies the tenant authorization policy holds no permission-grant
+  policy for the default user role — the object-level expression of
+  "users cannot consent to applications". Consent phishing needs no
+  credential theft and no MFA bypass: the victim authenticates legitimately
+  and authorizes the attacker's application, and the resulting token
+  survives a password reset.
+source: azure
+profile: L1
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: "2.5"
+  nist: ["AC-3", "CM-7"]
+  hth: "microsoft-entra-id:4.1"
+
+steps:
+  - id: get_authorization_policy
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/policies/authorizationPolicy"
+    extract:
+      grant_policies_assigned: "$.defaultUserRolePermissions.permissionGrantPoliciesAssigned"
+
+assertions:
+  - id: user_consent_disabled
+    expr: "size(grant_policies_assigned) == 0"
+    severity: high
+    title: User Consent to Applications Disabled
+    pass_message: "The default user role has no permission-grant policy assigned — users cannot consent to applications"
+    fail_message: "The default user role has one or more permission-grant policies assigned — users can still consent to applications"
+    finding:
+      description: |
+        The tenant authorization policy's defaultUserRolePermissions still
+        has one or more entries in permissionGrantPoliciesAssigned, meaning
+        standard users can consent to third-party OAuth applications
+        without admin review. This is the single Graph object an
+        attacker's consent-phishing lure depends on, and it defaults to
+        permissive in every new tenant.
+
+remediation:
+  description: |
+    Set the tenant authorization policy so the default user role holds no
+    permission-grant policy, and enable the admin consent request
+    workflow so users can still request access to legitimate applications.
+  steps:
+    - "Navigate to Applications > Enterprise applications > Consent and permissions > User consent settings"
+    - "Select 'Do not allow user consent'"
+    - "Click Save"
+    - "Under Admin consent settings, enable 'Users can request admin consent to apps they are unable to consent to'"
+    - "Add reviewers (Security team members) and configure notification settings"
+  api:
+    url: https://graph.microsoft.com/v1.0/policies/authorizationPolicy
+    method: PATCH
+    body:
+      defaultUserRolePermissions:
+        permissionGrantPoliciesAssigned: []
+
+tags:
+  - application-security
+  - oauth-consent
+  - azure

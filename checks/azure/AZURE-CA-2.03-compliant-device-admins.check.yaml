@@ -1,0 +1,109 @@
+id: AZURE-CA-2.03
+name: Require Compliant Devices for Admins
+description: |
+  Verifies an enabled Conditional Access policy requires a compliant or
+  Microsoft Entra hybrid joined device for privileged access to Microsoft
+  Graph. Microsoft's mandatory-MFA enforcement is scoped to the admin
+  portals and Azure Resource Manager — Microsoft Graph APIs are generally
+  not in scope — so without a policy explicitly targeting Graph, virtually
+  all scripted admin automation runs unprotected by a device requirement.
+source: azure
+profile: L2
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: ["4.1", "6.4"]
+  nist: ["AC-2(11)", "AC-6(1)"]
+  hth: "microsoft-entra-id:2.3"
+
+steps:
+  - id: get_conditional_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+    extract:
+      policies: "$.value"
+
+assertions:
+  - id: compliant_device_required_for_graph
+    expr: >-
+      policies.exists(p, p.state == "enabled" &&
+        has(p.conditions) && has(p.conditions.applications) &&
+        has(p.conditions.applications.includeApplications) &&
+        "00000003-0000-0000-c000-000000000000" in p.conditions.applications.includeApplications &&
+        has(p.grantControls) && has(p.grantControls.builtInControls) &&
+        ("compliantDevice" in p.grantControls.builtInControls ||
+         "domainJoinedDevice" in p.grantControls.builtInControls))
+    severity: high
+    title: Compliant Device Required for Microsoft Graph
+    pass_message: "An enabled Conditional Access policy requires a compliant or hybrid-joined device for Microsoft Graph"
+    fail_message: "No enabled Conditional Access policy requires a compliant device for Microsoft Graph"
+    finding:
+      description: |
+        No enabled Conditional Access policy targets Microsoft Graph
+        (application ID 00000003-0000-0000-c000-000000000000) with a
+        compliant-device or hybrid-joined-device grant. Microsoft's
+        mandatory-MFA enforcement covers the admin portals and Azure
+        Resource Manager but explicitly does not cover Microsoft Graph
+        APIs, which is what virtually all scripted admin automation and
+        PowerShell/CLI tooling authenticates through. Without this policy,
+        a stolen admin credential can be used from any unmanaged device via
+        Graph even if the portal itself is protected.
+
+remediation:
+  description: |
+    Author a Conditional Access policy scoped to privileged directory
+    roles that targets Microsoft Admin Portals, Microsoft Intune, and
+    Microsoft Graph, and grants on a compliant or hybrid Entra joined
+    device plus a phishing-resistant authentication strength.
+  steps:
+    - "Navigate to Protection > Conditional Access > Policies > + New policy"
+    - "Users > Include > Directory roles: Global Administrator, Security Administrator, and other roles that can change tenant or device state"
+    - "Users > Exclude: the emergency access group"
+    - "Target resources: Microsoft Admin Portals, Microsoft Intune, Microsoft Graph"
+    - "Grant: Require device to be marked as compliant (or Entra hybrid joined) AND require authentication strength: Phishing-Resistant MFA"
+    - "Session > Sign-in frequency: 1 hour"
+    - "Enable in Report-only first, confirm admin devices satisfy it, then set to On"
+  api:
+    url: https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
+    method: POST
+    body:
+      displayName: "HTH-AdminPortal-ComplianceRequired"
+      state: "enabled"
+      conditions:
+        applications:
+          includeApplications:
+            - "c44b4083-3bb0-49c1-b47d-974e53cbdf3c"
+            - "0000000a-0000-0000-c000-000000000000"
+            - "00000003-0000-0000-c000-000000000000"
+        clientAppTypes:
+          - "browser"
+          - "mobileAppsAndDesktopClients"
+      grantControls:
+        operator: "AND"
+        builtInControls:
+          - "compliantDevice"
+
+tags:
+  - conditional-access
+  - device-compliance
+  - admin-plane
+  - azure

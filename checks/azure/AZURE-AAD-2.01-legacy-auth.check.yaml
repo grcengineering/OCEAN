@@ -32,6 +32,7 @@ inputs:
 references:
   nist: AC-17
   soc2: CC6.6
+  hth: "microsoft-entra-id:2.1"
 
 steps:
   - id: get_conditional_access_policies

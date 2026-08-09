@@ -1,0 +1,104 @@
+id: AZURE-CA-2.06
+name: Block Device Code Flow
+description: |
+  Verifies a Conditional Access policy blocks the OAuth device code
+  authentication flow tenant-wide. Device code phishing (tracked by Microsoft
+  as Storm-2372) tricks users into entering an attacker-generated device code
+  at a legitimate Microsoft URL, handing the attacker access and refresh
+  tokens without a password. The stolen token satisfies MFA, so blocking the
+  flow is the only strong control.
+source: azure
+profile: L1
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  nist: [AC-3, IA-2]
+  soc2: CC6.1
+  hth: "microsoft-entra-id:2.6"
+
+steps:
+  - id: get_conditional_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+    extract:
+      policies: "$.value"
+
+assertions:
+  - id: device_code_flow_blocked
+    expr: >-
+      policies.exists(p, p.state == "enabled" &&
+        has(p.conditions) && has(p.conditions.authenticationFlows) &&
+        has(p.conditions.authenticationFlows.transferMethods) &&
+        "deviceCodeFlow" in p.conditions.authenticationFlows.transferMethods &&
+        has(p.grantControls) && has(p.grantControls.builtInControls) &&
+        "block" in p.grantControls.builtInControls)
+    severity: high
+    title: Device Code Flow Blocked
+    pass_message: "An enabled Conditional Access policy blocks the device code authentication flow"
+    fail_message: "No enabled Conditional Access policy blocks the device code authentication flow"
+    finding:
+      description: |
+        No enabled Conditional Access policy targets the device code
+        authentication flow with a block grant. Device code phishing
+        (Storm-2372) hands an attacker valid access and refresh tokens
+        without ever capturing a password or satisfying MFA interactively —
+        blocking the flow tenant-wide (with scoped exceptions for
+        conference-room and input-constrained devices) is the only
+        preventive control, since the stolen token itself satisfies MFA.
+
+remediation:
+  description: |
+    Author a Conditional Access policy in report-only mode targeting the
+    "Device code flow" authentication flow condition with a Block grant,
+    excluding any inventoried legitimate device-login use cases, then
+    enable it after the report-only observation period shows no
+    unexpected impact.
+  steps:
+    - "Navigate to Protection > Conditional Access > Policies > + New policy"
+    - "Name: Block device code flow"
+    - "Users: All users (exclude the emergency access group and any inventoried device-login service accounts)"
+    - "Conditions > Authentication flows > Configure: Yes > check Device code flow"
+    - "Grant: Block access"
+    - "Enable in Report-only first, then set to On after the observation window"
+  api:
+    url: https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
+    method: POST
+    body:
+      displayName: "Block device code flow"
+      state: "enabledForReportingButNotEnforced"
+      conditions:
+        clientAppTypes:
+          - "all"
+        authenticationFlows:
+          transferMethods: "deviceCodeFlow"
+        users:
+          includeUsers:
+            - "All"
+      grantControls:
+        operator: "OR"
+        builtInControls:
+          - "block"
+
+tags:
+  - conditional-access
+  - device-code-flow
+  - azure

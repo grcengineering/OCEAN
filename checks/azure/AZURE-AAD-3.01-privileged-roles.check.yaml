@@ -32,6 +32,7 @@ inputs:
 references:
   nist: AC-6(7)
   soc2: CC6.3
+  hth: "microsoft-entra-id:3.1"
 
 steps:
   - id: get_directory_roles

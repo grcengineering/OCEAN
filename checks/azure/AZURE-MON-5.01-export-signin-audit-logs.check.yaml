@@ -1,0 +1,112 @@
+id: AZURE-MON-5.01
+name: Export Entra ID Sign-In and Audit Logs
+description: |
+  Verifies tenant-level Entra ID diagnostic settings export the SignInLogs
+  category to a durable destination. Sign-in telemetry is the only record
+  of how an account authenticated — which Conditional Access policies
+  applied, which factor satisfied MFA, which IP and device the session
+  came from — and it lives only in this plane. Entra's built-in retention
+  is short (7-30 days depending on license); an intrusion discovered a
+  quarter later is investigated entirely from what was exported at the
+  time.
+source: azure
+profile: L1
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: "8.2"
+  nist: ["AU-2", "AU-3", "AU-6"]
+  hth: "microsoft-entra-id:5.1"
+
+steps:
+  - id: get_tenant_diagnostic_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://management.azure.com/providers/microsoft.aadiam/diagnosticSettings?api-version=2017-04-01"
+    extract:
+      diag_settings: "$.value"
+
+assertions:
+  - id: diagnostic_setting_exists
+    expr: "size(diag_settings) > 0"
+    severity: high
+    title: Tenant Diagnostic Setting Configured
+    pass_message: "At least one tenant-level Entra ID diagnostic setting is configured"
+    fail_message: "No tenant-level Entra ID diagnostic setting is configured"
+    finding:
+      description: |
+        No diagnostic setting was found on the Microsoft.aadiam tenant
+        resource. Entra ID sign-in and audit logs are not part of the
+        Microsoft 365 unified audit log and are not retained past the
+        Entra default without an explicit export to a Log Analytics
+        workspace, Event Hub, or storage account.
+
+  - id: signin_logs_category_enabled
+    expr: >-
+      diag_settings.exists(d, has(d.properties) && has(d.properties.logs) &&
+        d.properties.logs.exists(l, has(l.category) && l.category == "SignInLogs" &&
+          has(l.enabled) && l.enabled == true))
+    severity: high
+    title: SignInLogs Category Exported
+    pass_message: "The SignInLogs category is enabled on a tenant diagnostic setting"
+    fail_message: "No tenant diagnostic setting has the SignInLogs category enabled"
+    finding:
+      description: |
+        No diagnostic setting has the SignInLogs log category enabled. A
+        diagnostic setting can exist while covering only a subset of
+        categories — ServicePrincipalSignInLogs and
+        NonInteractiveUserSignInLogs are off by default in many export
+        configurations, and interactive SignInLogs specifically is where
+        Conditional Access outcomes and the satisfying MFA factor are
+        recorded.
+
+remediation:
+  description: |
+    Configure a tenant-level diagnostic setting exporting SignInLogs,
+    AuditLogs, NonInteractiveUserSignInLogs, and ServicePrincipalSignInLogs
+    to a Log Analytics workspace, Event Hub, or storage account.
+  steps:
+    - "Navigate to Monitoring > Diagnostic settings > + Add diagnostic setting"
+    - "Name: Send to Log Analytics (or SIEM)"
+    - "Logs: SignInLogs, AuditLogs, NonInteractiveUserSignInLogs, ServicePrincipalSignInLogs"
+    - "Destination: Log Analytics workspace / Event Hub / Storage Account"
+    - "Click Save"
+  api:
+    url: https://management.azure.com/providers/microsoft.aadiam/diagnosticSettings/{name}?api-version=2017-04-01
+    method: PUT
+    body:
+      properties:
+        workspaceId: "/subscriptions/{subscriptionId}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{workspace}"
+        logs:
+          - category: "SignInLogs"
+            enabled: true
+          - category: "AuditLogs"
+            enabled: true
+          - category: "NonInteractiveUserSignInLogs"
+            enabled: true
+          - category: "ServicePrincipalSignInLogs"
+            enabled: true
+
+tags:
+  - logging
+  - diagnostic-settings
+  - identity-logs
+  - azure
