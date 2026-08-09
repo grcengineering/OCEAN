@@ -15,3 +15,9 @@ paths = [
   '''\.sscsb/out/.*\.cdx\.json''',
   '''\.sscsb/out/.*\.spdx\.json''',
 ]
+
+[[allowlists]]
+description = "ADE lockfile: SHA-256 file-integrity hashes (hex digests, not credentials)"
+paths = [
+  '''ade\.lock\.json''',
+]

@@ -60,3 +60,5 @@ id_ed25519
 .serena/cache/
 .serena/project.local.yml
 .serena/memories/
+# CocoIndex Code (ccc)
+/.cocoindex_code/

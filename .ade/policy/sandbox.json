@@ -1,0 +1,34 @@
+{
+  "credentials": {
+    "injection": "at-boundary",
+    "rule": "secrets are injected by the sandbox at exec time, never stored in the environment or files"
+  },
+  "enforcement": "advisory",
+  "filesystem": {
+    "denyRead": [
+      ".env",
+      ".env.*",
+      "~/.ssh/**"
+    ],
+    "denyWrite": [
+      "~/.ssh",
+      "~/.aws",
+      "~/.claude",
+      "system paths"
+    ],
+    "writeScope": [
+      "<repo>"
+    ]
+  },
+  "network": {
+    "allowlist": [
+      "registry.npmjs.org",
+      "pypi.org",
+      "crates.io",
+      "proxy.golang.org",
+      "github.com"
+    ],
+    "default": "deny"
+  },
+  "schemaVersion": 1
+}

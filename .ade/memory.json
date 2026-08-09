@@ -1,0 +1,16 @@
+{
+  "activation": {
+    "mcp": "to enable the OpenMemory MCP server, set modules.memory.options.enableMcp = true in ade.json, then run `ade apply`"
+  },
+  "posture": "local-first",
+  "project": "mem0.ai/openmemory",
+  "provider": "openmemory",
+  "schemaVersion": 1,
+  "sensitivity": {
+    "classification": "sensitive-user-data",
+    "gitIgnored": true,
+    "rule": "memory content is never committed to version control and never leaves the machine without explicit user-configured sync"
+  },
+  "storePath": ".ade/memory-store/",
+  "sync": "the memory server runs locally; network sync is user-controlled and off until the user configures it"
+}

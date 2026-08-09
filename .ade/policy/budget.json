@@ -1,0 +1,18 @@
+{
+  "alerts": {
+    "warnAtFraction": 0.8
+  },
+  "limits": {
+    "perProjectDailyCostUsd": 100,
+    "perProjectDailyTokens": 10000000,
+    "perSessionCostUsd": 25,
+    "perSessionTokens": 2000000
+  },
+  "routing": {
+    "cheap": "small-model for mechanical edits, summaries, and classification",
+    "default": "balanced",
+    "escalation": "large-model only for architecture, security, and cross-cutting design",
+    "policy": "route to the cheapest model that meets the task's quality bar"
+  },
+  "schemaVersion": 1
+}
