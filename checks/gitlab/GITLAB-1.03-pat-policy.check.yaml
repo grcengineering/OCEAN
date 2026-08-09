@@ -1,0 +1,97 @@
+id: GITLAB-1.03
+name: Enforce Personal Access Token Expiration and Least-Privilege Scopes
+description: |
+  Verifies that all active personal access tokens have an expiration date set
+  and that none hold the full 'api' scope, which grants unrestricted access
+  to source code and CI/CD pipelines. GitLab enforces mandatory PAT
+  expiration platform-wide (365-day default, 400-day ceiling), so any active
+  token missing expires_at predates that enforcement or was otherwise
+  grandfathered in and should be rotated.
+author: grc-engineering
+version: "1.0"
+source: gitlab
+profile: L1
+tags: [authentication, tokens, credential-hygiene]
+
+references:
+  nist: IA-5
+  soc2: CC6.1
+  hth: "gitlab:1.3"
+
+credentials:
+  GITLAB_TOKEN:
+    type: api_token
+    scopes: [api]
+    required: true
+
+inputs:
+  gitlab_url:
+    description: GitLab instance base URL
+    env: GITLAB_URL
+    default: "https://gitlab.com"
+    required: false
+
+steps:
+  - id: get_active_tokens
+    action: api_call
+    request:
+      method: GET
+      url: "{{gitlab_url}}/api/v4/personal_access_tokens?state=active&per_page=100"
+      headers:
+        PRIVATE-TOKEN: "{{GITLAB_TOKEN}}"
+      paginate: true
+    extract:
+      tokens: "$[*]"
+      token_count: "$length"
+
+assertions:
+  - id: tokens_have_expiration
+    expr: "size(tokens.filter(t, t.expires_at == null)) == 0"
+    severity: critical
+    title: All Active Tokens Have an Expiration Date
+    pass_message: "All {{token_count}} active personal access token(s) have an expiration date"
+    fail_message: "One or more active personal access tokens have no expiration date"
+    finding:
+      description: |
+        At least one active personal access token has no expires_at value.
+        GitLab now requires an expiration date on every new token (365-day
+        default, 400-day platform ceiling), so a non-expiring active token
+        either predates that enforcement or was granted a legacy exception.
+        A leaked non-expiring token grants persistent, password-less access
+        to source code and CI/CD pipelines. Set an expiration date on every
+        flagged token, or revoke and reissue it with one.
+
+  - id: tokens_least_privilege_scope
+    expr: 'size(tokens.filter(t, t.scopes.exists(s, s == "api"))) == 0'
+    severity: high
+    title: No Active Token Holds the Full 'api' Scope
+    pass_message: "No active personal access token holds the full 'api' scope"
+    fail_message: "One or more active personal access tokens hold the full 'api' scope"
+    finding:
+      description: |
+        At least one active personal access token holds the full 'api'
+        scope, which grants unrestricted read/write access to the GitLab
+        API rather than the minimum scopes the token's use case requires
+        (for example read_repository or write_repository). A leaked token
+        with 'api' scope can read source code, modify CI/CD configuration,
+        and manage group and project settings. Replace broad-scope tokens
+        with narrowly-scoped ones.
+
+remediation:
+  description: |
+    Cap the platform-wide maximum personal access token lifetime and rotate
+    any flagged token to a narrowly-scoped, expiring replacement.
+  steps:
+    - "Navigate to Admin → Settings → General → Account and limit"
+    - "Set 'Maximum allowable lifetime for access tokens' to your organizational policy (90 days recommended; platform ceiling is 400 days)"
+    - "Enable 'Limit project access token creation'"
+    - "For each flagged token, ask its owner to create a narrowly-scoped replacement with an expiration date, then revoke the old token"
+  api:
+    method: PUT
+    url: "{{gitlab_url}}/api/v4/application/settings"
+    body:
+      max_personal_access_token_lifetime: 90
+  cli:
+    command: 'glab api application/settings --method PUT -f max_personal_access_token_lifetime=90'
+  manual:
+    - "Review the active-token list quarterly and confirm no token has drifted back to a broad scope or a missing expiration"

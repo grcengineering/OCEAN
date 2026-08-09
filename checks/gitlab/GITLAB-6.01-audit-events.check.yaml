@@ -1,0 +1,102 @@
+id: GITLAB-6.01
+name: Enable Audit Event Logging and SIEM Streaming
+description: |
+  Verifies that group-level audit events are being recorded (Premium/
+  Ultimate) and that at least one external streaming destination is
+  configured to forward events to a SIEM. Audit events are the record of
+  who did what — repository deletion, permission changes, runner
+  registration — and streaming preserves that record off-platform, outside
+  the reach of an attacker who has compromised the GitLab instance itself.
+author: grc-engineering
+version: "1.0"
+source: gitlab
+profile: L1
+tags: [audit, logging, monitoring, siem]
+
+references:
+  nist: ["AU-2", "AU-3"]
+  soc2: CC7.2
+  hth: "gitlab:6.1"
+
+credentials:
+  GITLAB_TOKEN:
+    type: api_token
+    scopes: [api]
+    required: true
+
+inputs:
+  gitlab_url:
+    description: GitLab instance base URL
+    env: GITLAB_URL
+    default: "https://gitlab.com"
+    required: false
+  group_id:
+    description: GitLab group ID or URL-encoded path (e.g. "42" or "my-group")
+    env: GITLAB_GROUP_ID
+    required: true
+
+steps:
+  - id: get_audit_events
+    action: api_call
+    request:
+      method: GET
+      url: "{{gitlab_url}}/api/v4/groups/{{group_id}}/audit_events?per_page=20"
+      headers:
+        PRIVATE-TOKEN: "{{GITLAB_TOKEN}}"
+    extract:
+      audit_events: "$[*]"
+      event_count: "$length"
+
+  - id: get_streaming_destinations
+    action: api_call
+    request:
+      method: GET
+      url: "{{gitlab_url}}/api/v4/groups/{{group_id}}/audit_events/streaming/destinations"
+      headers:
+        PRIVATE-TOKEN: "{{GITLAB_TOKEN}}"
+    extract:
+      stream_destinations: "$[*]"
+      stream_destination_count: "$length"
+
+assertions:
+  - id: audit_logging_active
+    expr: "event_count > 0"
+    severity: high
+    title: Group Audit Events Are Being Recorded
+    pass_message: "Retrieved {{event_count}} recent audit event(s) — audit logging is active"
+    fail_message: "No audit events were returned — verify GitLab tier (Premium/Ultimate) and token permissions"
+    finding:
+      description: |
+        No audit events were retrieved for the group. This either means the
+        instance is on a tier below Premium/Ultimate (audit events require
+        Premium or Ultimate), the token lacks the Owner role needed to read
+        group-wide audit events, or no auditable activity has occurred.
+        Without recorded audit events, malicious actions such as repository
+        deletion, permission changes, or runner registration go undetected.
+
+  - id: audit_streaming_configured
+    expr: "stream_destination_count > 0"
+    severity: medium
+    title: Audit Event Streaming to an External Destination Is Configured
+    pass_message: "Found {{stream_destination_count}} external audit event streaming destination(s)"
+    fail_message: "No external audit event streaming destinations are configured"
+    finding:
+      description: |
+        No external audit event streaming destination is configured for
+        this group. Audit events recorded only inside GitLab are lost if
+        the instance itself is compromised or its logs are tampered with.
+        Streaming to an external SIEM preserves a tamper-resistant, off-
+        platform record and enables alerting on high-risk events such as
+        admin privilege changes.
+
+remediation:
+  description: |
+    Configure an external HTTP streaming destination for group audit events
+    and route it to your SIEM.
+  steps:
+    - "Navigate to Group → Security & Compliance → Audit events → Streaming"
+    - "Add a new streaming destination pointing at your SIEM's HTTP collector endpoint"
+    - "Select 'All event types', or scope to the high-risk event types your SIEM alerts on"
+    - "Save the destination and confirm test events arrive at the SIEM"
+  manual:
+    - "Alert on critical event types once streaming: repository deletion, protected branch modification, runner registration, admin privilege changes"

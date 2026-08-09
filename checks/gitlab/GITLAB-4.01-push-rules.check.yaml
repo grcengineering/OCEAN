@@ -1,0 +1,125 @@
+id: GITLAB-4.01
+name: Enable Push Rules to Block Secrets and Tag Deletion
+description: |
+  Verifies that a project has push rules configured with prevent_secrets and
+  deny_delete_tag enabled, and reports whether reject_unsigned_commits (the
+  L2 enhancement) is also enabled. Push rules run at push time, before a
+  secret or a destructive tag deletion ever reaches repository history.
+author: grc-engineering
+version: "1.0"
+source: gitlab
+profile: L1
+tags: [repository, push-rules, secrets]
+
+references:
+  nist: CM-3
+  soc2: CC8.1
+  hth: "gitlab:4.1"
+
+credentials:
+  GITLAB_TOKEN:
+    type: api_token
+    scopes: [api]
+    required: true
+
+inputs:
+  gitlab_url:
+    description: GitLab instance base URL
+    env: GITLAB_URL
+    default: "https://gitlab.com"
+    required: false
+  project_id:
+    description: GitLab project ID or URL-encoded path (e.g. "42" or "group%2Fproject")
+    env: GITLAB_PROJECT_ID
+    required: true
+
+steps:
+  - id: get_push_rule
+    action: api_call
+    request:
+      method: GET
+      url: "{{gitlab_url}}/api/v4/projects/{{project_id}}/push_rule"
+      headers:
+        PRIVATE-TOKEN: "{{GITLAB_TOKEN}}"
+    extract:
+      push_rule_id: "$.id"
+      prevent_secrets: "$.prevent_secrets"
+      deny_delete_tag: "$.deny_delete_tag"
+      reject_unsigned_commits: "$.reject_unsigned_commits"
+
+assertions:
+  - id: push_rules_configured
+    expr: "push_rule_id != null"
+    severity: critical
+    title: Push Rules Are Configured
+    pass_message: "Push rules are configured on the project"
+    fail_message: "Push rules are NOT configured on the project"
+    finding:
+      description: |
+        The project has no push rule configuration at all — GitLab returns
+        an empty response from the push rule endpoint. Without push rules,
+        nothing at push time blocks committed secrets or protects tags from
+        deletion. Configure push rules before relying on any of its
+        individual protections.
+
+  - id: prevent_secrets_enabled
+    expr: "prevent_secrets == true"
+    severity: high
+    title: Prevent-Secrets Push Rule Enabled
+    pass_message: "prevent_secrets is enabled — pushes containing likely secret files are rejected"
+    fail_message: "prevent_secrets is NOT enabled"
+    finding:
+      description: |
+        The prevent_secrets push rule is disabled, so GitLab does not
+        reject pushes containing files that look like private keys or
+        other credential files at push time. Secrets that reach repository
+        history remain there even after deletion and are routinely
+        harvested by attackers scanning cloned or forked repositories.
+
+  - id: deny_delete_tag_enabled
+    expr: "deny_delete_tag == true"
+    severity: medium
+    title: Deny-Delete-Tag Push Rule Enabled
+    pass_message: "deny_delete_tag is enabled — tags cannot be deleted via push"
+    fail_message: "deny_delete_tag is NOT enabled"
+    finding:
+      description: |
+        The deny_delete_tag push rule is disabled, so a tag (which may mark
+        a release or a compliance evidence point) can be deleted by anyone
+        with push access. Enable deny_delete_tag to prevent silent removal
+        of tags that other systems or audits may depend on.
+
+  - id: reject_unsigned_commits_enabled
+    expr: "reject_unsigned_commits == true"
+    severity: medium
+    title: Reject-Unsigned-Commits Push Rule Enabled (L2)
+    pass_message: "reject_unsigned_commits is enabled — unsigned commits are rejected at push time"
+    fail_message: "reject_unsigned_commits is NOT enabled (L2 enhancement)"
+    finding:
+      description: |
+        The reject_unsigned_commits push rule is disabled. Without it, Git
+        commit authorship is only self-asserted metadata, and unsigned
+        commits provide no real proof of who wrote the code. This is an L2
+        enhancement — enable it once GPG/SSH commit signing (control 4.2)
+        is rolled out to contributors.
+
+remediation:
+  description: |
+    Configure or update the project's push rule to enable prevent_secrets
+    and deny_delete_tag (L1), and reject_unsigned_commits (L2).
+  steps:
+    - "Navigate to Project → Settings → Repository → Push rules"
+    - "Enable 'Prevent pushing secret files'"
+    - "Enable 'Reject unsigned commits' (L2, after commit signing is rolled out)"
+    - "Save changes"
+  api:
+    method: PUT
+    url: "{{gitlab_url}}/api/v4/projects/{{project_id}}/push_rule"
+    body:
+      prevent_secrets: true
+      deny_delete_tag: true
+      reject_unsigned_commits: true
+  cli:
+    command: 'curl -X PUT -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" "{{gitlab_url}}/api/v4/projects/{{project_id}}/push_rule" -d "prevent_secrets=true" -d "deny_delete_tag=true" -d "reject_unsigned_commits=true"'
+  manual:
+    - "If the project has no push rule configured yet, POST to the same endpoint instead of PUT to create one"
