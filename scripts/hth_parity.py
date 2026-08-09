@@ -47,6 +47,15 @@ PREFIX_TO_SLUG = {
     "NOTION": "notion",
     "PM": "postman",
     "DUO": "duo",  # no OCEAN checks — Admin API requires per-request HMAC-signed Authorization (ikey/skey), not a static bearer/basic token the check DSL can compute
+    "VERCEL": "vercel",
+    "JC": "jumpcloud",
+    "SFDC": "salesforce",
+    "CF": "cloudflare",
+    "AUTH0": "auth0",
+    "LD": "launchdarkly",
+    "ANTH": "anthropic-claude",  # multi-guide family (anthropic-claude hub, anthropic-api, claude-code, claude-enterprise) — each check's references.hth carries the specific guide slug
+    "CGPT": "chatgpt-enterprise",
+    "WKTO": "workato",
 }
 
 

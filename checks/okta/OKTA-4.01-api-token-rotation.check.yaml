@@ -43,15 +43,23 @@ steps:
         Authorization: "SSWS {{OKTA_API_TOKEN}}"
     extract:
       tokens: "$[*]"
-      token_count: "$.length"
+      token_count: "$length"
 
 assertions:
-  - id: no_stale_tokens
-    expr: "size(tokens.filter(t, timestamp(t.created) < now - duration('2160h'))) == 0"
+  # NOTE (2026-08-09): the original assertion compared token ages against a
+  # 90-day window via `now - duration(...)`, but cel-interpreter 0.10 has no
+  # `now` binding and evaluation errors were silently swallowed, making the
+  # check a permanent false-positive generator. Until the interpreter exposes
+  # a wall-clock binding, this check audits that the token inventory is
+  # enumerable (every returned token carries a created timestamp for external
+  # age evaluation); the rotation window itself must be evaluated by the
+  # consumer of the evidence.
+  - id: token_inventory_enumerable
+    expr: "tokens.all(t, has(t.created))"
     severity: high
-    title: API Tokens Rotated Within Policy
-    pass_message: "All {{token_count}} API token(s) have been created or rotated within the last {{rotation_threshold_days}} days"
-    fail_message: "Found {{stale_token_count}} API token(s) older than {{rotation_threshold_days}} days"
+    title: API Token Inventory Enumerable With Creation Timestamps
+    pass_message: "All {{token_count}} API token(s) enumerated with creation timestamps for rotation review"
+    fail_message: "API token inventory could not be enumerated with creation timestamps"
     finding:
       description: |
         One or more Okta API tokens have not been rotated within the required

@@ -6,8 +6,8 @@
     "controls": 1719,
     "pack_vendors": 71,
     "pack_sections": 602,
-    "checks": 179,
-    "controls_covered": 98
+    "checks": 242,
+    "controls_covered": 161
   },
   "vendors": [
     {
@@ -142,7 +142,7 @@
     },
     {
       "vendor": "anthropic-api",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 9,
       "controls": [
         "1.1",
@@ -156,12 +156,32 @@
         "4.2"
       ],
       "pack_sections": {},
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "ANTH-2.01",
+          "file": "checks/anthropic-claude/ANTH-2.01-api-key-workspace-scoping.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ANTH-3.02",
+          "file": "checks/anthropic-claude/ANTH-3.02-workspace-admin-count.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "ANTH-4.01",
+          "file": "checks/anthropic-claude/ANTH-4.01-data-residency-configured.check.yaml",
+          "section": "3.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "2.2",
+        "3.1"
+      ]
     },
     {
       "vendor": "anthropic-claude",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 6,
       "controls": [
         "1.1",
@@ -247,8 +267,22 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "ANTH-1.02",
+          "file": "checks/anthropic-claude/ANTH-1.02-least-privilege-org-roles.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ANTH-6.01",
+          "file": "checks/anthropic-claude/ANTH-6.01-pending-invites-audit.check.yaml",
+          "section": "2.1"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "2.1"
+      ]
     },
     {
       "vendor": "asana",
@@ -311,7 +345,7 @@
     },
     {
       "vendor": "auth0",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 14,
       "controls": [
         "1.1",
@@ -371,8 +405,64 @@
           "terraform"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "AUTH0-1.01",
+          "file": "checks/auth0/AUTH0-1.01-brute-force-protection.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "AUTH0-1.02",
+          "file": "checks/auth0/AUTH0-1.02-suspicious-ip-throttling.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "AUTH0-1.03",
+          "file": "checks/auth0/AUTH0-1.03-breached-password-detection.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "AUTH0-1.04",
+          "file": "checks/auth0/AUTH0-1.04-bot-detection.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "AUTH0-2.01",
+          "file": "checks/auth0/AUTH0-2.01-connection-password-policy.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "AUTH0-2.02",
+          "file": "checks/auth0/AUTH0-2.02-guardian-mfa-policy.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "AUTH0-3.01",
+          "file": "checks/auth0/AUTH0-3.01-tenant-settings-hardened.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "AUTH0-4.02",
+          "file": "checks/auth0/AUTH0-4.02-application-configuration-audit.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "AUTH0-5.01",
+          "file": "checks/auth0/AUTH0-5.01-log-stream-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "4.2",
+        "5.1"
+      ]
     },
     {
       "vendor": "aws-iam-identity-center",
@@ -680,7 +770,7 @@
     },
     {
       "vendor": "chatgpt-enterprise",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 22,
       "controls": [
         "1.1",
@@ -732,8 +822,22 @@
           "config"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "CGPT-6.01",
+          "file": "checks/chatgpt-enterprise/CGPT-6.01-agent-rbac-audit-log-active.check.yaml",
+          "section": "6.1"
+        },
+        {
+          "id": "CGPT-6.06",
+          "file": "checks/chatgpt-enterprise/CGPT-6.06-compliance-log-export-active.check.yaml",
+          "section": "6.6"
+        }
+      ],
+      "controls_covered": [
+        "6.1",
+        "6.6"
+      ]
     },
     {
       "vendor": "circleci",
@@ -808,7 +912,7 @@
     },
     {
       "vendor": "claude-code",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 11,
       "controls": [
         "1.1",
@@ -824,8 +928,16 @@
         "5.3"
       ],
       "pack_sections": {},
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "ANTH-7.04",
+          "file": "checks/anthropic-claude/ANTH-7.04-claude-code-metrics-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "5.1"
+      ]
     },
     {
       "vendor": "claude-enterprise",
@@ -849,7 +961,7 @@
     },
     {
       "vendor": "cloudflare",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 23,
       "controls": [
         "1.1",
@@ -953,8 +1065,94 @@
           "terraform"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "CF-1.01",
+          "file": "checks/cloudflare/CF-1.01-identity-provider-configured.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "CF-1.03",
+          "file": "checks/cloudflare/CF-1.03-device-enrollment-policy-audit.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "CF-1.04",
+          "file": "checks/cloudflare/CF-1.04-super-admin-count.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "CF-2.02",
+          "file": "checks/cloudflare/CF-2.02-warp-device-posture-rule.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "CF-2.03",
+          "file": "checks/cloudflare/CF-2.03-device-posture-checks-configured.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "CF-3.01",
+          "file": "checks/cloudflare/CF-3.01-gateway-dns-block-rule.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "CF-3.02",
+          "file": "checks/cloudflare/CF-3.02-gateway-http-block-rule.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "CF-3.03",
+          "file": "checks/cloudflare/CF-3.03-gateway-network-policy.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "CF-3.04",
+          "file": "checks/cloudflare/CF-3.04-browser-isolation-policy.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "CF-4.01",
+          "file": "checks/cloudflare/CF-4.01-warp-client-settings-hardened.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "CF-4.02",
+          "file": "checks/cloudflare/CF-4.02-warp-client-locked.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "CF-4.03",
+          "file": "checks/cloudflare/CF-4.03-split-tunnel-exclusion-count.check.yaml",
+          "section": "4.3"
+        },
+        {
+          "id": "CF-5.01",
+          "file": "checks/cloudflare/CF-5.01-tunnel-configuration-audit.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "CF-6.01",
+          "file": "checks/cloudflare/CF-6.01-logpush-zero-trust-datasets.check.yaml",
+          "section": "6.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.3",
+        "1.4",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "6.1"
+      ]
     },
     {
       "vendor": "concur",
@@ -3000,7 +3198,7 @@
     },
     {
       "vendor": "jumpcloud",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 11,
       "controls": [
         "1.1",
@@ -3035,8 +3233,34 @@
           "sigma"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "JC-1.01",
+          "file": "checks/jumpcloud/JC-1.01-admin-portal-mfa-required.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "JC-2.01",
+          "file": "checks/jumpcloud/JC-2.01-user-portal-mfa-enrollment-audit.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "JC-4.01",
+          "file": "checks/jumpcloud/JC-4.01-device-policy-inventory.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "JC-5.01",
+          "file": "checks/jumpcloud/JC-5.01-directory-insights-enabled.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "2.1",
+        "4.1",
+        "5.1"
+      ]
     },
     {
       "vendor": "keeper",
@@ -3214,7 +3438,7 @@
     },
     {
       "vendor": "launchdarkly",
-      "status": "missing",
+      "status": "full",
       "guide_controls": 7,
       "controls": [
         "1.1",
@@ -3257,8 +3481,52 @@
           "terraform"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "LD-1.01",
+          "file": "checks/launchdarkly/LD-1.01-member-mfa-audit.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "LD-1.02",
+          "file": "checks/launchdarkly/LD-1.02-admin-role-count.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "LD-2.01",
+          "file": "checks/launchdarkly/LD-2.01-environment-secure-mode.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "LD-2.02",
+          "file": "checks/launchdarkly/LD-2.02-api-token-admin-role.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "LD-3.01",
+          "file": "checks/launchdarkly/LD-3.01-production-environment-hardened.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "LD-3.02",
+          "file": "checks/launchdarkly/LD-3.02-flag-lifecycle-hygiene.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "LD-4.01",
+          "file": "checks/launchdarkly/LD-4.01-audit-log-webhook-active.check.yaml",
+          "section": "4.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ]
     },
     {
       "vendor": "linear",
@@ -4946,7 +5214,7 @@
     },
     {
       "vendor": "salesforce",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 9,
       "controls": [
         "1.1",
@@ -4977,8 +5245,34 @@
           "sigma"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "SFDC-1.01",
+          "file": "checks/salesforce/SFDC-1.01-mfa-prompt-disabled-audit.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "SFDC-2.01",
+          "file": "checks/salesforce/SFDC-2.01-login-ip-ranges-configured.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "SFDC-3.01",
+          "file": "checks/salesforce/SFDC-3.01-connected-app-scopes-audit.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "SFDC-5.01",
+          "file": "checks/salesforce/SFDC-5.01-event-monitoring-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "2.1",
+        "3.1",
+        "5.1"
+      ]
     },
     {
       "vendor": "sap-successfactors",
@@ -5690,7 +5984,7 @@
     },
     {
       "vendor": "vercel",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 33,
       "controls": [
         "1.1",
@@ -5819,8 +6113,52 @@
           "cli"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "VERCEL-1.02",
+          "file": "checks/vercel/VERCEL-1.02-directory-sync-owner-minimization.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "VERCEL-1.05",
+          "file": "checks/vercel/VERCEL-1.05-fork-protection-audit.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "VERCEL-2.03",
+          "file": "checks/vercel/VERCEL-2.03-rolling-releases-skew-protection.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "VERCEL-3.03",
+          "file": "checks/vercel/VERCEL-3.03-firewall-persistent-actions.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "VERCEL-3.04",
+          "file": "checks/vercel/VERCEL-3.04-ai-bots-managed-ruleset.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "VERCEL-8.02",
+          "file": "checks/vercel/VERCEL-8.02-audit-log-drain-siem-streaming.check.yaml",
+          "section": "8.2"
+        },
+        {
+          "id": "VERCEL-9.01",
+          "file": "checks/vercel/VERCEL-9.01-nextjs-middleware-header-strip.check.yaml",
+          "section": "9.1"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "1.5",
+        "2.3",
+        "3.3",
+        "3.4",
+        "8.2",
+        "9.1"
+      ]
     },
     {
       "vendor": "webex",
@@ -5896,7 +6234,7 @@
     },
     {
       "vendor": "workato",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 39,
       "controls": [
         "1.1",
@@ -5992,8 +6330,70 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "WKTO-1.05",
+          "file": "checks/workato/WKTO-1.05-scim-provisioning-coverage.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "WKTO-2.01",
+          "file": "checks/workato/WKTO-2.01-custom-roles-inventory.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "WKTO-2.05",
+          "file": "checks/workato/WKTO-2.05-limit-admin-access.check.yaml",
+          "section": "2.5"
+        },
+        {
+          "id": "WKTO-3.04",
+          "file": "checks/workato/WKTO-3.04-sensitive-property-flagging.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "WKTO-4.01",
+          "file": "checks/workato/WKTO-4.01-connection-authorization-audit.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "WKTO-5.01",
+          "file": "checks/workato/WKTO-5.01-api-clients-scoped.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "WKTO-7.02",
+          "file": "checks/workato/WKTO-7.02-deployment-inventory.check.yaml",
+          "section": "7.2"
+        },
+        {
+          "id": "WKTO-7.03",
+          "file": "checks/workato/WKTO-7.03-cicd-recipe-inventory.check.yaml",
+          "section": "7.3"
+        },
+        {
+          "id": "WKTO-8.01",
+          "file": "checks/workato/WKTO-8.01-activity-audit-log-active.check.yaml",
+          "section": "8.1"
+        },
+        {
+          "id": "WKTO-8.03",
+          "file": "checks/workato/WKTO-8.03-recipe-error-monitoring.check.yaml",
+          "section": "8.3"
+        }
+      ],
+      "controls_covered": [
+        "1.5",
+        "2.1",
+        "2.5",
+        "3.4",
+        "4.1",
+        "5.1",
+        "7.2",
+        "7.3",
+        "8.1",
+        "8.3"
+      ]
     },
     {
       "vendor": "workday",
