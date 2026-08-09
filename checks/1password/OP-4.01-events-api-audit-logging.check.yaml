@@ -1,0 +1,176 @@
+id: OP-4.01
+name: Verify 1Password Events API Audit Logging Is Active
+description: |
+  Verifies that a 1Password Events API bearer token is authorized and that
+  all three event classes the guide requires — account audit events, item
+  usage, and sign-in attempts — are actively returning data. Each class
+  answers a different question (auditevents = admin/policy tampering,
+  itemusages = mass credential access, signinattempts = credential
+  stuffing/spraying), so all three must be captured to avoid a monitoring
+  blind spot. Base URL is regional (US, US Enterprise, Canada, Europe);
+  override via the op_events_base input for non-US tenants.
+author: grc-engineering
+version: "1.0"
+source: 1password
+profile: L1
+tags: [audit-logs, monitoring, siem]
+
+references:
+  cis: "8.2"
+  nist: [AU-2, AU-3, AU-6]
+  soc2: CC7.2
+  hth: "1password:4.1"
+
+credentials:
+  OP_EVENTS_TOKEN:
+    type: api_token
+    scopes: ["auditevents", "itemusages", "signinattempts"]
+    required: true
+
+inputs:
+  op_events_base:
+    description: >-
+      Events API base URL for the account's region: US
+      https://events.1password.com, US Enterprise
+      https://events.ent.1password.com, Canada https://events.1password.ca,
+      Europe https://events.1password.eu
+    env: OP_EVENTS_BASE
+    default: "https://events.1password.com"
+    required: false
+  op_events_start_time:
+    description: ISO8601 start of the collection window sent to each event-class endpoint
+    env: OP_EVENTS_START_TIME
+    default: "2024-01-01T00:00:00Z"
+    required: false
+
+steps:
+  - id: introspect_token
+    action: api_call
+    note: Confirms which event-class features this token is authorized for before pulling.
+    request:
+      method: GET
+      url: "{{op_events_base}}/api/v2/auth/introspect"
+      headers:
+        Authorization: "Bearer {{OP_EVENTS_TOKEN}}"
+    extract:
+      features: "$.features"
+
+  - id: get_audit_events
+    action: api_call
+    request:
+      method: POST
+      url: "{{op_events_base}}/api/v2/auditevents"
+      headers:
+        Authorization: "Bearer {{OP_EVENTS_TOKEN}}"
+        Content-Type: application/json
+      body:
+        limit: 100
+        start_time: "{{op_events_start_time}}"
+    extract:
+      auditevents_items: "$.items"
+
+  - id: get_item_usages
+    action: api_call
+    request:
+      method: POST
+      url: "{{op_events_base}}/api/v2/itemusages"
+      headers:
+        Authorization: "Bearer {{OP_EVENTS_TOKEN}}"
+        Content-Type: application/json
+      body:
+        limit: 100
+        start_time: "{{op_events_start_time}}"
+    extract:
+      itemusages_items: "$.items"
+
+  - id: get_signin_attempts
+    action: api_call
+    request:
+      method: POST
+      url: "{{op_events_base}}/api/v2/signinattempts"
+      headers:
+        Authorization: "Bearer {{OP_EVENTS_TOKEN}}"
+        Content-Type: application/json
+      body:
+        limit: 100
+        start_time: "{{op_events_start_time}}"
+    extract:
+      signinattempts_items: "$.items"
+
+assertions:
+  - id: events_api_token_authorized
+    expr: "size(features) > 0"
+    severity: medium
+    title: Events API Token Has At Least One Authorized Feature
+    pass_message: "Events API token introspection returned at least one authorized feature"
+    fail_message: "Events API token introspection returned zero authorized features"
+    finding:
+      description: |
+        The auth/introspect endpoint returned an empty features list for
+        this Events API token. A token with no authorized features cannot
+        pull auditevents, itemusages, or signinattempts, so SIEM ingestion
+        configured against it is silently non-functional. Reissue the
+        token from Integrations -> your SIEM -> Issue Token with the
+        required event-class features enabled.
+
+  - id: audit_events_captured
+    expr: "size(auditevents_items) > 0"
+    severity: high
+    title: Account Audit Events Are Being Captured
+    pass_message: "The auditevents endpoint returned recent administrative and account-change events"
+    fail_message: "The auditevents endpoint returned zero events for the collection window"
+    finding:
+      description: |
+        The Events API auditevents endpoint returned no items. This class
+        covers administrative and account changes such as policy
+        tampering, group and permission changes, and provisioning abuse.
+        Zero events either means no administrative activity occurred in
+        the window, the token lacks the auditevents feature, or SIEM
+        ingestion is not actually running. Confirm the token's authorized
+        features (see the introspect assertion) and widen the collection
+        window before concluding audit logging is inactive.
+
+  - id: item_usage_captured
+    expr: "size(itemusages_items) > 0"
+    severity: medium
+    title: Item Usage Events Are Being Captured
+    pass_message: "The itemusages endpoint returned recent vault item access events"
+    fail_message: "The itemusages endpoint returned zero events for the collection window"
+    finding:
+      description: |
+        The Events API itemusages endpoint returned no items. This class
+        covers items viewed, copied, or edited in shared vaults, and is
+        what detects mass credential access or insider misuse staging
+        before exfiltration. Zero events over a real usage window is a
+        monitoring blind spot for vault-access visibility. Confirm the
+        token holds the itemusages feature and that shared-vault activity
+        exists in the window.
+
+  - id: signin_attempts_captured
+    expr: "size(signinattempts_items) > 0"
+    severity: high
+    title: Sign-in Attempt Events Are Being Captured
+    pass_message: "The signinattempts endpoint returned recent sign-in attempt events"
+    fail_message: "The signinattempts endpoint returned zero events for the collection window"
+    finding:
+      description: |
+        The Events API signinattempts endpoint returned no items. This
+        class covers successful and failed sign-ins and is what detects
+        credential stuffing, password spraying, and anomalous access
+        patterns. Zero events over a real usage window means credential-
+        attack detection has no data source. Confirm the token holds the
+        signinattempts feature.
+
+remediation:
+  description: |
+    Issue an Events API token with all three event-class features enabled
+    and configure continuous collection to a SIEM or log management
+    platform.
+  steps:
+    - "Navigate to Admin Console -> Integrations -> Events"
+    - "Issue or review the Events API token and confirm it authorizes auditevents, itemusages, and signinattempts"
+    - "Configure the collector to run on a schedule using cursor-based pagination so no events are dropped between runs"
+    - "Point collected output at a SIEM or log management platform for correlation and alerting"
+  manual:
+    - "Alert on repeated failed signinattempts entries and on auditevents entries indicating policy or permission changes"
+    - "Confirm the account's Events API base URL matches its region (US, US Enterprise, Canada, or Europe) before troubleshooting a zero-event result"

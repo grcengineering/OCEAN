@@ -1,0 +1,91 @@
+id: SAIL-2.02
+name: Flag Non-Managed Personal Access Tokens With No Expiration
+description: |
+  Mints an OAuth client-credentials token, then queries the Identity
+  Security Cloud v3 Personal Access Tokens API and flags any non-managed
+  PAT whose expirationDate is null. Per SailPoint's documentation, leaving
+  the expiration field blank at creation produces a token that never
+  expires — the most dangerous configuration in the product.
+author: grc-engineering
+version: "1.0"
+source: sailpoint
+profile: L1
+tags: [api-tokens, credential-hygiene, pat]
+
+references:
+  cis: "5.2"
+  nist: [IA-5, AC-6, AU-2]
+  hth: "sailpoint:2.2"
+
+credentials:
+  SAIL_CLIENT_ID:
+    type: api_token
+    required: true
+  SAIL_CLIENT_SECRET:
+    type: api_token
+    required: true
+
+inputs:
+  sail_base_url:
+    description: Identity Security Cloud tenant API base URL (e.g. https://tenant.api.identitynow.com)
+    env: SAIL_BASE_URL
+    required: true
+
+steps:
+  - id: mint_token
+    action: api_call
+    request:
+      method: POST
+      url: "{{sail_base_url}}/oauth/token"
+      headers:
+        Content-Type: application/x-www-form-urlencoded
+      body_form:
+        grant_type: client_credentials
+        client_id: "{{SAIL_CLIENT_ID}}"
+        client_secret: "{{SAIL_CLIENT_SECRET}}"
+    extract:
+      access_token: "$.access_token"
+
+  - id: list_pats
+    action: api_call
+    request:
+      method: GET
+      url: "{{sail_base_url}}/v3/personal-access-tokens"
+      headers:
+        Authorization: "Bearer {{access_token}}"
+        Accept: application/json
+    extract:
+      pats: "$[*]"
+      pat_count: "$length"
+
+assertions:
+  - id: no_never_expiring_non_managed_pats
+    expr: "size(pats.filter(p, p.expirationDate == null && p.managed == false)) == 0"
+    severity: critical
+    title: No Non-Managed PAT Lacks an Expiration Date
+    pass_message: "All {{pat_count}} personal access token(s) reviewed; no never-expiring non-managed PAT found"
+    fail_message: "One or more non-managed personal access tokens never expire"
+    finding:
+      description: |
+        At least one non-managed personal access token in this tenant has a
+        null expirationDate, meaning it never expires. A PAT authenticates
+        to the same governance APIs an administrator uses; a leaked
+        never-expiring token is a standing, admin-equivalent credential
+        within its scopes that carries no MFA prompt and survives
+        indefinitely. Set an explicit expiration on every flagged token, or
+        revoke and reissue it with one (SailPoint documents a 6-month
+        default and no expiration ceiling shorter than that default is
+        enforced automatically).
+
+remediation:
+  description: |
+    Bound the expiration of every non-managed personal access token and
+    establish an inventory review cadence.
+  steps:
+    - "Navigate to Admin -> Global -> Security Settings -> API Management"
+    - "Identify every non-managed token with a blank expiration date"
+    - "Regenerate or update each flagged token with an explicit expiration no longer than the 6-month default"
+    - "Use the documented bulk expiration update (25 tokens at a time) to bring an inherited estate back under policy"
+  manual:
+    - "Confirm every token maps to a documented application and an accountable owner"
+    - "Review last-used timestamps and revoke tokens with no recent activity"

@@ -212,6 +212,11 @@ pub struct RequestDef {
     pub headers: HashMap<String, String>,
     #[serde(default)]
     pub body: Option<serde_json::Value>,
+    /// Form-urlencoded body (key/value pairs, templated like everything else).
+    /// Mutually exclusive with `body` — OAuth token endpoints (SailPoint,
+    /// OneLogin, Zoom S2S) are form-only and reject JSON bodies.
+    #[serde(default)]
+    pub body_form: Option<HashMap<String, String>>,
     /// When true, follow GitHub-style `Link: <url>; rel="next"` pagination.
     #[serde(default)]
     pub paginate: bool,

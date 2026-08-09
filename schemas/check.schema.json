@@ -224,6 +224,11 @@
         "body": {
           "description": "Request body (any JSON value)."
         },
+        "body_form": {
+          "type": "object",
+          "description": "Form-urlencoded body as key/value string pairs (templated). Mutually exclusive with body; OAuth token endpoints are form-only.",
+          "additionalProperties": { "type": "string" }
+        },
         "paginate": {
           "type": "boolean",
           "default": false,

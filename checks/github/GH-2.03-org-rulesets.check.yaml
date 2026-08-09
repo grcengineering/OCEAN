@@ -40,13 +40,11 @@ steps:
         Accept: application/vnd.github+json
         X-GitHub-Api-Version: "2022-11-28"
     extract:
-      ruleset_count: "$length"
-      active_rulesets: "$[?(@.enforcement == 'active')]"
-      active_ruleset_count: "$[?(@.enforcement == 'active')].length"
+      rulesets: "$[*]"
 
 assertions:
   - id: has_active_rulesets
-    expr: "active_ruleset_count >= 1"
+    expr: "size(rulesets.filter(r, r.enforcement == 'active')) >= 1"
     severity: medium
     title: Organization Has Active Rulesets
     pass_message: "Organization has at least one active ruleset configured"

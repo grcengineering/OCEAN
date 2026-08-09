@@ -1,0 +1,108 @@
+id: ZOOM-4.02
+name: Verify Recording Security Settings Are Present and Locked Account-Wide
+description: |
+  Confirms the Zoom Account Settings API returns the recording setting
+  group (cloud recording password protection, consent, download and
+  viewer restrictions per the guide's 4.2), and that the account-level
+  lock_settings response covers recording — mirroring the HTH pack's own
+  audit logic (`jq 'if has("recording") then {recording} else . end'`)
+  rather than asserting individual nested toggle values, since the
+  interpreter's JSONPath extractor cannot select nested fields inside the
+  recording group and OCEAN could not fetch a live copy of the settings
+  schema this session to verify those field names.
+
+  This check requires a pre-minted Zoom Server-to-Server OAuth access
+  token supplied as a credential rather than minted in-step: Zoom's
+  /oauth/token endpoint requires an application/x-www-form-urlencoded
+  request body (grant_type, account_id) per OAuth 2.0, and this
+  interpreter's api_call step only sends JSON bodies, so a token-mint step
+  cannot be modeled correctly here. Mint the token externally per
+  https://developers.zoom.us/docs/internal-apps/s2s-oauth/ and supply the
+  resulting access token, refreshing it before each run since it is valid
+  for 1 hour.
+author: grc-engineering
+version: "1.0"
+source: zoom
+profile: L1
+tags: [recording-security, audit]
+
+references:
+  nist: SC-28
+  hth: "zoom:4.2"
+
+credentials:
+  ZOOM_ACCESS_TOKEN:
+    type: api_token
+    scopes: ["account:read:admin"]
+    required: true
+
+inputs:
+  zoom_account_id:
+    description: Zoom account ID; "me" targets the account owning the Server-to-Server OAuth app
+    env: ZOOM_ACCOUNT_ID
+    default: "me"
+    required: false
+
+steps:
+  - id: get_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.zoom.us/v2/accounts/{{zoom_account_id}}/settings"
+      headers:
+        Authorization: "Bearer {{ZOOM_ACCESS_TOKEN}}"
+    extract:
+      settings: "$"
+
+  - id: get_lock_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.zoom.us/v2/accounts/{{zoom_account_id}}/lock_settings"
+      headers:
+        Authorization: "Bearer {{ZOOM_ACCESS_TOKEN}}"
+    extract:
+      lock_settings: "$"
+
+assertions:
+  - id: recording_settings_present
+    expr: "has(settings.recording)"
+    severity: medium
+    title: Recording Setting Group Is Present in Account Settings
+    pass_message: "The recording settings group was returned by the Account Settings API"
+    fail_message: "The recording settings group is missing from the Account Settings API response"
+    finding:
+      description: |
+        The Account Settings API response has no "recording" group. This
+        group carries cloud recording password protection, consent, and
+        download/viewer restriction settings (guide 4.2). Confirm the
+        token holds account:read:admin and re-run; if still absent, the
+        account may not have cloud recording enabled.
+
+  - id: recording_settings_locked
+    expr: "has(lock_settings.recording)"
+    severity: high
+    title: Recording Security Settings Are Locked Account-Wide
+    pass_message: "The account-level lock_settings response includes a recording lock section"
+    fail_message: "The account-level lock_settings response has no recording lock section"
+    finding:
+      description: |
+        The /lock_settings response has no "recording" key, meaning
+        recording protections (password, consent, download restriction)
+        are not locked at the account level and can be weakened by a
+        group admin or host. This mirrors the HTH pack's own audit check
+        for this control. Lock the recording settings account-wide so
+        cloud recordings cannot be exposed by a downstream configuration
+        change.
+
+remediation:
+  description: |
+    Enforce and lock cloud recording password protection, consent, and
+    download restriction at the account level.
+  steps:
+    - "Navigate to Admin -> Account Settings -> Recording"
+    - "Require recording consent, password-protect cloud recordings, and restrict downloads to authenticated users"
+    - "Enable viewer authentication and set a default expiration for shared recordings"
+    - "Lock these settings at the account level so they cannot be weakened by a group or user"
+  manual:
+    - "Re-run this check after any account settings change to confirm the recording group still returns and the lock still covers it"

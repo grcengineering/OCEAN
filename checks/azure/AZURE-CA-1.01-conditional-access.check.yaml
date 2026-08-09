@@ -43,7 +43,7 @@ steps:
 
 assertions:
   - id: ca_policies_exist
-    expr: "policies | length > 0"
+    expr: "size(policies) > 0"
     severity: high
     title: Conditional Access Policies Exist
     pass_message: "At least one Conditional Access policy is configured"
@@ -57,7 +57,10 @@ assertions:
         identity verification.
 
   - id: mfa_policy_enabled
-    expr: "policies | selectattr('grantControls.builtInControls', 'contains', 'mfa') | selectattr('state', 'equalto', 'enabled') | list | length > 0"
+    expr: >-
+      policies.exists(p, p.state == "enabled" &&
+        has(p.grantControls) && has(p.grantControls.builtInControls) &&
+        "mfa" in p.grantControls.builtInControls)
     severity: high
     title: MFA Required via Conditional Access
     pass_message: "At least one enabled policy requires MFA"

@@ -46,16 +46,14 @@ steps:
       body: {}
     extract:
       trails: "$.trailList"
-      trails_without_validation: "$.trailList[?(@.LogFileValidationEnabled == false)]"
-      all_validated: "$.trailList[?(@.LogFileValidationEnabled == false)].length() == 0"
 
 assertions:
   - id: log_file_validation_enabled
-    expr: "all_validated == true"
+    expr: "size(trails.filter(t, t.LogFileValidationEnabled == false)) == 0"
     severity: high
     title: Log File Validation Enabled
     pass_message: "All CloudTrail trails have log file validation enabled"
-    fail_message: "{{trails_without_validation | length}} trail(s) do not have log file validation enabled"
+    fail_message: "One or more CloudTrail trails do not have log file validation enabled"
     finding:
       description: |
         One or more CloudTrail trails do not have log file integrity validation

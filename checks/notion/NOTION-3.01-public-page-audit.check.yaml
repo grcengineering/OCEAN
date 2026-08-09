@@ -1,0 +1,85 @@
+id: NOTION-3.01
+name: Audit Pages Published to the Public Web
+description: |
+  Enumerates pages visible to the auditing integration via the Notion
+  search API (POST /v1/search, filtered to object=page) and flags any page
+  whose public_url field is non-null, meaning it has been published to the
+  open web and is reachable without authentication. Search only returns
+  pages shared with the auditing integration, so grant it access to the
+  content that needs auditing.
+author: grc-engineering
+version: "1.0"
+source: notion
+profile: L1
+tags: [sharing, data-leakage, public-exposure]
+
+references:
+  cis: "3.3"
+  nist: AC-3
+  soc2: CC6.7
+  hth: "notion:3.1"
+
+credentials:
+  NOTION_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: search_pages
+    action: api_call
+    request:
+      method: POST
+      url: "https://api.notion.com/v1/search"
+      headers:
+        Authorization: "Bearer {{NOTION_TOKEN}}"
+        Notion-Version: "2026-03-11"
+        Content-Type: application/json
+      body:
+        filter:
+          property: object
+          value: page
+        page_size: 100
+    extract:
+      pages: "$.results"
+
+assertions:
+  - id: search_api_reachable
+    expr: "status_code == 200"
+    severity: medium
+    title: Page Search API Reachable
+    pass_message: "POST /v1/search returned successfully — page sharing status is auditable"
+    fail_message: "POST /v1/search did not return 200 — public page exposure cannot be audited"
+    finding:
+      description: |
+        The Notion Search API (POST /v1/search) did not return a
+        successful response, so pages shared with this integration cannot
+        be enumerated and their public-sharing status cannot be verified.
+
+  - id: no_pages_published_publicly
+    expr: "pages.filter(p, p.public_url != null).size() == 0"
+    severity: high
+    title: No Pages Published to the Public Web
+    pass_message: "No page visible to this integration has a non-null public_url — no pages are published to the open web"
+    fail_message: "One or more pages visible to this integration are published to the public web (public_url is non-null)"
+    finding:
+      description: |
+        At least one page reachable by this audit has a non-null
+        public_url, meaning it has been published to the open web and is
+        reachable by anyone with the link, without authentication.
+        Notion pages routinely contain customer data, credentials, and
+        strategy documents; a publicly published page bypasses every
+        workspace permission and sharing control. Unpublish any page that
+        was not deliberately made public, and confirm public-page
+        publishing is restricted to authorized members.
+
+remediation:
+  description: |
+    Unpublish unintended public pages and restrict who can publish pages
+    to the web going forward.
+  steps:
+    - "Navigate to Settings -> Security and review who can publish pages publicly"
+    - "For each flagged page, open the Share menu and disable Publish to web (or set Share to web to off)"
+    - "Restrict public-page publishing to a small, documented set of members or disable it entirely if there is no business need"
+  manual:
+    - "Audit public pages on a recurring cadence, not only at initial rollout"
+    - "Grant the auditing integration access to additional pages/team spaces over time to widen audit coverage beyond what is currently shared with it"

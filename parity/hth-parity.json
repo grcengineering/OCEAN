@@ -6,13 +6,13 @@
     "controls": 1719,
     "pack_vendors": 71,
     "pack_sections": 602,
-    "checks": 161,
-    "controls_covered": 80
+    "checks": 179,
+    "controls_covered": 98
   },
   "vendors": [
     {
       "vendor": "1password",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 15,
       "controls": [
         "1.1",
@@ -45,8 +45,16 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "OP-4.01",
+          "file": "checks/1password/OP-4.01-events-api-audit-logging.check.yaml",
+          "section": "4.1"
+        }
+      ],
+      "controls_covered": [
+        "4.1"
+      ]
     },
     {
       "vendor": "abnormal",
@@ -3861,7 +3869,7 @@
     },
     {
       "vendor": "notion",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 15,
       "controls": [
         "1.1",
@@ -3888,8 +3896,22 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "NOTION-2.01",
+          "file": "checks/notion/NOTION-2.01-workspace-access-audit.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "NOTION-3.01",
+          "file": "checks/notion/NOTION-3.01-public-page-audit.check.yaml",
+          "section": "3.1"
+        }
+      ],
+      "controls_covered": [
+        "2.1",
+        "3.1"
+      ]
     },
     {
       "vendor": "okta",
@@ -4384,7 +4406,7 @@
     },
     {
       "vendor": "onelogin",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 18,
       "controls": [
         "1.1",
@@ -4417,8 +4439,28 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "OL-3.03",
+          "file": "checks/onelogin/OL-3.03-privileged-role-inventory.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "OL-3.04",
+          "file": "checks/onelogin/OL-3.04-inactive-users.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "OL-5.01",
+          "file": "checks/onelogin/OL-5.01-audit-logging-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "3.3",
+        "3.4",
+        "5.1"
+      ]
     },
     {
       "vendor": "oracle-hcm",
@@ -4662,7 +4704,7 @@
     },
     {
       "vendor": "postman",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 15,
       "controls": [
         "1.1",
@@ -4692,8 +4734,28 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "PM-2.04",
+          "file": "checks/postman/PM-2.04-public-workspace-audit.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "PM-3.04",
+          "file": "checks/postman/PM-3.04-secret-scanner-findings.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "PM-4.01",
+          "file": "checks/postman/PM-4.01-audit-logs.check.yaml",
+          "section": "4.1"
+        }
+      ],
+      "controls_covered": [
+        "2.4",
+        "3.4",
+        "4.1"
+      ]
     },
     {
       "vendor": "power-bi",
@@ -4785,7 +4847,7 @@
     },
     {
       "vendor": "rapid7",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 13,
       "controls": [
         "1.1",
@@ -4810,8 +4872,22 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "R7-3.01",
+          "file": "checks/rapid7/R7-3.01-rbac-role-audit.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "R7-3.02",
+          "file": "checks/rapid7/R7-3.02-admin-account-ceiling.check.yaml",
+          "section": "3.2"
+        }
+      ],
+      "controls_covered": [
+        "3.1",
+        "3.2"
+      ]
     },
     {
       "vendor": "rippling",
@@ -4835,7 +4911,7 @@
     },
     {
       "vendor": "sailpoint",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 10,
       "controls": [
         "1.1",
@@ -4857,8 +4933,16 @@
           "cli"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "SAIL-2.02",
+          "file": "checks/sailpoint/SAIL-2.02-pat-never-expiring.check.yaml",
+          "section": "2.2"
+        }
+      ],
+      "controls_covered": [
+        "2.2"
+      ]
     },
     {
       "vendor": "salesforce",
@@ -4961,7 +5045,7 @@
     },
     {
       "vendor": "sendgrid",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 15,
       "controls": [
         "1.1",
@@ -4991,8 +5075,22 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "SG-1.04",
+          "file": "checks/sendgrid/SG-1.04-ip-access-management.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "SG-3.02",
+          "file": "checks/sendgrid/SG-3.02-teammate-permissions-audit.check.yaml",
+          "section": "3.2"
+        }
+      ],
+      "controls_covered": [
+        "1.4",
+        "3.2"
+      ]
     },
     {
       "vendor": "sentinelone",
@@ -5415,7 +5513,7 @@
     },
     {
       "vendor": "tenable",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 13,
       "controls": [
         "1.1",
@@ -5443,8 +5541,22 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "TEN-1.02",
+          "file": "checks/tenable/TEN-1.02-admin-account-ceiling.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "TEN-1.03",
+          "file": "checks/tenable/TEN-1.03-audit-log-active.check.yaml",
+          "section": "1.3"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "1.3"
+      ]
     },
     {
       "vendor": "terraform-cloud",
@@ -5928,7 +6040,7 @@
     },
     {
       "vendor": "zoom",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 13,
       "controls": [
         "1.1",
@@ -5953,8 +6065,22 @@
           "api"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "ZOOM-2.01",
+          "file": "checks/zoom/ZOOM-2.01-meeting-security-settings-audit.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ZOOM-4.02",
+          "file": "checks/zoom/ZOOM-4.02-recording-security-settings-audit.check.yaml",
+          "section": "4.2"
+        }
+      ],
+      "controls_covered": [
+        "2.1",
+        "4.2"
+      ]
     },
     {
       "vendor": "zscaler",

@@ -38,12 +38,10 @@ steps:
         Authorization: "SSWS {{OKTA_API_TOKEN}}"
     extract:
       authenticators: "$[*]"
-      authenticator_types: "$[*].type"
-      has_webauthn: "$[?(@.type=='security_key' || @.key=='webauthn')]"
 
 assertions:
   - id: phishing_resistant_authenticator
-    expr: "has_webauthn | length > 0"
+    expr: "size(authenticators.filter(a, a.type == 'security_key' || a.key == 'webauthn')) > 0"
     severity: high
     title: Phishing-Resistant Authenticator Available
     pass_message: "Phishing-resistant authenticator (FIDO2/WebAuthn) is configured"

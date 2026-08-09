@@ -1,0 +1,89 @@
+id: SG-3.02
+name: Audit SendGrid Teammate Administrator Grants
+description: |
+  Enumerates teammates via /v3/teammates and flags accounts holding the
+  Administrator grant, which carries every scope and is functionally a
+  full-account credential. SendGrid's own API reference is internally
+  inconsistent about the response envelope key — the example response
+  shows "results" while the schema documents "result" — so this check
+  extracts the whole response body and tests for either key in CEL rather
+  than assuming one.
+author: grc-engineering
+version: "1.0"
+source: sendgrid
+profile: L1
+tags: [teammates, least-privilege, admin-audit]
+
+references:
+  cis: "5.4"
+  nist: AC-6
+  soc2: CC6.2
+  hth: "sendgrid:3.2"
+
+credentials:
+  SENDGRID_API_KEY:
+    type: api_token
+    scopes: ["teammates.read"]
+    required: true
+
+steps:
+  - id: get_teammates
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.sendgrid.com/v3/teammates?limit=500&offset=0"
+      headers:
+        Authorization: "Bearer {{SENDGRID_API_KEY}}"
+    extract:
+      teammates_response: "$"
+
+assertions:
+  - id: teammates_api_reachable
+    expr: "has(teammates_response.results) || has(teammates_response.result)"
+    severity: medium
+    title: Teammates API Returned a Recognized Response Envelope
+    pass_message: "The Teammates API returned a results or result array"
+    fail_message: "The Teammates API response contained neither a results nor a result array"
+    finding:
+      description: |
+        The /v3/teammates response contained neither a "results" nor a
+        "result" key (the two envelope shapes SendGrid's own reference
+        documents). Without a recognized array, teammate permission
+        governance cannot be audited at all. Confirm the API key holds
+        the teammates.read scope and that the account has teammates
+        provisioned.
+
+  - id: administrator_population_minimal
+    expr: >-
+      (has(teammates_response.results) &&
+       size(teammates_response.results.filter(t, t.is_admin == true)) <= 3) ||
+      (has(teammates_response.result) &&
+       size(teammates_response.result.filter(t, t.is_admin == true)) <= 3)
+    severity: medium
+    title: Administrator Grant Population Is Minimal
+    pass_message: "The Administrator grant is held by 3 or fewer teammates"
+    fail_message: "More than 3 teammates hold the Administrator grant"
+    finding:
+      description: |
+        More than 3 teammates hold is_admin: true. The Administrator grant
+        holds every permission scope and is mutually exclusive with
+        billing-only access, so it is functionally a full-account
+        credential. Each additional administrator is another high-value
+        target for phishing and account takeover. Review each flagged
+        account and downgrade to individual, purpose-scoped permissions or
+        one of the SSO personas (Accountant, Developer, Marketer,
+        Observer) unless full administrative access is specifically
+        justified.
+
+remediation:
+  description: |
+    Review every teammate holding the Administrator grant and replace
+    unnecessary admin access with individually scoped permissions.
+  steps:
+    - "Navigate to Settings -> Teammates"
+    - "List teammates and identify every account with the Administrator grant"
+    - "For each administrator, confirm the business justification for full-account access"
+    - "Downgrade unjustified administrators to individual permissions or an SSO persona (Accountant, Developer, Marketer, Observer)"
+  manual:
+    - "Review teammate access monthly and remove permissions no longer required by the role"
+    - "Remember billing permissions are mutually exclusive with all other scopes — route billing needs to a dedicated billing-only teammate"

@@ -1,0 +1,70 @@
+id: TEN-1.03
+name: Verify Administrator Activity Audit Log Is Actively Capturing Events
+description: |
+  Verifies that the Tenable Vulnerability Management audit log
+  (audit-log/v1/events) is actively recording events since a given cutoff
+  date. An audit log endpoint that returns zero events over a meaningful
+  window indicates logging is not capturing administrator activity, even if
+  the feature appears configured.
+author: grc-engineering
+version: "1.0"
+source: tenable
+profile: L1
+tags: [audit-logging, monitoring]
+
+references:
+  cis: "8.2"
+  nist: AU-2
+  hth: "tenable:1.3"
+
+credentials:
+  TENABLE_API_KEYS:
+    type: api_token
+    required: true
+
+inputs:
+  audit_since:
+    description: "ISO date (YYYY-MM-DD) audit events must be present since, e.g. 30 days ago"
+    env: TENABLE_AUDIT_SINCE
+    required: true
+
+steps:
+  - id: get_audit_events
+    action: api_call
+    request:
+      method: GET
+      url: "https://cloud.tenable.com/audit-log/v1/events?f=date.gt:{{audit_since}}&limit=1000"
+      headers:
+        X-ApiKeys: "{{TENABLE_API_KEYS}}"
+        Accept: application/json
+      paginate: true
+    extract:
+      events: "$.events"
+
+assertions:
+  - id: audit_log_active
+    expr: "size(events) > 0"
+    severity: high
+    title: Administrator Audit Log Is Actively Capturing Events
+    pass_message: "The audit log returned events since {{audit_since}}, confirming active capture"
+    fail_message: "The audit log returned zero events since {{audit_since}}"
+    finding:
+      description: |
+        The Tenable audit-log/v1/events endpoint returned zero events since
+        the queried cutoff date. Administrator actions such as user
+        creation, role changes, and scan-data deletion can hide an attacker
+        covering their tracks if they are not being recorded. Confirm the
+        audit log is enabled and that the querying account holds the
+        Administrator role required to read it, and export the log to a
+        SIEM for tamper-evident, long-term retention.
+
+remediation:
+  description: |
+    Confirm audit logging is enabled and export it to a SIEM for
+    tamper-evident retention and alerting.
+  steps:
+    - "Navigate to Settings -> Activity Log and confirm events are visible for recent administrator actions"
+    - "Configure export of the activity log to a SIEM for long-term, tamper-evident retention"
+    - "Set up alerts for admin login events, configuration changes, and user creation/deletion"
+  manual:
+    - "Perform a weekly review of admin activity and investigate anomalies"

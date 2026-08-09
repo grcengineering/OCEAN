@@ -37,6 +37,16 @@ PREFIX_TO_SLUG = {
     "SNOW": "snowflake",  # no OCEAN checks yet — see parity report (transport not verifiable in-repo)
     "SLACK": "slack",
     "GITLAB": "gitlab",
+    "OP": "1password",
+    "SG": "sendgrid",
+    "ZOOM": "zoom",
+    "R7": "rapid7",
+    "TEN": "tenable",
+    "SAIL": "sailpoint",
+    "OL": "onelogin",
+    "NOTION": "notion",
+    "PM": "postman",
+    "DUO": "duo",  # no OCEAN checks — Admin API requires per-request HMAC-signed Authorization (ikey/skey), not a static bearer/basic token the check DSL can compute
 }
 
 

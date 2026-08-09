@@ -146,7 +146,21 @@ fn execute_step(step: &CheckStep, ctx: &HashMap<String, String>) -> Result<StepR
         req = req.set(k, v);
     }
 
-    let response = if let Some(body) = &step.request.body {
+    let response = if let Some(form) = &step.request.body_form {
+        // Form-urlencoded send (OAuth token endpoints are form-only).
+        let pairs: Vec<(String, String)> = form
+            .iter()
+            .map(|(k, v)| (k.clone(), resolve_template(v, ctx)))
+            .collect();
+        let borrowed: Vec<(&str, &str)> = pairs
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        match method.as_str() {
+            "GET" | "DELETE" => req.call(),
+            _ => req.send_form(&borrowed),
+        }
+    } else if let Some(body) = &step.request.body {
         let resolved_body = resolve_json_template(body, ctx);
         match method.as_str() {
             "GET" | "DELETE" => req.call(),

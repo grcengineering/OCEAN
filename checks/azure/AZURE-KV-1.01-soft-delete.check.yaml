@@ -44,7 +44,7 @@ steps:
 
 assertions:
   - id: key_vaults_have_soft_delete
-    expr: "vaults | rejectattr('properties.enableSoftDelete', 'equalto', true) | list | length == 0"
+    expr: "vaults.all(v, has(v.properties) && v.properties.enableSoftDelete == true)"
     severity: high
     title: All Key Vaults Have Soft Delete Enabled
     pass_message: "All Key Vaults have soft delete enabled"
@@ -58,7 +58,7 @@ assertions:
         it configured.
 
   - id: key_vaults_have_purge_protection
-    expr: "vaults | rejectattr('properties.enablePurgeProtection', 'equalto', true) | list | length == 0"
+    expr: "vaults.all(v, has(v.properties) && v.properties.enablePurgeProtection == true)"
     severity: high
     title: All Key Vaults Have Purge Protection Enabled
     pass_message: "All Key Vaults have purge protection enabled"

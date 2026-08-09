@@ -1,0 +1,91 @@
+id: OL-3.04
+name: Identify Users Inactive Past the Suspension Cutoff
+description: |
+  Mints an OAuth client-credentials token, then queries the Users v2 API
+  with the documented last_login_until filter to find accounts whose last
+  login predates the inactivity cutoff. This is the verification side of
+  automatic-suspension policy: it surfaces accounts the policy should have
+  caught so a reviewer can confirm suspension is actually working.
+author: grc-engineering
+version: "1.0"
+source: onelogin
+profile: L1
+tags: [dormant-accounts, offboarding, audit]
+
+references:
+  cis: "5.3"
+  nist: "AC-2(3)"
+  hth: "onelogin:3.4"
+
+credentials:
+  ONELOGIN_CLIENT_ID:
+    type: api_token
+    required: true
+  ONELOGIN_CLIENT_SECRET:
+    type: api_token
+    required: true
+
+inputs:
+  onelogin_subdomain:
+    description: OneLogin account subdomain (e.g. mycompany for mycompany.onelogin.com)
+    env: ONELOGIN_SUBDOMAIN
+    required: true
+  inactive_cutoff:
+    description: "ISO 8601 timestamp; users with last_login before this are considered inactive (90-day default mirrors OneLogin's documented default inactivity period)"
+    env: ONELOGIN_INACTIVE_CUTOFF
+    required: true
+
+steps:
+  - id: mint_token
+    action: api_call
+    request:
+      method: POST
+      url: "https://{{onelogin_subdomain}}.onelogin.com/auth/oauth2/v2/token"
+      headers:
+        Content-Type: application/x-www-form-urlencoded
+      body_form:
+        grant_type: client_credentials
+        client_id: "{{ONELOGIN_CLIENT_ID}}"
+        client_secret: "{{ONELOGIN_CLIENT_SECRET}}"
+    extract:
+      access_token: "$.access_token"
+
+  - id: get_inactive_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{onelogin_subdomain}}.onelogin.com/api/2/users?last_login_until={{inactive_cutoff}}&fields=id,username,email,state,status,last_login"
+      headers:
+        Authorization: "bearer {{access_token}}"
+    extract:
+      inactive_users: "$[*]"
+      inactive_count: "$length"
+
+assertions:
+  - id: inactive_user_audit
+    expr: "get_inactive_users_status_code == 200"
+    severity: medium
+    title: Users Inactive Past the Suspension Cutoff
+    pass_message: "{{inactive_count}} user(s) found with last_login before {{inactive_cutoff}} — confirm each is suspended"
+    fail_message: "The Users API call did not return 200 — the inactive-user list for the configured cutoff could not be retrieved"
+    finding:
+      description: |
+        This is an informational audit of accounts whose last login predates
+        the configured inactivity cutoff. An identity-provider account
+        grants access to every application assigned to it, so a forgotten
+        account is a forgotten key to the whole application portfolio. For
+        every account returned, confirm it is actually suspended by the
+        automatic-suspension policy; any that remain active indicate the
+        suspension policy is not working as configured.
+
+remediation:
+  description: |
+    Confirm the automatic-suspension policy is enabled and suspend any
+    account it missed.
+  steps:
+    - "Navigate to Security -> Policies -> select the user policy"
+    - "Confirm automatic suspension of inactive users is enabled with the intended inactivity period"
+    - "Manually suspend any account returned by this check that is still active"
+    - "Tighten the inactivity period for administrator and contractor policies below the 90-day default"
+  manual:
+    - "Document legitimately-rare-login accounts (break-glass, seasonal staff) instead of exempting the whole policy"

@@ -44,7 +44,7 @@ steps:
 
 assertions:
   - id: diagnostic_settings_exist
-    expr: "diagnostic_settings | length > 0"
+    expr: "size(diagnostic_settings) > 0"
     severity: high
     title: Diagnostic Settings Configured
     pass_message: "At least one diagnostic setting is configured on the subscription"
@@ -58,7 +58,7 @@ assertions:
         security monitoring and audit trail retention.
 
   - id: diagnostic_settings_capture_security
-    expr: "diagnostic_settings | selectattr('properties.logs', 'defined') | list | length > 0"
+    expr: "diagnostic_settings.exists(d, has(d.properties) && has(d.properties.logs))"
     severity: high
     title: Diagnostic Settings Capture Log Categories
     pass_message: "Diagnostic settings are configured to capture log categories"

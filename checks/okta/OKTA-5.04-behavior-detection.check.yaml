@@ -38,11 +38,10 @@ steps:
         Authorization: "SSWS {{OKTA_API_TOKEN}}"
     extract:
       behaviors: "$[*]"
-      active_behaviors: "$[?(@.status=='ACTIVE')]"
 
 assertions:
   - id: active_behavior_detection
-    expr: "active_behaviors | length > 0"
+    expr: "size(behaviors.filter(b, b.status == 'ACTIVE')) > 0"
     severity: medium
     title: Behavior Detection Rules Active
     pass_message: "Active behavior detection rules are configured"

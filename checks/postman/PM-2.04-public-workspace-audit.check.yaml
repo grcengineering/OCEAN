@@ -1,0 +1,76 @@
+id: PM-2.04
+name: Audit Public Postman Workspaces
+description: |
+  Lists every workspace visible to the API key whose visibility is public
+  via GET /workspaces?type=public and flags any result. Public workspaces
+  are discoverable by anyone on the internet, including automated
+  secret-harvesting bots, and were the root cause of the December 2024
+  CloudSEK finding of 30,000+ publicly exposed Postman workspaces.
+author: grc-engineering
+version: "1.0"
+source: postman
+profile: L2
+tags: [workspaces, data-leakage, public-exposure]
+
+references:
+  cis: "3.3"
+  nist: AC-3
+  soc2: CC6.7
+  hth: "postman:2.4"
+
+credentials:
+  POSTMAN_API_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_public_workspaces
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.getpostman.com/workspaces?type=public"
+      headers:
+        X-API-Key: "{{POSTMAN_API_KEY}}"
+    extract:
+      workspaces: "$.workspaces"
+
+assertions:
+  - id: workspaces_api_reachable
+    expr: "status_code == 200"
+    severity: medium
+    title: Workspaces API Reachable
+    pass_message: "GET /workspaces returned successfully — public workspace exposure is auditable"
+    fail_message: "GET /workspaces did not return 200 — public workspace exposure cannot be audited"
+    finding:
+      description: |
+        The Postman Workspaces API (GET /workspaces) did not return a
+        successful response, so public-workspace exposure cannot be
+        verified for this organization.
+
+  - id: no_public_workspaces
+    expr: "size(workspaces) == 0"
+    severity: high
+    title: No Public Postman Workspaces Exposed
+    pass_message: "No public workspaces were found — the ?type=public query returned zero results"
+    fail_message: "One or more workspaces are set to public visibility, exposed to the open internet"
+    finding:
+      description: |
+        At least one workspace in this organization is set to public
+        visibility, making it discoverable and readable by anyone on the
+        internet, including automated scrapers. Collections and
+        environments frequently contain live API keys, access tokens, and
+        internal endpoint URLs. Convert every flagged workspace to
+        private or team visibility unless it is deliberately and reviewed
+        as public.
+
+remediation:
+  description: |
+    Restrict who can create public workspaces and convert any unintended
+    public workspace to a private or team visibility.
+  steps:
+    - "Navigate to Team Settings -> Security and restrict public workspace creation"
+    - "Enable Require approval for public workspaces"
+    - "For each flagged workspace, open its settings and change visibility to Private or Team"
+  manual:
+    - "Review all existing public workspaces for exposed secrets before or immediately after converting visibility"
+    - "Re-run this audit on a recurring cadence, since visibility can be changed back to public by any member with sufficient role"

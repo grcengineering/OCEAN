@@ -1,0 +1,85 @@
+id: NOTION-2.01
+name: Audit Workspace Membership and Integration Attribution
+description: |
+  Enumerates workspace users via the Notion REST API (GET /v1/users) and
+  verifies the membership list is auditable, then flags bot/integration
+  users with no visible name — an attribution gap that makes it impossible
+  to identify which automated actor holds standing access to workspace
+  content. Requires the integration to hold the "Read user information
+  including email addresses" capability; without it, person-user emails
+  are omitted and a 403 signals the capability is missing.
+author: grc-engineering
+version: "1.0"
+source: notion
+profile: L1
+tags: [access-control, provisioning, integrations]
+
+references:
+  cis: "5.4"
+  nist: AC-6
+  soc2: CC6.6
+  hth: "notion:2.1"
+
+credentials:
+  NOTION_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_workspace_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.notion.com/v1/users?page_size=100"
+      headers:
+        Authorization: "Bearer {{NOTION_TOKEN}}"
+        Notion-Version: "2026-03-11"
+    extract:
+      users: "$.results"
+
+assertions:
+  - id: users_api_reachable
+    expr: "status_code == 200"
+    severity: medium
+    title: Workspace Membership API Reachable
+    pass_message: "GET /v1/users returned successfully — workspace membership is auditable"
+    fail_message: "GET /v1/users did not return 200 — workspace membership cannot be audited"
+    finding:
+      description: |
+        The Notion Users API (GET /v1/users) did not return a successful
+        response. A 403 indicates the integration lacks the "Read user
+        information including email addresses" capability; any other
+        non-200 status means workspace membership cannot be enumerated at
+        all. Without a working membership audit, unauthorized accounts,
+        stale members, and unattributed integrations can accumulate
+        unnoticed.
+
+  - id: no_unnamed_bot_integrations
+    expr: 'users.filter(u, u.type == "bot" && (u.name == null || u.name == "")).size() == 0'
+    severity: medium
+    title: Every Bot/Integration User Has a Visible Name
+    pass_message: "All bot/integration users in the workspace have a visible name"
+    fail_message: "One or more bot/integration users have no visible name"
+    finding:
+      description: |
+        At least one bot (integration) user visible to this audit has no
+        name set. Every integration installed in the workspace holds
+        standing, durable access to whatever content it was granted —
+        an unnamed integration cannot be attributed to a business owner
+        or reviewed during an access recertification, which is exactly
+        the membership-sprawl risk this control is meant to prevent.
+        Rename or remove any integration that cannot be attributed to a
+        known business purpose.
+
+remediation:
+  description: |
+    Restrict workspace membership to corporate identities and keep every
+    integration attributable to a documented owner.
+  steps:
+    - "Navigate to Settings -> General and restrict Allowed email domains to corporate domains only"
+    - "Turn off Automatic account creation so SSO alone cannot self-provision new members"
+    - "Navigate to Settings -> Connections and review every installed integration for a clear name and business owner"
+    - "Remove or rename any integration that cannot be attributed to a known purpose"
+  manual:
+    - "Review workspace membership and installed integrations on a recurring cadence as part of access recertification"
+    - "Grant the auditing integration 'Read user information including email addresses' so future audits can also verify email domains directly"

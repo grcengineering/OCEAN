@@ -1,0 +1,111 @@
+id: ZOOM-2.01
+name: Verify Meeting Security Setting Groups Are Present in Account Settings
+description: |
+  Confirms the Zoom Account Settings API returns the schedule_meeting,
+  in_meeting, and meeting_security setting groups that carry the meeting
+  password, waiting room, and authentication posture referenced in the
+  guide, and is a structural presence check rather than a per-toggle
+  assertion: the interpreter's JSONPath extractor cannot select individual
+  nested boolean fields, and OCEAN could not fetch a live copy of Zoom's
+  settings response schema this session to verify exact field names, so no
+  specific toggle value is asserted here — review the dumped groups
+  manually against the guide's required posture.
+
+  This check requires a pre-minted Zoom Server-to-Server OAuth access
+  token supplied as a credential rather than minted in-step: Zoom's
+  /oauth/token endpoint requires an application/x-www-form-urlencoded
+  request body (grant_type, account_id) per OAuth 2.0, and this
+  interpreter's api_call step only sends JSON bodies, so a token-mint step
+  cannot be modeled correctly here. Mint the token externally per
+  https://developers.zoom.us/docs/internal-apps/s2s-oauth/ (POST
+  https://zoom.us/oauth/token with HTTP Basic client_id:client_secret and
+  grant_type=account_credentials) and supply the resulting access token,
+  refreshing it before each run since it is valid for 1 hour.
+author: grc-engineering
+version: "1.0"
+source: zoom
+profile: L1
+tags: [meeting-security, waiting-room, audit]
+
+references:
+  nist: AC-3
+  hth: "zoom:2.1"
+
+credentials:
+  ZOOM_ACCESS_TOKEN:
+    type: api_token
+    scopes: ["account:read:admin"]
+    required: true
+
+inputs:
+  zoom_account_id:
+    description: Zoom account ID; "me" targets the account owning the Server-to-Server OAuth app
+    env: ZOOM_ACCOUNT_ID
+    default: "me"
+    required: false
+
+steps:
+  - id: get_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.zoom.us/v2/accounts/{{zoom_account_id}}/settings"
+      headers:
+        Authorization: "Bearer {{ZOOM_ACCESS_TOKEN}}"
+    extract:
+      settings: "$"
+
+  - id: get_lock_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.zoom.us/v2/accounts/{{zoom_account_id}}/lock_settings"
+      headers:
+        Authorization: "Bearer {{ZOOM_ACCESS_TOKEN}}"
+    extract:
+      lock_settings: "$"
+
+assertions:
+  - id: meeting_security_groups_present
+    expr: "has(settings.schedule_meeting) && has(settings.in_meeting) && has(settings.meeting_security)"
+    severity: medium
+    title: Meeting Security Setting Groups Are Present in Account Settings
+    pass_message: "schedule_meeting, in_meeting, and meeting_security were all returned by the Account Settings API"
+    fail_message: "One or more of schedule_meeting, in_meeting, or meeting_security is missing from the Account Settings API response"
+    finding:
+      description: |
+        The Account Settings API response is missing at least one of the
+        schedule_meeting, in_meeting, or meeting_security groups. These
+        groups carry the passcode, waiting room, and meeting-
+        authentication controls the guide requires (2.1). Confirm the
+        token holds the account:read:admin scope and re-run; if the
+        groups are still absent, the settings API may have changed shape
+        and the guide's control mapping needs review.
+
+  - id: lock_settings_reachable
+    expr: "size(lock_settings) > 0"
+    severity: medium
+    title: Account-Level Lock Settings Are Reachable
+    pass_message: "The lock_settings endpoint returned a non-empty response"
+    fail_message: "The lock_settings endpoint returned an empty response"
+    finding:
+      description: |
+        The /lock_settings endpoint returned no data. Without visibility
+        into which settings are locked account-wide, a group admin or
+        host could weaken meeting password, waiting room, or
+        authentication requirements that the account intends to enforce
+        everywhere. Confirm the token holds account:read:admin and that
+        the account tier supports account-level locking.
+
+remediation:
+  description: |
+    Enforce and lock meeting password, waiting room, and authenticated-
+    user requirements at the account level so they cannot be weakened by
+    an individual group or host.
+  steps:
+    - "Navigate to Admin -> Account Management -> Account Settings -> Security"
+    - "Enable and lock: require a passcode when scheduling new meetings, require a passcode for phone participants, and Waiting Room"
+    - "Enable 'Only authenticated users can join meetings' and configure the authentication method"
+    - "Disable and lock: allow participants to rename themselves, allow removed participants to rejoin"
+  manual:
+    - "Re-run this check after any account settings change to confirm the groups still return and locks still cover the expected settings"
