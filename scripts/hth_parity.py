@@ -34,6 +34,9 @@ PREFIX_TO_SLUG = {
     "OKTA": "okta",
     "AWS": "aws",  # no HTH guide (AWS is out of HTH's SaaS scope) — native-only
     "AZURE": "microsoft-entra-id",
+    "SNOW": "snowflake",  # no OCEAN checks yet — see parity report (transport not verifiable in-repo)
+    "SLACK": "slack",
+    "GITLAB": "gitlab",
 }
 
 
@@ -102,11 +105,53 @@ def norm_section(section: str | None) -> str | None:
     return section
 
 
+def validate(manifest_path: Path) -> int:
+    """CI mode: no HTH checkout needed. Validates the committed manifest against
+    the checks/ tree — every check's references.hth must resolve to a real
+    control in the manifest, and per-vendor check counts must match reality."""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    by_vendor = {v["vendor"]: v for v in manifest["vendors"]}
+    checks = ocean_checks()
+    errors: list[str] = []
+
+    for slug, vendor_checks in checks.items():
+        if slug.startswith("_unmapped/") or slug not in by_vendor:
+            continue
+        known = {norm_section(c) for c in by_vendor[slug]["controls"]}
+        for chk in vendor_checks:
+            sec = norm_section(chk["section"])
+            if sec and known and sec not in known:
+                errors.append(
+                    f"{chk['file']}: references section {sec} not in HTH {slug} controls"
+                )
+
+    for v in manifest["vendors"]:
+        alias = VENDOR_ALIASES.get(v["vendor"], "")
+        actual = len(checks.get(v["vendor"], []) + checks.get(alias, []))
+        if actual != len(v["ocean_checks"]):
+            errors.append(
+                f"{v['vendor']}: manifest lists {len(v['ocean_checks'])} checks, tree has {actual} — regenerate (scripts/hth_parity.py)"
+            )
+
+    if errors:
+        print("parity validate: FAIL", file=sys.stderr)
+        for e in errors:
+            print(f"  {e}", file=sys.stderr)
+        return 1
+    print(f"parity validate: OK ({manifest['totals']['checks']} mapped checks consistent)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--hth", type=Path, default=DEFAULT_HTH)
     ap.add_argument("--out", type=Path, default=REPO / "parity" / "hth-parity.json")
+    ap.add_argument("--validate", action="store_true",
+                    help="validate committed manifest against checks/ (no HTH checkout needed)")
     args = ap.parse_args()
+
+    if args.validate:
+        return validate(args.out)
 
     guides_dir = args.hth / "docs" / "_guides"
     packs_dir = args.hth / "docs" / "_data" / "packs"

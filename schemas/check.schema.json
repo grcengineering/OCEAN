@@ -74,7 +74,11 @@
         "soc2":     { "$ref": "#/$defs/stringOrArray" },
         "iso27001": { "$ref": "#/$defs/stringOrArray" },
         "pci_dss":  { "$ref": "#/$defs/stringOrArray" },
-        "disa_stig":{ "$ref": "#/$defs/stringOrArray" }
+        "disa_stig":{ "$ref": "#/$defs/stringOrArray" },
+        "hth": {
+          "type": "string",
+          "description": "HTH guide control this check derives from, as 'vendor-slug:N.N' (e.g. 'slack:1.2')."
+        }
       }
     },
     "credentials": {

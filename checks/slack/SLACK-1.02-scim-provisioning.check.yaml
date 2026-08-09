@@ -1,0 +1,69 @@
+id: SLACK-1.02
+name: Verify SCIM User Provisioning Is Active
+description: |
+  Verifies that SCIM (System for Cross-domain Identity Management) user
+  provisioning is active on the Slack workspace by confirming the SCIM
+  Users endpoint returns provisioned users. Absence of provisioned users
+  indicates SCIM is not actually syncing identities from the IdP, leaving
+  user lifecycle management manual.
+author: grc-engineering
+version: "1.0"
+source: slack
+profile: L1
+tags: [scim, provisioning, identity]
+
+references:
+  cis: "5.3"
+  nist: AC-2
+  hth: "slack:1.2"
+
+credentials:
+  SLACK_ADMIN_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_scim_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.slack.com/scim/v1/Users"
+      headers:
+        Authorization: "Bearer {{SLACK_ADMIN_TOKEN}}"
+        Content-Type: application/json
+    extract:
+      total_results: "$.totalResults"
+
+assertions:
+  - id: scim_provisioning_active
+    expr: "total_results > 0"
+    severity: high
+    title: SCIM User Provisioning Active
+    pass_message: "SCIM provisioning is active with {{total_results}} provisioned user(s)"
+    fail_message: "SCIM Users endpoint returned zero provisioned users"
+    finding:
+      description: |
+        The Slack SCIM Users endpoint (scim/v1/Users) returned zero users,
+        indicating SCIM provisioning is not actively syncing identities from
+        the identity provider even if it has been configured. Without active
+        SCIM sync, user lifecycle management (creation, attribute updates,
+        and deprovisioning) reverts to manual administration, and employees
+        who leave the organization may retain Slack access because their
+        account was never automatically deprovisioned. Confirm SCIM
+        provisioning is enabled in the identity provider and that the SCIM
+        base URL and bearer token are correctly configured.
+
+remediation:
+  description: |
+    Enable and complete SCIM provisioning from the identity provider so that
+    users are automatically created, updated, and deactivated in Slack based
+    on IdP directory membership.
+  steps:
+    - "Navigate to Enterprise Grid Admin -> Settings -> Authentication"
+    - "Click Configure next to SCIM provisioning and generate a SCIM API token"
+    - "In the identity provider, configure SCIM integration with base URL https://api.slack.com/scim/v1 and the generated bearer token"
+    - "Enable create, update, and deactivate provisioning actions in the identity provider"
+    - "Assign the intended user population to the Slack SCIM integration and confirm sync"
+  manual:
+    - "Verify a test user created in the IdP appears in Slack"
+    - "Deactivate a test user in the IdP and confirm Slack access is removed"

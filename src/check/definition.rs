@@ -120,6 +120,9 @@ pub struct CheckReferences {
     pub pci_dss: StringOrVec,
     #[serde(default)]
     pub disa_stig: StringOrVec,
+    /// HTH guide control this check derives from, as "vendor-slug:N.N" (e.g. "slack:1.2").
+    #[serde(default)]
+    pub hth: String,
 }
 
 /// Accepts either a single string or a list of strings in YAML.
