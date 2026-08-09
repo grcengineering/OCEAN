@@ -1,0 +1,67 @@
+id: VERCEL-8.02
+name: Verify Audit Log Drain Is Streaming to a SIEM
+description: |
+  Verifies that at least one Log Drain is configured for the team so
+  administrative and security-relevant audit events (member role changes,
+  environment variable CRUD, SAML config changes, integration installs)
+  are forwarded to a SIEM in real time instead of relying on after-the-fact
+  CSV export from the dashboard.
+author: grc-engineering
+version: "1.0"
+source: vercel
+profile: L2
+tags: [audit-logging, siem, monitoring]
+
+references:
+  nist: ["AU-2", "AU-3", "AU-12"]
+  hth: "vercel:8.2"
+
+credentials:
+  VERCEL_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  vercel_team_id:
+    description: Vercel team ID (starts with "team_")
+    env: VERCEL_TEAM_ID
+    required: true
+
+steps:
+  - id: get_log_drains
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.vercel.com/v1/log-drains?teamId={{vercel_team_id}}"
+      headers:
+        Authorization: "Bearer {{VERCEL_TOKEN}}"
+    extract:
+      drains: "$[*]"
+      drain_count: "$length"
+
+assertions:
+  - id: log_drain_configured
+    expr: "drain_count > 0"
+    severity: high
+    title: At Least One Log Drain Is Configured
+    pass_message: "{{drain_count}} log drain(s) are configured for the team"
+    fail_message: "No log drains are configured for the team"
+    finding:
+      description: |
+        The team has no Log Drains configured. Enterprise audit logs are
+        retained for 90 days natively, but without a Log Drain forwarding
+        events to a SIEM, security-relevant events (privilege escalation,
+        secret creation, deployment-protection changes, SSO config changes)
+        are only reviewable through manual, after-the-fact CSV export
+        instead of real-time alerting.
+
+remediation:
+  description: |
+    Configure an Audit Log Drain forwarding to the organization's SIEM and
+    alert on the security-critical event types.
+  steps:
+    - "Navigate to Team Settings -> Security -> Audit Log"
+    - "Configure a Log Drain endpoint pointing at the SIEM ingestion URL"
+    - "Confirm the drain's sources include audit-log events and its status is active"
+  manual:
+    - "Configure SIEM detection rules for team.member.role.updated (privilege escalation), team.member.invited, team.member.removed, project.env_variable.created/updated, deployment-protection.updated, password_protection.disabled, saml.updated, integration.installed, and domain.added"

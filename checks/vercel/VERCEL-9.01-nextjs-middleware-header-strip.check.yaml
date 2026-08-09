@@ -1,0 +1,86 @@
+id: VERCEL-9.01
+name: Deny Spoofed Next.js Middleware Subrequest Headers at the Edge
+description: |
+  Verifies that a Firewall rule exists denying inbound requests that carry
+  the x-middleware-subrequest header from the public internet. CVE-2025-29927
+  allowed attackers to bypass Next.js middleware-based authorization by
+  spoofing this internal header; stripping/denying it at the edge is
+  defense in depth even after the framework is patched.
+author: grc-engineering
+version: "1.0"
+source: vercel
+profile: L1
+tags: [waf, nextjs, cve, middleware]
+
+references:
+  nist: ["SI-4", "SI-10", "SC-7"]
+  hth: "vercel:9.1"
+
+credentials:
+  VERCEL_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  vercel_team_id:
+    description: Vercel team ID (starts with "team_")
+    env: VERCEL_TEAM_ID
+    required: true
+  vercel_project_id:
+    description: Vercel project ID or name
+    env: VERCEL_PROJECT_ID
+    required: true
+
+steps:
+  - id: get_firewall_config
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.vercel.com/v1/security/firewall/config/active?projectId={{vercel_project_id}}&teamId={{vercel_team_id}}"
+      headers:
+        Authorization: "Bearer {{VERCEL_TOKEN}}"
+    extract:
+      rules: "$.rules"
+
+assertions:
+  - id: middleware_subrequest_header_denied
+    expr: "rules.exists(r, r.conditionGroup.exists(cg, cg.conditions.exists(c, c.key == \"x-middleware-subrequest\")) && r.action.mitigate.action == \"deny\")"
+    severity: high
+    title: Requests Carrying x-middleware-subrequest Are Denied at the Edge
+    pass_message: "A firewall rule denies inbound requests carrying the x-middleware-subrequest header"
+    fail_message: "No firewall rule denies inbound requests carrying the x-middleware-subrequest header"
+    finding:
+      description: |
+        No active firewall rule denies requests that carry the
+        x-middleware-subrequest header. This header is internal to Next.js's
+        middleware execution model and should never arrive from the public
+        internet; CVE-2025-29927 showed that spoofing it lets an attacker
+        bypass middleware-enforced authorization entirely. Even on a patched
+        Next.js version, denying this header at the edge is defense in
+        depth against the same exploitation class recurring in a future CVE.
+
+remediation:
+  description: |
+    Deploy a Firewall rule that denies any request carrying the
+    x-middleware-subrequest header, and keep the pinned Next.js version
+    current against known framework CVEs.
+  steps:
+    - "Navigate to Project -> Firewall -> Custom Rules"
+    - "Create a rule matching requests where the x-middleware-subrequest header exists, with a Deny mitigation and Persistent Action enabled"
+    - "Create a Log-mode rule for the x-nextjs-data and Next-Action headers to monitor for exploit-precursor probing"
+  api:
+    method: PUT
+    url: "https://api.vercel.com/v1/security/firewall/config?projectId={{vercel_project_id}}&teamId={{vercel_team_id}}"
+    body:
+      action: rules.insert
+      id: null
+      value:
+        name: hth-cve-2025-29927-deny-middleware-subrequest
+        active: true
+        action:
+          mitigate:
+            action: deny
+            actionDuration: permanent
+            persistentAction: true
+  manual:
+    - "Confirm the pinned next dependency version is at or above the fix version for CVE-2025-29927 (12.3.5 / 13.5.9 / 14.2.25 / 15.2.3) and subsequent RSC-related CVEs"

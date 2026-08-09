@@ -1,0 +1,65 @@
+id: SFDC-1.01
+name: Flag Active Users With the MFA Prompt Disabled
+description: |
+  Runs the pack's SOQL query for active users and flags any whose
+  UserPreferencesDisableMFAPrompt is true. This preference, when set,
+  suppresses the identity-verification MFA prompt for that user even when
+  org-wide MFA is otherwise enforced, making it a targeted bypass.
+author: grc-engineering
+version: "1.0"
+source: salesforce
+profile: L1
+tags: [authentication, mfa, users]
+
+references:
+  cis: ["6.3", "6.5"]
+  nist: ["IA-2(1)", "IA-2(2)"]
+  hth: "salesforce:1.1"
+
+credentials:
+  SF_ACCESS_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  sf_instance_url:
+    description: Salesforce instance base URL (e.g. https://your-instance.my.salesforce.com)
+    env: SF_INSTANCE_URL
+    required: true
+
+steps:
+  - id: query_active_users
+    action: api_call
+    request:
+      method: GET
+      url: "{{sf_instance_url}}/services/data/v59.0/query?q=SELECT%20Id%2C%20Username%2C%20Name%2C%20Profile.Name%2C%20IsActive%2C%20UserPreferencesDisableMFAPrompt%20FROM%20User%20WHERE%20IsActive%20%3D%20true"
+      headers:
+        Authorization: "Bearer {{SF_ACCESS_TOKEN}}"
+    extract:
+      records: "$.records"
+      total_size: "$.totalSize"
+
+assertions:
+  - id: no_users_with_mfa_prompt_disabled
+    expr: "size(records.filter(u, u.UserPreferencesDisableMFAPrompt == true)) == 0"
+    severity: high
+    title: No Active Users Have the MFA Prompt Disabled
+    pass_message: "None of the {{total_size}} active user(s) have the MFA prompt disabled"
+    fail_message: "One or more active users have the MFA prompt disabled"
+    finding:
+      description: |
+        At least one active user has UserPreferencesDisableMFAPrompt set to
+        true. This preference suppresses Salesforce's identity-verification
+        MFA prompt for that specific user, so even an org that otherwise
+        enforces MFA can have individual accounts silently exempted from
+        the requirement — a targeted, low-visibility bypass.
+
+remediation:
+  description: |
+    Clear the disabled-MFA-prompt preference for every flagged user and
+    confirm org-wide MFA enforcement is active.
+  steps:
+    - "Navigate to Setup -> Users, open each flagged user, and clear 'Disable Multi-Factor Authentication prompts for login'"
+    - "Navigate to Setup -> Identity Verification and confirm 'Require multi-factor authentication (MFA)' is enabled for all users"
+  manual:
+    - "Review permission sets with PermissionsManageMultiFactorInUi enabled and confirm each grant has a documented business need"

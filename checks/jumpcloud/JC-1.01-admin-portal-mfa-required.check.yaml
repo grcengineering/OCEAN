@@ -1,0 +1,78 @@
+id: JC-1.01
+name: Require MFA for the JumpCloud Admin Portal
+description: |
+  Mints no token (JumpCloud auth is a static admin API key), looks up the
+  organization, then verifies its requireAdminMFA setting is enabled.
+  JumpCloud is the directory of record for every downstream integrated
+  application, so an admin console without mandatory MFA is a single
+  password away from full-directory compromise.
+author: grc-engineering
+version: "1.0"
+source: jumpcloud
+profile: L1
+tags: [authentication, mfa, admin]
+
+references:
+  cis: "5.4"
+  nist: "AC-6(1)"
+  hth: "jumpcloud:1.1"
+
+credentials:
+  JUMPCLOUD_API_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_organizations
+    action: api_call
+    request:
+      method: GET
+      url: "https://console.jumpcloud.com/api/organizations"
+      headers:
+        x-api-key: "{{JUMPCLOUD_API_KEY}}"
+    extract:
+      org_id: "$[0].id"
+
+  - id: get_organization
+    action: api_call
+    request:
+      method: GET
+      url: "https://console.jumpcloud.com/api/organizations/{{org_id}}"
+      headers:
+        x-api-key: "{{JUMPCLOUD_API_KEY}}"
+    extract:
+      require_admin_mfa: "$.settings.requireAdminMFA"
+
+assertions:
+  - id: admin_mfa_required
+    expr: "require_admin_mfa == true"
+    severity: critical
+    title: Admin Portal MFA Is Required
+    pass_message: "The organization requires MFA for admin portal logins"
+    fail_message: "The organization does NOT require MFA for admin portal logins"
+    finding:
+      description: |
+        The organization's requireAdminMFA setting is not enabled. The
+        JumpCloud admin console can create, modify, and delete every user,
+        system, and policy in the directory, and the directory in turn
+        controls access to every downstream integrated application. A
+        single-factor admin credential is therefore a single leaked
+        password away from a full-directory takeover.
+
+remediation:
+  description: |
+    Enable the organization-wide admin MFA requirement.
+  steps:
+    - "Navigate to Settings -> Security Settings"
+    - "Enable 'Require Multi-factor Authentication' for administrators"
+    - "Confirm every admin account has an MFA factor enrolled before enforcing"
+  api:
+    method: PUT
+    url: "https://console.jumpcloud.com/api/organizations/{{org_id}}"
+    headers:
+      x-api-key: "{{JUMPCLOUD_API_KEY}}"
+    body:
+      settings:
+        requireAdminMFA: true
+  manual:
+    - "Review admin accounts quarterly to confirm MFA enrollment has not lapsed for any of them"

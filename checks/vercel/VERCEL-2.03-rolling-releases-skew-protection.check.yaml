@@ -1,0 +1,71 @@
+id: VERCEL-2.03
+name: Configure Skew Protection for Rolling Releases
+description: |
+  Verifies that Skew Protection is configured on the project. Skew
+  Protection ensures client-side code and backend API routes always come
+  from the same deployment revision during a rollout, preventing a stale
+  client from calling a backend that has already moved on to an
+  incompatible new revision.
+author: grc-engineering
+version: "1.0"
+source: vercel
+profile: L2
+tags: [deployment, rollout, availability]
+
+references:
+  nist: ["CM-3(2)"]
+  hth: "vercel:2.3"
+
+credentials:
+  VERCEL_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  vercel_team_id:
+    description: Vercel team ID (starts with "team_")
+    env: VERCEL_TEAM_ID
+    required: true
+  vercel_project_id:
+    description: Vercel project ID or name
+    env: VERCEL_PROJECT_ID
+    required: true
+
+steps:
+  - id: get_project
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.vercel.com/v9/projects/{{vercel_project_id}}?teamId={{vercel_team_id}}"
+      headers:
+        Authorization: "Bearer {{VERCEL_TOKEN}}"
+    extract:
+      skew_protection: "$.skewProtection"
+
+assertions:
+  - id: skew_protection_enabled
+    expr: "skew_protection != null"
+    severity: medium
+    title: Skew Protection Is Configured
+    pass_message: "Skew Protection is configured on the project"
+    fail_message: "Skew Protection is not configured on the project"
+    finding:
+      description: |
+        The project has no skewProtection configuration. During a rolling
+        release, a browser tab that loaded an older deployment's JavaScript
+        can keep calling that deployment's API routes for the life of the
+        tab. Without Skew Protection, a version mismatch between client and
+        server code during a rollout can produce broken requests or
+        undefined behavior instead of being transparently routed to the
+        matching backend revision.
+
+remediation:
+  description: |
+    Enable rolling releases with Skew Protection so client and backend code
+    stay pinned to the same deployment revision during a rollout.
+  steps:
+    - "Navigate to Project -> Settings -> Git -> Rolling Releases"
+    - "Enable rolling releases and configure the rollout stages (e.g. 10% -> 50% -> 100%)"
+    - "Enable Skew Protection in Project Settings -> Advanced"
+  manual:
+    - "During the next production rollout, confirm in the deployments list that skewProtection stays active until the rollout completes"

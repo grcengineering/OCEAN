@@ -1,0 +1,61 @@
+id: JC-2.01
+name: Audit User Portal MFA Enrollment
+description: |
+  Queries the system users list and flags any active user who has neither
+  TOTP nor user-portal multi-factor authentication enabled. This is the
+  verification side of an organization-wide MFA enforcement policy — it
+  surfaces the accounts the policy should be catching.
+author: grc-engineering
+version: "1.0"
+source: jumpcloud
+profile: L1
+tags: [authentication, mfa, users]
+
+references:
+  cis: "6.5"
+  nist: "IA-2(1)"
+  hth: "jumpcloud:2.1"
+
+credentials:
+  JUMPCLOUD_API_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_system_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://console.jumpcloud.com/api/systemusers?limit=100"
+      headers:
+        x-api-key: "{{JUMPCLOUD_API_KEY}}"
+    extract:
+      users: "$.results"
+      total_count: "$.totalCount"
+
+assertions:
+  - id: all_users_have_mfa
+    expr: "size(users.filter(u, u.totp_enabled == false && u.enable_user_portal_multifactor == false)) == 0"
+    severity: high
+    title: All Users Have MFA Enrolled
+    pass_message: "All {{total_count}} user(s) in this page have TOTP or user-portal MFA enabled"
+    fail_message: "One or more users have neither TOTP nor user-portal MFA enabled"
+    finding:
+      description: |
+        At least one active user has both totp_enabled and
+        enable_user_portal_multifactor set to false. JumpCloud is the
+        identity gateway for every application assigned to the user, so an
+        account with no MFA factor is a single-password compromise away
+        from full access to every one of those downstream applications.
+
+remediation:
+  description: |
+    Create (or confirm) a user-portal conditional access policy requiring
+    MFA for all users, then chase down enrollment for any user this audit
+    flags.
+  steps:
+    - "Navigate to Security Management -> Policies -> New Policy"
+    - "Create a User Portal policy requiring MFA (TOTP, WebAuthn, Push) with User Verification set to required"
+    - "For every user flagged by this audit, require MFA enrollment at next login"
+  manual:
+    - "Re-run this audit after the enrollment grace period to confirm the flagged list has cleared"

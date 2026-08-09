@@ -1,0 +1,66 @@
+id: SFDC-5.01
+name: Verify Event Monitoring Is Actively Generating Log Files
+description: |
+  Runs the pack's SOQL query against EventLogFile and verifies that recent
+  log files exist. A workspace with Event Monitoring genuinely active
+  should return recent EventLogFile records; zero records indicates
+  monitoring is not capturing activity even if the Shield/Event Monitoring
+  add-on appears provisioned.
+author: grc-engineering
+version: "1.0"
+source: salesforce
+profile: L1
+tags: [audit-logging, monitoring, event-monitoring]
+
+references:
+  nist: ["AU-2", "AU-6", "SI-4"]
+  hth: "salesforce:5.1"
+
+credentials:
+  SF_ACCESS_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  sf_instance_url:
+    description: Salesforce instance base URL (e.g. https://your-instance.my.salesforce.com)
+    env: SF_INSTANCE_URL
+    required: true
+
+steps:
+  - id: query_event_log_files
+    action: api_call
+    request:
+      method: GET
+      url: "{{sf_instance_url}}/services/data/v59.0/query?q=SELECT%20Id%2C%20EventType%2C%20LogDate%2C%20LogFileLength%20FROM%20EventLogFile%20ORDER%20BY%20LogDate%20DESC%20LIMIT%2050"
+      headers:
+        Authorization: "Bearer {{SF_ACCESS_TOKEN}}"
+    extract:
+      total_size: "$.totalSize"
+
+assertions:
+  - id: event_monitoring_active
+    expr: "total_size > 0"
+    severity: high
+    title: Event Monitoring Is Actively Generating Log Files
+    pass_message: "{{total_size}} recent EventLogFile record(s) found — Event Monitoring is active"
+    fail_message: "No EventLogFile records were found — Event Monitoring may not be enabled"
+    finding:
+      description: |
+        The EventLogFile object returned zero records. Event Monitoring
+        (via Salesforce Shield or the standalone add-on) requires explicit
+        enablement per event type; without it, API usage anomalies, bulk
+        data exports, and suspicious login patterns generate no queryable
+        log files and cannot be investigated after the fact.
+
+remediation:
+  description: |
+    Enable Event Monitoring and the API-relevant event log types, then
+    export EventLogFile data to a SIEM for retention beyond Salesforce's
+    native window.
+  steps:
+    - "Navigate to Setup -> Event Monitoring Settings and enable Event Log File generation (requires Salesforce Shield or the Event Monitoring add-on)"
+    - "Enable at minimum the ApiTotalUsage, API, RestApi, BulkApi, Login, and LoginAs event types"
+    - "Configure the Event Monitoring Analytics app or an ETL job to export EventLogFile data to the organization's SIEM"
+  manual:
+    - "Review LoginHistory for repeated Failed status entries from the same SourceIp (5+ in a short window is a brute-force indicator) until automated alerting is in place"
