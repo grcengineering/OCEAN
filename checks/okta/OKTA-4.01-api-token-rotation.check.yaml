@@ -15,6 +15,7 @@ tags: [credentials, api-tokens, hygiene]
 references:
   nist: IA-5(1)
   soc2: CC6.1
+  hth: "okta:3.4"
 
 credentials:
   OKTA_API_TOKEN:

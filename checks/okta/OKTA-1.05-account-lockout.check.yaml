@@ -1,0 +1,85 @@
+id: OKTA-1.05
+name: Verify Account Lockout Policy
+description: |
+  Verifies that the default Okta password policy locks accounts after a
+  small number of consecutive invalid login attempts. Lockout after a low
+  attempt threshold significantly reduces the effectiveness of brute-force
+  and password-guessing attacks against Okta-mastered accounts.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [lockout, brute-force, password, account-security]
+
+references:
+  nist: "AC-7"
+  disa_stig: "V-273189"
+  hth: "okta:1.5"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+  max_lockout_attempts:
+    description: Maximum failed attempts allowed before lockout is considered compliant
+    default: "5"
+    required: false
+
+steps:
+  - id: get_password_policy
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/policies?type=PASSWORD"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      policies: "$[*]"
+
+assertions:
+  - id: lockout_configured
+    expr: "size(policies) > 0 && policies[0].settings.password.lockout.maxAttempts > 0 && policies[0].settings.password.lockout.maxAttempts <= 5"
+    severity: medium
+    title: Account Lockout Configured
+    pass_message: "Default password policy locks accounts after {{max_lockout_attempts}} or fewer failed attempts"
+    fail_message: "Default password policy does not lock accounts after a bounded number of failed attempts"
+    finding:
+      description: |
+        The default Okta password policy does not enforce account lockout
+        after a small number of consecutive invalid login attempts (or the
+        threshold exceeds the recommended maximum of 5). Without lockout,
+        attackers can attempt unlimited password guesses against an account.
+        Configure lockout after 3-5 failed attempts (3 for DISA STIG /
+        L2-L3 environments), with either a fixed auto-unlock window or
+        admin-only unlock.
+
+remediation:
+  description: |
+    Configure the default password policy to lock accounts after 3-5
+    consecutive invalid login attempts.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authenticators → Password → Edit"
+    - "Under Account Lockout, set 'Lock out user after N unsuccessful attempts' to 5 (L1) or 3 (L2/L3)"
+    - "Configure auto-unlock duration (30 minutes for L1) or require admin unlock (L2/L3)"
+    - "Enable 'Show lockout failures' so users see remaining attempts"
+    - "Click Update Policy"
+  manual:
+    - "Ensure a documented account-unlock process exists for the help desk"
+    - "Review lockout thresholds annually alongside the password policy"
+  api:
+    method: PUT
+    url: "https://{{okta_domain}}/api/v1/policies/{{policy_id}}"
+    body:
+      settings:
+        password:
+          lockout:
+            maxAttempts: 3
+            autoUnlockMinutes: 30
+            showLockoutFailures: true

@@ -1,0 +1,75 @@
+id: OKTA-4.02
+name: Verify Session Persistence Is Disabled
+description: |
+  Verifies that custom sign-on policies do not enable persistent
+  ("Remember Me") session cookies. Persistent global session cookies
+  survive browser restarts, extending the window during which a stolen
+  session can be hijacked.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [session-management, persistence, remember-me]
+
+references:
+  nist: "SC-23"
+  disa_stig: "V-273206"
+  hth: "okta:4.2"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_sign_on_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/policies?type=OKTA_SIGN_ON"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      policies: "$[*]"
+
+assertions:
+  - id: no_persistent_custom_sessions
+    expr: "size(policies.filter(p, p.system == false && p.settings.oie.session.usePersistentCookie == true)) == 0"
+    severity: high
+    title: No Custom Sign-On Policy Allows Persistent Sessions
+    pass_message: "No custom sign-on policy has persistent session cookies enabled"
+    fail_message: "One or more custom sign-on policies allow persistent ('Remember Me') session cookies"
+    finding:
+      description: |
+        At least one custom Okta sign-on policy has `usePersistentCookie`
+        enabled, allowing sessions to survive browser restarts. Persistent
+        sessions extend the window during which a stolen session cookie
+        remains usable by an attacker. Disable persistent cookies on all
+        custom sign-on policies and rely on bounded session lifetime and
+        idle timeout instead.
+
+remediation:
+  description: |
+    Disable persistent session cookies on all custom sign-on policies.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authentication Policies → Sign On"
+    - "Edit each custom sign-on policy rule"
+    - "Disable 'Persist session cookies across browser sessions' (Remember Me)"
+    - "Set an explicit session lifetime and idle timeout instead"
+  manual:
+    - "Communicate the change to users who rely on Remember Me for convenience"
+  api:
+    method: PUT
+    url: "https://{{okta_domain}}/api/v1/policies/{{policy_id}}"
+    body:
+      settings:
+        oie:
+          session:
+            usePersistentCookie: false

@@ -1,0 +1,85 @@
+id: OKTA-4.03
+name: Verify Admin Session ASN/IP Binding
+description: |
+  Verifies that admin session ASN binding and IP binding are both enabled.
+  These org-level settings invalidate an admin's session when its network
+  characteristics (originating ASN or IP) change, directly mitigating the
+  October 2023-style session-token replay attacks that Okta's post-breach
+  product enhancements were designed to prevent.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [session-security, admin, session-hijacking, asn-binding, ip-binding]
+
+references:
+  nist: ["SC-23", "AC-12"]
+  hth: "okta:4.3"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.orgs.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_org_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/org/settings"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      admin_session_asn_binding: "$.adminSessionASNBinding"
+      admin_session_ip_binding: "$.adminSessionIPBinding"
+
+assertions:
+  - id: admin_session_asn_binding_enabled
+    expr: "admin_session_asn_binding == 'ENABLED'"
+    severity: high
+    title: Admin Session ASN Binding Enabled
+    pass_message: "Admin session ASN binding is enabled"
+    fail_message: "Admin session ASN binding is '{{admin_session_asn_binding}}' — expected 'ENABLED'"
+    finding:
+      description: |
+        Admin session ASN binding is not enabled. Without ASN binding, an
+        admin session token replayed from a different network provider is
+        not automatically invalidated, weakening protection against
+        session-hijacking following credential or token theft.
+
+  - id: admin_session_ip_binding_enabled
+    expr: "admin_session_ip_binding == 'ENABLED'"
+    severity: high
+    title: Admin Session IP Binding Enabled
+    pass_message: "Admin session IP binding is enabled"
+    fail_message: "Admin session IP binding is '{{admin_session_ip_binding}}' — expected 'ENABLED'"
+    finding:
+      description: |
+        Admin session IP binding is not enabled. Without IP binding, an
+        admin session token replayed from a different source IP is not
+        automatically invalidated. Combined with ASN binding, this closes
+        the session-replay path used against admin accounts in the
+        October 2023 breach.
+
+remediation:
+  description: |
+    Enable both admin session ASN binding and IP binding.
+  steps:
+    - "Navigate to Okta Admin Console → Security → General"
+    - "Under Admin Console Session, enable ASN binding and IP binding"
+    - "Click Save"
+  manual:
+    - "Document a break-glass procedure for admins who travel or use rotating carrier IPs"
+  api:
+    method: PUT
+    url: "https://{{okta_domain}}/api/v1/org/settings"
+    body:
+      adminSessionASNBinding: "ENABLED"
+      adminSessionIPBinding: "ENABLED"

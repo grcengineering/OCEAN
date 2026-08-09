@@ -14,6 +14,7 @@ tags: [recovery, password, authentication]
 references:
   nist: IA-5(1)
   soc2: CC6.1
+  hth: "okta:1.10"
 
 credentials:
   OKTA_API_TOKEN:

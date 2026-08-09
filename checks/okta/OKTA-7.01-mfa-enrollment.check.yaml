@@ -16,6 +16,7 @@ native_module: okta_mfa_enrollment
 references:
   nist: ["IA-2(1)", "IA-2(2)"]
   soc2: CC6.1
+  hth: "okta:5.6"
 
 credentials:
   OKTA_API_TOKEN:

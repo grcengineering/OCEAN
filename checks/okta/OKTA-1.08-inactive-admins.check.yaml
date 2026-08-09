@@ -15,6 +15,7 @@ tags: [governance, admin, hygiene]
 references:
   nist: AC-2(3)
   soc2: CC6.1
+  hth: "okta:1.6"
 
 credentials:
   OKTA_API_TOKEN:

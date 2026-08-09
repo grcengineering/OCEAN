@@ -13,6 +13,7 @@ tags: [admin, roles, least-privilege]
 references:
   nist: AC-6(1)
   soc2: CC6.2
+  hth: "okta:1.2"
 
 credentials:
   OKTA_API_TOKEN:

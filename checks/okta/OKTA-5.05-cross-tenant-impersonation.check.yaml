@@ -1,0 +1,99 @@
+id: OKTA-5.05
+name: Audit Identity Provider Inventory for Cross-Tenant Impersonation
+description: |
+  Enumerates all configured Identity Providers and IDP discovery (routing)
+  policies as an informational audit for cross-tenant impersonation risk.
+  An adversary with admin access can configure a malicious external IdP
+  and routing rule to impersonate any user without credentials or MFA;
+  IdP lifecycle events are low-volume and any unrecognized entry warrants
+  immediate investigation.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [idp, impersonation, cross-tenant, monitoring, federation]
+
+references:
+  nist: ["SI-4", "AU-6"]
+  hth: "okta:5.5"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.idps.read, okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_identity_providers
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/idps"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      idp_count: "$length"
+      idps: "$[*]"
+
+  - id: get_idp_discovery_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/policies?type=IDP_DISCOVERY"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      idp_discovery_policy_count: "$length"
+
+assertions:
+  - id: idps_inventoried
+    expr: "idp_count >= 0"
+    severity: high
+    title: Identity Provider Inventory Audit
+    pass_message: "{{idp_count}} identity provider(s) configured — verify each is recognized and authorized"
+    fail_message: "Unable to retrieve identity providers"
+    finding:
+      description: |
+        This is an informational audit of all configured Identity
+        Providers. Every entry must be traceable to an authorized,
+        documented federation trust. Any IdP that cannot be immediately
+        attributed to a known integration should be treated as a
+        potential cross-tenant impersonation indicator and investigated
+        immediately.
+
+  - id: idp_discovery_policies_reviewed
+    expr: "idp_discovery_policy_count >= 0"
+    severity: medium
+    title: IDP Discovery (Routing) Policy Audit
+    pass_message: "{{idp_discovery_policy_count}} IDP discovery polic(y/ies) found — review routing rules for unauthorized entries"
+    fail_message: "Unable to retrieve IDP discovery policies"
+    finding:
+      description: |
+        This is an informational audit of IDP discovery (routing)
+        policies. Review each rule for conditions that route unexpected
+        users or domains to an external identity provider, since routing
+        manipulation is the mechanism used in cross-tenant impersonation
+        attacks. Correlate against system log events matching
+        `system.idp.lifecycle.*` for recent creation or activation.
+
+remediation:
+  description: |
+    Investigate and deactivate any unrecognized Identity Provider or
+    routing rule immediately.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Identity Providers"
+    - "Cross-reference every listed IdP against a documented inventory of authorized federation trusts"
+    - "Review Security → Authentication Policies → IDP discovery rules for unexpected routing conditions"
+    - "Deactivate any IdP or rule that cannot be immediately attributed to a known integration"
+  manual:
+    - "Alert on system.idp.lifecycle.create and system.idp.lifecycle.activate events in the SIEM"
+    - "Restrict IdP creation to a small set of Super Admins"
+  api:
+    method: POST
+    url: "https://{{okta_domain}}/api/v1/idps/{{idp_id}}/lifecycle/deactivate"

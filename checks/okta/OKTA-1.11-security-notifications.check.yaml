@@ -1,0 +1,111 @@
+id: OKTA-1.11
+name: Verify End-User Security Notifications
+description: |
+  Verifies that all five end-user security notification types are enabled
+  and that Suspicious Activity Reporting is enabled. These notifications
+  alert users to security-relevant changes on their own accounts (new
+  sign-on, authenticator enrolled/reset, password changed, MFA factor
+  reset) and let users flag unauthorized actions directly, creating
+  actionable system log events for security teams.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [notifications, suspicious-activity, detection, account-monitoring]
+
+references:
+  nist: ["SI-4", "IR-6"]
+  hth: "okta:1.11"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.orgs.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_org_settings
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/org/settings"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      end_user_notifications: "$.endUserNotifications"
+
+  - id: get_suspicious_activity_reporting
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/org/privacy/suspicious-activity-reporting"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      suspicious_activity_reporting_enabled: "$.enabled"
+
+assertions:
+  - id: end_user_notifications_enabled
+    expr: >
+      end_user_notifications.newSignOnNotification.enabled == true &&
+      end_user_notifications.authenticatorEnrolledNotification.enabled == true &&
+      end_user_notifications.authenticatorResetNotification.enabled == true &&
+      end_user_notifications.passwordChangedNotification.enabled == true &&
+      end_user_notifications.factorResetNotification.enabled == true
+    severity: medium
+    title: All End-User Security Notifications Enabled
+    pass_message: "All five end-user security notification types are enabled"
+    fail_message: "One or more end-user security notification types are disabled"
+    finding:
+      description: |
+        Not all five end-user security notification types (new sign-on,
+        authenticator enrolled, authenticator reset, password changed,
+        MFA factor reset) are enabled. Without these notifications, users
+        have no visibility into security-relevant changes on their own
+        accounts and cannot flag unauthorized activity in near real time.
+
+  - id: suspicious_activity_reporting_enabled
+    expr: "suspicious_activity_reporting_enabled == true"
+    severity: medium
+    title: Suspicious Activity Reporting Enabled
+    pass_message: "Suspicious Activity Reporting is enabled"
+    fail_message: "Suspicious Activity Reporting is disabled"
+    finding:
+      description: |
+        Suspicious Activity Reporting is disabled, so end users cannot flag
+        unauthorized sign-ons or account changes directly from
+        notification emails. Enabling it creates actionable system log
+        events (`user.account.report_suspicious_activity_by_enduser`) that
+        security teams can alert on.
+
+remediation:
+  description: |
+    Enable all five end-user notification types and Suspicious Activity
+    Reporting.
+  steps:
+    - "Navigate to Okta Admin Console → Settings → Account"
+    - "Under Security Notification Emails, enable all listed notification types"
+    - "Enable 'Report suspicious activity' end-user reporting"
+  manual:
+    - "Confirm users know how to use the suspicious-activity report link in notification emails"
+  api:
+    method: PUT
+    url: "https://{{okta_domain}}/api/v1/org/settings"
+    body:
+      endUserNotifications:
+        newSignOnNotification:
+          enabled: true
+        authenticatorEnrolledNotification:
+          enabled: true
+        authenticatorResetNotification:
+          enabled: true
+        passwordChangedNotification:
+          enabled: true
+        factorResetNotification:
+          enabled: true

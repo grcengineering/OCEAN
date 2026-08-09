@@ -14,6 +14,7 @@ tags: [network, zones, access-control]
 references:
   nist: ["AC-17", "SC-7"]
   soc2: CC6.6
+  hth: "okta:2.1"
 
 credentials:
   OKTA_API_TOKEN:
