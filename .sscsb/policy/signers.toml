@@ -7,12 +7,11 @@
 # a key that is used for signing — the class exists so an AI-associated
 # identity can be explicitly DENIED signing rights.
 #
-# [[signer]]
-# principal = "you@example.com"          # matches allowed_signers principal
-# class = "human"                        # human | ci | ai
-# hardware_backed = true                 # asserted when the key lives on a YubiKey/secure element
-# ssh_public_key = "ssh-ed25519 AAAA... you@example.com"
-# # gpg_fingerprint = "ABCD1234..."      # for gpg.format=openpgp signers
+[[signer]]
+principal = "10093271+p4gs@users.noreply.github.com"  # matches allowed_signers + git user.email
+class = "human"
+hardware_backed = false  # 1Password-vaulted SSH key (software-backed)
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxEAReKc/G/sUxY/UbXprOccUKaxhd+sr/7Gbb40u9w GitHub Signing Key (p4gs)"
 #
 # AI agents may sign ONLY when the `agent-signing` control is enabled, and their
 # signatures are ALWAYS rejected on protected branches regardless of any other

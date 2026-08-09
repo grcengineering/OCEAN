@@ -22,10 +22,12 @@ trufflehog = true
 gitleaks = true
 pre_push_range_scan = true
 
-# CommitSigningGuard: Hardware-backed, human-only signing enforced on protected branches at pre-push
+# CommitSigningGuard: human-only signing enforced on protected branches at pre-push.
+# require_hardware_backed relaxed 2026-08-09 (principal decision) to admit a
+# 1Password-vaulted SSH key (software-backed, not a physical security key).
 [controls.commit-signing]
 enabled = true
-require_hardware_backed = true
+require_hardware_backed = false
 require_review_evidence_for_ai_merges = true
 
 # AI agent commit signing: Verifiable AI-agent signatures (distinct identity, never valid on protected branches); off by default
