@@ -1,0 +1,94 @@
+id: GH-7.02
+name: Create Custom Repository Roles
+description: |
+  Verifies that the organization has defined at least one custom repository
+  role, allowing fine-grained permission sets beyond the built-in Read,
+  Triage, Write, Maintain, and Admin roles (e.g., a security-only reviewer
+  role with no write access to code).
+author: grc-engineering
+version: "1.0"
+source: github
+profile: L2
+tags: [custom-roles, access-control, organization]
+
+references:
+  cis: "6.8"
+  nist: ["AC-2", "AC-3"]
+  soc2: ["CC6.1", "CC6.2"]
+  hth: "github:7.2"
+
+credentials:
+  GITHUB_TOKEN:
+    type: api_token
+    scopes: [admin:org]
+    required: true
+
+inputs:
+  org:
+    description: GitHub organization name
+    env: GITHUB_ORG
+    required: true
+
+steps:
+  - id: get_custom_repository_roles
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.github.com/orgs/{{org}}/custom-repository-roles"
+      headers:
+        Authorization: "Bearer {{GITHUB_TOKEN}}"
+        Accept: application/vnd.github+json
+        X-GitHub-Api-Version: "2022-11-28"
+    on_error:
+      "*": continue
+    extract:
+      custom_roles: "$.custom_roles"
+      total_count: "$.total_count"
+
+assertions:
+  - id: custom_repository_roles_defined
+    expr: "size(custom_roles) > 0"
+    severity: low
+    title: Custom Repository Roles Defined
+    pass_message: "{{total_count}} custom repository role(s) defined"
+    fail_message: "No custom repository roles are defined"
+    finding:
+      description: |
+        The organization has not defined any custom repository roles.
+        Without custom roles, access is limited to the built-in Read,
+        Triage, Write, Maintain, and Admin roles — there is no way to grant
+        security-alert visibility (secret scanning, Dependabot, code
+        scanning) without also granting write access to code. This forces
+        over-permissioning for users who only need security-review access.
+        Custom repository roles require GitHub Enterprise Cloud.
+
+remediation:
+  description: |
+    Create a custom repository role (e.g., "Security Reviewer") that
+    inherits from a base role and adds only the specific security
+    permissions needed, then assign it to security team members instead
+    of granting Write or Admin access.
+  steps:
+    - "Navigate to github.com/organizations/{{org}}/settings/roles"
+    - "Click 'Create a role'"
+    - "Name it 'Security Reviewer', select base role 'Read'"
+    - "Add permissions: view/dismiss secret scanning alerts, view/dismiss Dependabot alerts, view/dismiss code scanning alerts"
+    - "Click 'Create role'"
+    - "Assign the role to the relevant team or user in Repository Settings -> Collaborators and teams"
+  api:
+    method: POST
+    url: "https://api.github.com/orgs/{{org}}/custom-repository-roles"
+    body:
+      name: "Security Reviewer"
+      description: "Can view security alerts and manage security settings"
+      base_role: "read"
+      permissions:
+        - "security_events"
+        - "view_secret_scanning_alerts"
+        - "dismiss_secret_scanning_alerts"
+        - "view_dependabot_alerts"
+        - "dismiss_dependabot_alerts"
+        - "view_code_scanning_alerts"
+        - "dismiss_code_scanning_alerts"
+  cli:
+    command: "gh api orgs/{{org}}/custom-repository-roles --jq '.custom_roles[] | {id, name, base_role}'"

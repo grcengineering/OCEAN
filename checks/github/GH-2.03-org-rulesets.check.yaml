@@ -15,6 +15,7 @@ references:
   nist: CM-3
   soc2: CC8.1
   iso27001: A.12.1.2
+  hth: "github:2.3"
 
 credentials:
   GITHUB_TOKEN:

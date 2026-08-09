@@ -14,6 +14,7 @@ references:
   nist: SC-12
   soc2: CC6.1
   pci_dss: "8.2.1"
+  hth: "github:5.1"
 
 credentials:
   GITHUB_TOKEN:

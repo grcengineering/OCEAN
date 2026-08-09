@@ -14,6 +14,7 @@ references:
   nist: SA-11
   soc2: CC7.2
   iso27001: A.14.2.8
+  hth: "github:2.2"
 
 credentials:
   GITHUB_TOKEN:

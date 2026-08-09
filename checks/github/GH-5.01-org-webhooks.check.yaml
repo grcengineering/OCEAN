@@ -13,6 +13,7 @@ tags: [webhooks, organization, audit]
 references:
   nist: SC-8
   soc2: CC6.1
+  hth: "github:none"
 
 credentials:
   GITHUB_TOKEN:

@@ -20,6 +20,7 @@ tags: [actions, injection, active-test]
 references:
   nist: SA-11
   soc2: CC7.2
+  hth: "github:3.13"
 
 credentials:
   GITHUB_TOKEN:

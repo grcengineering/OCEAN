@@ -15,6 +15,7 @@ references:
   nist: AC-6
   soc2: ["CC6.2", "CC9.2"]
   iso27001: A.9.2.1
+  hth: "github:4.1"
 
 credentials:
   GITHUB_TOKEN:
