@@ -1,0 +1,81 @@
+id: LD-1.02
+name: Verify Admin Role Assignment Is Within Recommended Limit
+description: |
+  Audits account members via the Members API and flags accounts where
+  more than 3 members hold the built-in "admin" role, which grants
+  unrestricted control over every project, environment, and flag in the
+  account.
+author: grc-engineering
+version: "1.0"
+source: launchdarkly
+profile: L1
+tags: [rbac, admin, least-privilege]
+
+references:
+  nist: [AC-3, AC-6]
+  hth: "launchdarkly:1.2"
+
+credentials:
+  LD_API_KEY:
+    type: api_token
+    scopes: ["reader"]
+    required: true
+
+steps:
+  - id: get_members
+    action: api_call
+    request:
+      method: GET
+      url: "https://app.launchdarkly.com/api/v2/members?limit=100"
+      headers:
+        Authorization: "{{LD_API_KEY}}"
+        LD-API-Version: "20240415"
+    extract:
+      members: "$.items"
+
+assertions:
+  - id: admin_count_within_limit
+    expr: 'size(members.filter(m, m.role == "admin")) <= 3'
+    severity: medium
+    title: Admin Role Assignment Is Within Recommended Limit
+    pass_message: "The built-in admin role is held by 3 or fewer members"
+    fail_message: "More than 3 members hold the built-in admin role"
+    finding:
+      description: |
+        More than 3 members hold the built-in "admin" role, which
+        grants unrestricted access to every project, environment, and
+        flag in the account with no scoping. Each additional admin
+        widens the blast radius of a single compromised account.
+        Replace unnecessary admin grants with least-privilege custom
+        roles scoped to the projects and environments each member
+        actually needs.
+
+remediation:
+  description: |
+    Reduce the admin population to the smallest set of accounts with a
+    documented business need, and create scoped custom roles for
+    everyone else.
+  steps:
+    - "Navigate to Account Settings → Members"
+    - "Review every member holding the admin role and confirm business justification"
+    - "Create least-privilege custom roles (for example, production read-only) and reassign members who do not need full admin"
+  api:
+    method: POST
+    url: "https://app.launchdarkly.com/api/v2/roles"
+    headers:
+      Authorization: "{{LD_API_KEY}}"
+      LD-API-Version: "20240415"
+    body:
+      key: "hth-prod-readonly"
+      name: "HTH Production Read-Only"
+      description: "Read-only access to production environment"
+      basePermissions: "no_access"
+      policy:
+        - effect: "allow"
+          actions: ["viewProject"]
+          resources: ["proj/*"]
+        - effect: "deny"
+          actions: ["updateOn", "updateOff", "updateRules", "updateTargets", "updateFallthrough"]
+          resources: ["proj/*:env/production:flag/*"]
+  manual:
+    - "Review admin role assignments quarterly as part of access review"

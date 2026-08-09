@@ -1,0 +1,78 @@
+id: LD-4.01
+name: Verify an Active Webhook Exports Audit Log Events
+description: |
+  Verifies via the Webhooks API that at least one webhook is enabled
+  (on: true), which is LaunchDarkly's mechanism for streaming audit log
+  events to an external SIEM or log management platform in near
+  real-time.
+author: grc-engineering
+version: "1.0"
+source: launchdarkly
+profile: L1
+tags: [audit-log, monitoring, siem]
+
+references:
+  nist: [AU-2, AU-3]
+  hth: "launchdarkly:4.1"
+
+credentials:
+  LD_API_KEY:
+    type: api_token
+    scopes: ["reader"]
+    required: true
+
+steps:
+  - id: get_webhooks
+    action: api_call
+    request:
+      method: GET
+      url: "https://app.launchdarkly.com/api/v2/webhooks"
+      headers:
+        Authorization: "{{LD_API_KEY}}"
+        LD-API-Version: "20240415"
+    extract:
+      webhooks: "$.items"
+
+assertions:
+  - id: active_audit_webhook_exists
+    expr: "size(webhooks.filter(w, w.on == true)) > 0"
+    severity: high
+    title: At Least One Enabled Webhook Exists
+    pass_message: "At least one enabled webhook is configured"
+    fail_message: "No enabled webhook is configured"
+    finding:
+      description: |
+        No webhook with on: true was found. Without an active webhook
+        exporting audit log events, flag changes, member changes, and
+        other account activity have no external, durable record —
+        tampering, repudiation, and delayed incident detection all
+        become more likely since there is no independent trail to
+        correlate against.
+
+remediation:
+  description: |
+    Create a signed webhook exporting audit log events to the
+    organization's SIEM.
+  steps:
+    - "Navigate to Account Settings → Integrations → Webhooks"
+    - "Create a webhook pointed at the SIEM's ingestion endpoint"
+    - "Enable request signing and store the signing secret in a secrets manager so the receiver can verify authenticity"
+    - "Scope the webhook's statements to the events the organization wants streamed"
+  api:
+    method: POST
+    url: "https://app.launchdarkly.com/api/v2/webhooks"
+    headers:
+      Authorization: "{{LD_API_KEY}}"
+      LD-API-Version: "20240415"
+    body:
+      name: "HTH SIEM Webhook"
+      url: "https://siem.example.com/webhook/launchdarkly"
+      sign: true
+      on: true
+      tags: ["hth", "siem"]
+      statements:
+        - effect: "allow"
+          actions: ["*"]
+          resources: ["proj/*"]
+  manual:
+    - "Verify webhook signature validation is implemented on the receiving end before relying on the export for investigation integrity"

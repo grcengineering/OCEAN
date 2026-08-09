@@ -1,0 +1,91 @@
+id: LD-2.01
+name: Verify Environment Secure Mode Is Enabled
+description: |
+  Verifies via the Environments API that no environment has secure mode
+  disabled, and specifically that the production environment has secure
+  mode enabled. Secure mode prevents a client-side SDK from being used
+  to evaluate or spoof flags for an arbitrary, attacker-chosen user key.
+author: grc-engineering
+version: "1.0"
+source: launchdarkly
+profile: L1
+tags: [sdk-keys, secure-mode, environments]
+
+references:
+  nist: [IA-5]
+  hth: "launchdarkly:2.1"
+
+credentials:
+  LD_API_KEY:
+    type: api_token
+    scopes: ["reader"]
+    required: true
+
+inputs:
+  ld_project_key:
+    description: LaunchDarkly project key
+    env: LD_PROJECT_KEY
+    required: true
+
+steps:
+  - id: get_environments
+    action: api_call
+    request:
+      method: GET
+      url: "https://app.launchdarkly.com/api/v2/projects/{{ld_project_key}}/environments"
+      headers:
+        Authorization: "{{LD_API_KEY}}"
+        LD-API-Version: "20240415"
+    extract:
+      environments: "$.items"
+
+assertions:
+  - id: no_environments_without_secure_mode
+    expr: "size(environments.filter(e, e.secureMode == false)) == 0"
+    severity: medium
+    title: No Environment Has Secure Mode Disabled
+    pass_message: "All environments in project {{ld_project_key}} have secure mode enabled"
+    fail_message: "One or more environments have secure mode disabled"
+    finding:
+      description: |
+        At least one environment has secureMode: false. Without secure
+        mode, a client-side SDK can request flag evaluations for any
+        user key an attacker chooses to supply, rather than only the
+        signed context the SDK actually established — enabling
+        targeting-rule enumeration and business-logic disclosure through
+        crafted user keys.
+
+  - id: production_secure_mode_enabled
+    expr: 'environments.exists(e, e.key == "production" && e.secureMode == true)'
+    severity: high
+    title: Production Environment Has Secure Mode Enabled
+    pass_message: "The production environment has secure mode enabled"
+    fail_message: "The production environment does not have secure mode enabled"
+    finding:
+      description: |
+        The production environment either does not exist under this
+        project key or has secureMode: false. This is the environment
+        with the highest-value SDK keys and the broadest client-side
+        exposure, so secure mode here specifically prevents user-key
+        spoofing against live production flag targeting.
+
+remediation:
+  description: |
+    Enable secure mode on every environment, starting with production.
+  steps:
+    - "Navigate to Account Settings → Projects → select the project → Environments"
+    - "Edit each environment and enable Secure mode"
+  api:
+    method: PATCH
+    url: "https://app.launchdarkly.com/api/v2/projects/{{ld_project_key}}/environments/production"
+    headers:
+      Authorization: "{{LD_API_KEY}}"
+      LD-API-Version: "20240415"
+      Content-Type: "application/json; domain-model=launchdarkly.semanticpatch"
+    body:
+      comment: "HTH: Enable secure mode to prevent client-side SDK user impersonation"
+      instructions:
+        - kind: "updateSecureMode"
+          value: true
+  manual:
+    - "Secure mode requires the client-side SDK to send a signed hash of the user key — confirm client applications are updated to compute and send it before enforcing"

@@ -1,0 +1,75 @@
+id: AUTH0-2.02
+name: Verify MFA Is Enforced for All Applications
+description: |
+  Verifies that the Auth0 Guardian MFA policy is set to
+  "all-applications" via the Guardian Policies API, meaning multi-factor
+  authentication is required tenant-wide rather than left as an opt-in
+  or per-application setting.
+author: grc-engineering
+version: "1.0"
+source: auth0
+profile: L1
+tags: [mfa, guardian, authentication]
+
+references:
+  cis: ["6.5"]
+  nist: [IA-2(1)]
+  hth: "auth0:2.2"
+
+credentials:
+  AUTH0_TOKEN:
+    type: api_token
+    scopes: ["read:guardian_factors"]
+    required: true
+
+inputs:
+  auth0_api_base:
+    description: Auth0 Management API base URL, including scheme and /api/v2 (e.g. https://yourcompany.auth0.com/api/v2)
+    env: AUTH0_API_BASE
+    required: true
+
+steps:
+  - id: get_guardian_policies
+    action: api_call
+    request:
+      method: GET
+      url: "{{auth0_api_base}}/guardian/policies"
+      headers:
+        Authorization: "Bearer {{AUTH0_TOKEN}}"
+    extract:
+      policies: "$[*]"
+
+assertions:
+  - id: mfa_enforced_all_applications
+    expr: 'policies.exists(p, p == "all-applications")'
+    severity: critical
+    title: MFA Is Enforced for All Applications
+    pass_message: "The Guardian MFA policy includes all-applications"
+    fail_message: "The Guardian MFA policy does not include all-applications"
+    finding:
+      description: |
+        The Guardian policies endpoint does not include
+        "all-applications", meaning MFA is not enforced tenant-wide —
+        it is either fully optional (policy is empty, "never") or left
+        to individual application configuration. Any application not
+        explicitly requiring MFA accepts password-only authentication,
+        which MFA prevents from becoming account takeover in the vast
+        majority of automated and phishing-driven attacks.
+
+remediation:
+  description: |
+    Set the Guardian MFA policy to all-applications and enable
+    phishing-resistant factors.
+  steps:
+    - "Navigate to Security → Multi-factor Auth"
+    - "Set the policy to Always (all-applications) rather than Adaptive-only or per-application"
+    - "Enable WebAuthn with Security Keys and WebAuthn with Device Biometrics as the preferred factors, with OTP as a fallback"
+    - "Discourage SMS and Voice factors due to SIM-swap risk"
+  api:
+    method: PUT
+    url: "{{auth0_api_base}}/guardian/policies"
+    headers:
+      Authorization: "Bearer {{AUTH0_TOKEN}}"
+    body: ["all-applications"]
+  manual:
+    - "Auth0 Dashboard (tenant member) MFA is enrolled per-member and is not controlled by this tenant-wide policy — audit Settings → Tenant Members separately for admin MFA enrollment"

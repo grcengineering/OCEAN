@@ -1,0 +1,79 @@
+id: CF-3.02
+name: Verify a Gateway HTTP Malware-Blocking Rule Exists
+description: |
+  Verifies that at least one Gateway rule filters HTTP traffic with a
+  block action, which stops malware downloads and malicious file
+  delivery that DNS-layer filtering alone would miss (for example, a
+  malicious payload hosted on an otherwise-benign domain).
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L1
+tags: [gateway, http-filtering, zero-trust]
+
+references:
+  cis: ["9.2", "13.3"]
+  nist: [SC-7, SI-4]
+  hth: "cloudflare:3.2"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_gateway_rules
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      rules: "$.result"
+
+assertions:
+  - id: http_block_rule_exists
+    expr: 'size(rules.filter(r, r.action == "block" && r.filters.exists(f, f == "http"))) > 0'
+    severity: high
+    title: A Gateway HTTP Malware-Blocking Rule Exists
+    pass_message: "At least one Gateway HTTP rule blocks malware-risk content categories"
+    fail_message: "No Gateway HTTP rule blocks malware-risk content categories"
+    finding:
+      description: |
+        No Gateway rule filters HTTP traffic with a block action.
+        Without HTTP-layer filtering, a WARP-enrolled device can
+        download a malicious payload hosted on a domain that DNS
+        category filtering does not flag, such as a compromised but
+        otherwise legitimate site. Create an HTTP policy blocking
+        malware-risk content categories.
+
+remediation:
+  description: |
+    Create a Gateway HTTP policy that blocks malware downloads by
+    content category.
+  steps:
+    - "Navigate to Zero Trust → Gateway → Firewall Policies → HTTP"
+    - "Add a policy with Selector = Content Category matching malware and spyware/adware categories"
+    - "Set Action to Block and enable the block page"
+  api:
+    method: POST
+    url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+    headers:
+      Authorization: "Bearer {{CF_API_TOKEN}}"
+    body:
+      name: "HTH: Block Malware Downloads (HTTP)"
+      action: "block"
+      filters: ["http"]
+      traffic: "any(http.request.uri.content_category[*] in {80 83})"
+      enabled: true
+      precedence: 10
+  manual:
+    - "TLS inspection must be enabled for HTTP policies to inspect encrypted downloads — see section 3.5 for DLP-related TLS decryption prerequisites"

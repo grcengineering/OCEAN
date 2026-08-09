@@ -1,0 +1,79 @@
+id: CF-3.04
+name: Verify a Browser Isolation Policy Exists
+description: |
+  Verifies that at least one Gateway rule uses the "isolate" action,
+  which routes risky web categories through Cloudflare's remote browser
+  so page code executes in an isolated container rather than on the
+  endpoint.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L3
+tags: [gateway, browser-isolation, zero-trust]
+
+references:
+  cis: ["10.5"]
+  nist: [SI-3]
+  hth: "cloudflare:3.4"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_gateway_rules
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      rules: "$.result"
+
+assertions:
+  - id: browser_isolation_policy_exists
+    expr: 'size(rules.filter(r, r.action == "isolate")) > 0'
+    severity: medium
+    title: A Browser Isolation Policy Exists
+    pass_message: "At least one Gateway rule isolates risky web categories"
+    fail_message: "No Gateway rule isolates risky web categories"
+    finding:
+      description: |
+        No Gateway rule uses the "isolate" action. Without browser
+        isolation for risky or uncategorized sites, page code —
+        including zero-day browser exploits and drive-by download
+        scripts — executes directly on the endpoint rather than in an
+        isolated remote container. This is an L3 (maximum security)
+        control and requires a Browser Isolation license.
+
+remediation:
+  description: |
+    Create a Gateway HTTP policy that isolates risky web categories in
+    Cloudflare's remote browser.
+  steps:
+    - "Confirm the account has a Browser Isolation license"
+    - "Navigate to Zero Trust → Gateway → Firewall Policies → HTTP"
+    - "Add a policy with Selector = Content Category matching newly-seen and uncategorized domains, and set Action to Isolate"
+  api:
+    method: POST
+    url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+    headers:
+      Authorization: "Bearer {{CF_API_TOKEN}}"
+    body:
+      name: "HTH: Isolate Risky Websites"
+      action: "isolate"
+      filters: ["http"]
+      traffic: "any(http.request.uri.content_category[*] in {68 155})"
+      enabled: true
+      precedence: 5
+  manual:
+    - "Tune biso_admin_controls (copy/paste, download, upload, printing) inside the isolated session to match data-handling requirements"

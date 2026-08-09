@@ -1,0 +1,97 @@
+id: AUTH0-4.02
+name: Audit Application Token Configuration for OIDC Conformance and Rotation
+description: |
+  Enumerates Auth0 applications (clients) and flags any that are not
+  OIDC conformant, whose access token lifetime exceeds 1 hour, or whose
+  refresh tokens are not set to rotate — mirroring the HTH pack's own
+  per-application audit logic.
+author: grc-engineering
+version: "1.0"
+source: auth0
+profile: L1
+tags: [applications, oidc, token-lifetime]
+
+references:
+  cis: ["4.1"]
+  nist: [CM-7]
+  hth: "auth0:4.2"
+
+credentials:
+  AUTH0_TOKEN:
+    type: api_token
+    scopes: ["read:clients"]
+    required: true
+
+inputs:
+  auth0_api_base:
+    description: Auth0 Management API base URL, including scheme and /api/v2 (e.g. https://yourcompany.auth0.com/api/v2)
+    env: AUTH0_API_BASE
+    required: true
+
+steps:
+  - id: get_clients
+    action: api_call
+    request:
+      method: GET
+      url: "{{auth0_api_base}}/clients?fields=name,client_id,app_type,oidc_conformant,jwt_configuration,refresh_token&include_fields=true"
+      headers:
+        Authorization: "Bearer {{AUTH0_TOKEN}}"
+    extract:
+      clients: "$[*]"
+      client_count: "$length"
+
+assertions:
+  - id: all_clients_oidc_conformant
+    expr: "size(clients.filter(c, c.oidc_conformant != true)) == 0"
+    severity: medium
+    title: All Applications Are OIDC Conformant
+    pass_message: "All {{client_count}} application(s) are OIDC conformant"
+    fail_message: "One or more applications are not OIDC conformant"
+    finding:
+      description: |
+        At least one application has oidc_conformant set to false or
+        unset. Non-conformant applications can accept legacy response
+        modes and token behaviors that fall outside current OIDC
+        security guidance, widening the surface for token interception
+        and replay.
+
+  - id: all_clients_short_access_token_ttl
+    expr: "size(clients.filter(c, c.jwt_configuration.lifetime_in_seconds > 3600)) == 0"
+    severity: medium
+    title: All Applications Have an Access Token Lifetime of 1 Hour or Less
+    pass_message: "All {{client_count}} application(s) have an access token lifetime of 1 hour or less"
+    fail_message: "One or more applications have an access token lifetime exceeding 1 hour"
+    finding:
+      description: |
+        At least one application's jwt_configuration.lifetime_in_seconds
+        exceeds 3600 (1 hour). A longer-lived access token stays usable
+        for longer after theft or leakage, and cannot be revoked
+        individually before it expires on its own.
+
+  - id: all_clients_rotating_refresh_tokens
+    expr: 'size(clients.filter(c, c.refresh_token.rotation_type != "rotating")) == 0'
+    severity: medium
+    title: All Applications Use Rotating Refresh Tokens
+    pass_message: "All {{client_count}} application(s) use rotating refresh tokens"
+    fail_message: "One or more applications do not use rotating refresh tokens"
+    finding:
+      description: |
+        At least one application's refresh_token.rotation_type is not
+        "rotating". Without rotation, a stolen refresh token remains
+        valid and undetectable for its entire absolute lifetime;
+        rotation with reuse detection revokes the entire token family
+        the moment a replayed token is presented, containing session
+        theft early.
+
+remediation:
+  description: |
+    Set every application to OIDC conformant, cap access token lifetime
+    at 1 hour, and enable rotating refresh tokens.
+  steps:
+    - "Navigate to Applications → select each application → Settings"
+    - "Confirm OIDC Conformant is enabled (Advanced Settings → OAuth)"
+    - "Set Access Token Expiration to 3600 seconds or less"
+    - "Enable Refresh Token Rotation and set the absolute lifetime well below the 30-day default for high-value applications"
+  manual:
+    - "Instrument alerting on refresh-token reuse-detection revocations — a family revocation is a strong signal of token theft, not routine noise"
+    - "Review the enhanced third-party application security deprecation (mandatory PKCE, EOL 2026-10-23) and confirm third-party applications have migrated"

@@ -1,0 +1,112 @@
+id: LD-3.01
+name: Verify Production Environment Change Controls Are Enabled
+description: |
+  Verifies via the Environments API that the production environment
+  requires a comment on every change, requires confirmation before a
+  change is applied, and is marked critical — the three change-control
+  settings the guide requires for the environment with the highest
+  blast radius.
+author: grc-engineering
+version: "1.0"
+source: launchdarkly
+profile: L1
+tags: [change-control, environments, production]
+
+references:
+  nist: [CM-3]
+  hth: "launchdarkly:3.1"
+
+credentials:
+  LD_API_KEY:
+    type: api_token
+    scopes: ["reader"]
+    required: true
+
+inputs:
+  ld_project_key:
+    description: LaunchDarkly project key
+    env: LD_PROJECT_KEY
+    required: true
+
+steps:
+  - id: get_production_environment
+    action: api_call
+    request:
+      method: GET
+      url: "https://app.launchdarkly.com/api/v2/projects/{{ld_project_key}}/environments/production"
+      headers:
+        Authorization: "{{LD_API_KEY}}"
+        LD-API-Version: "20240415"
+    extract:
+      environment: "$"
+
+assertions:
+  - id: production_requires_comments
+    expr: "environment.requireComments == true"
+    severity: medium
+    title: Production Environment Requires Comments on Changes
+    pass_message: "requireComments is enabled on production"
+    fail_message: "requireComments is disabled on production"
+    finding:
+      description: |
+        The production environment does not require a comment on flag
+        and configuration changes. Without a mandatory comment, the
+        change history has no recorded rationale, making unreviewed
+        flag flips harder to distinguish from justified changes during
+        an incident review.
+
+  - id: production_requires_confirm_changes
+    expr: "environment.confirmChanges == true"
+    severity: medium
+    title: Production Environment Requires Change Confirmation
+    pass_message: "confirmChanges is enabled on production"
+    fail_message: "confirmChanges is disabled on production"
+    finding:
+      description: |
+        The production environment does not require confirmation before
+        a change is applied. Without a confirmation step, an accidental
+        click or a slipped keystroke can immediately flip a production
+        flag with no opportunity to catch the mistake before it takes
+        effect.
+
+  - id: production_marked_critical
+    expr: "environment.critical == true"
+    severity: low
+    title: Production Environment Is Marked Critical
+    pass_message: "The production environment is marked critical"
+    fail_message: "The production environment is not marked critical"
+    finding:
+      description: |
+        The production environment is not marked critical. This
+        designation is used elsewhere in LaunchDarkly (for example,
+        approval workflow eligibility) to identify environments that
+        warrant additional scrutiny, so leaving it unmarked can exclude
+        production from protections meant specifically for it.
+
+remediation:
+  description: |
+    Enable require-comments, confirm-changes, and the critical
+    designation on the production environment.
+  steps:
+    - "Navigate to Account Settings → Projects → select the project → Environments → production"
+    - "Enable 'Require comments for flag and configuration changes'"
+    - "Enable 'Require confirmation for changes'"
+    - "Mark the environment as Critical"
+  api:
+    method: PATCH
+    url: "https://app.launchdarkly.com/api/v2/projects/{{ld_project_key}}/environments/production"
+    headers:
+      Authorization: "{{LD_API_KEY}}"
+      LD-API-Version: "20240415"
+      Content-Type: "application/json; domain-model=launchdarkly.semanticpatch"
+    body:
+      comment: "HTH: Harden production environment controls"
+      instructions:
+        - kind: "updateRequireComments"
+          value: true
+        - kind: "updateConfirmChanges"
+          value: true
+        - kind: "updateCritical"
+          value: true
+  manual:
+    - "Consider layering approval workflows on top of these controls for the highest-risk flags"

@@ -1,0 +1,102 @@
+id: AUTH0-3.01
+name: Verify Tenant Session and Security Settings Are Hardened
+description: |
+  Verifies that tenant-wide session lifetime, idle session lifetime, and
+  the revoke_refresh_token_grant flag are set to hardened values via the
+  Tenant Settings API, bounding how long a Dashboard session or
+  refresh-token grant can persist without user re-authentication.
+author: grc-engineering
+version: "1.0"
+source: auth0
+profile: L1
+tags: [tenant-settings, session-management]
+
+references:
+  cis: ["5.4"]
+  nist: [AC-6(1)]
+  hth: "auth0:3.1"
+
+credentials:
+  AUTH0_TOKEN:
+    type: api_token
+    scopes: ["read:tenant_settings"]
+    required: true
+
+inputs:
+  auth0_api_base:
+    description: Auth0 Management API base URL, including scheme and /api/v2 (e.g. https://yourcompany.auth0.com/api/v2)
+    env: AUTH0_API_BASE
+    required: true
+
+steps:
+  - id: get_tenant_settings
+    action: api_call
+    request:
+      method: GET
+      url: "{{auth0_api_base}}/tenants/settings"
+      headers:
+        Authorization: "Bearer {{AUTH0_TOKEN}}"
+    extract:
+      settings: "$"
+
+assertions:
+  - id: session_lifetime_bounded
+    expr: "settings.session_lifetime <= 8"
+    severity: medium
+    title: Tenant Session Lifetime Is Bounded to 8 Hours or Less
+    pass_message: "session_lifetime is 8 hours or less"
+    fail_message: "session_lifetime exceeds 8 hours"
+    finding:
+      description: |
+        The tenant's session_lifetime exceeds 8 hours. A long-lived
+        session extends the window in which a stolen session cookie
+        remains usable without forcing re-authentication.
+
+  - id: idle_session_lifetime_bounded
+    expr: "settings.idle_session_lifetime <= 1"
+    severity: medium
+    title: Tenant Idle Session Lifetime Is Bounded to 1 Hour or Less
+    pass_message: "idle_session_lifetime is 1 hour or less"
+    fail_message: "idle_session_lifetime exceeds 1 hour"
+    finding:
+      description: |
+        The tenant's idle_session_lifetime exceeds 1 hour. An
+        unattended, authenticated session (for example an unlocked
+        workstation) stays valid for longer than necessary, extending
+        the window for session hijacking.
+
+  - id: refresh_token_revocation_on_grant_delete
+    expr: "settings.flags.revoke_refresh_token_grant == true"
+    severity: medium
+    title: Refresh Tokens Are Revoked When Their Grant Is Deleted
+    pass_message: "revoke_refresh_token_grant is enabled"
+    fail_message: "revoke_refresh_token_grant is disabled"
+    finding:
+      description: |
+        flags.revoke_refresh_token_grant is false. When this is
+        disabled, deleting a grant does not revoke its outstanding
+        refresh tokens, so a token issued under a since-removed grant
+        can continue to mint new access tokens indefinitely.
+
+remediation:
+  description: |
+    Apply hardened tenant session and refresh-token settings.
+  steps:
+    - "Navigate to Settings → General → Login Session Management"
+    - "Set the session lifetime to 8 hours or less and idle session lifetime to 1 hour or less"
+    - "Enable 'Revoke refresh token grant' and set the session cookie mode to non-persistent"
+  api:
+    method: PATCH
+    url: "{{auth0_api_base}}/tenants/settings"
+    headers:
+      Authorization: "Bearer {{AUTH0_TOKEN}}"
+    body:
+      session_lifetime: 8
+      idle_session_lifetime: 1
+      flags:
+        revoke_refresh_token_grant: true
+        enable_sso: true
+      session_cookie:
+        mode: "non-persistent"
+  manual:
+    - "Communicate shortened session lifetimes to end users ahead of enforcement to avoid a spike in unexpected re-authentication prompts"

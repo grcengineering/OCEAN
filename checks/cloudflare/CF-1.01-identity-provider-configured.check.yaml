@@ -1,0 +1,82 @@
+id: CF-1.01
+name: Verify a Zero Trust Identity Provider Is Configured
+description: |
+  Verifies that at least one identity provider is registered with
+  Cloudflare Access via the Zero Trust Identity Providers API. Without a
+  connected IdP, Access falls back to Cloudflare's built-in one-time-PIN
+  login, which carries none of a corporate IdP's MFA enforcement,
+  conditional access, or group-based policy signals.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L1
+tags: [identity, sso, zero-trust]
+
+references:
+  cis: ["6.3", "12.5"]
+  nist: [IA-2, IA-8]
+  hth: "cloudflare:1.1"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, access:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_identity_providers
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/access/identity_providers"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      idps: "$.result"
+
+assertions:
+  - id: identity_provider_configured
+    expr: "size(idps) > 0"
+    severity: high
+    title: A Zero Trust Identity Provider Is Configured
+    pass_message: "At least one identity provider is registered with Access"
+    fail_message: "No identity provider is registered with Cloudflare Access"
+    finding:
+      description: |
+        The Zero Trust Identity Providers API returned zero configured
+        providers. Without a connected corporate IdP, Access
+        applications fall back to Cloudflare's one-time-PIN login, which
+        has no IdP-enforced MFA, no conditional access, and no
+        group-based policy signal — fragmenting authentication and
+        weakening every Access policy that relies on IdP group
+        membership. Connect the organization's IdP (OIDC, SAML, or
+        Azure AD) via Zero Trust before relying on Access policies for
+        enforcement.
+
+remediation:
+  description: |
+    Connect a corporate identity provider to Zero Trust so Access
+    policies inherit IdP-enforced authentication and group membership.
+  steps:
+    - "Navigate to Zero Trust → Settings → Authentication → Login methods"
+    - "Add the corporate identity provider (OIDC, SAML, Azure AD, Okta, etc.)"
+    - "Configure claims and scopes so group membership is available to Access policies"
+  api:
+    method: POST
+    url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/access/identity_providers"
+    headers:
+      Authorization: "Bearer {{CF_API_TOKEN}}"
+    body:
+      name: "Corporate IdP"
+      type: "oidc"
+      config:
+        claims: ["email_verified", "preferred_username", "groups"]
+        scopes: ["openid", "email", "profile", "groups"]
+  manual:
+    - "Remove the one-time-PIN login method once the corporate IdP is confirmed working for all Access applications"

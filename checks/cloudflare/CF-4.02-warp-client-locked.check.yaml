@@ -1,0 +1,87 @@
+id: CF-4.02
+name: Verify the WARP Client Is Locked
+description: |
+  Verifies that the WARP client switch is locked and users are not
+  allowed to leave the Zero Trust organization, preventing end users
+  from disabling WARP to evade Gateway filtering and device posture
+  enforcement.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L2
+tags: [warp, device-policy, zero-trust]
+
+references:
+  cis: ["4.1"]
+  nist: [CM-7]
+  hth: "cloudflare:4.2"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_device_policy
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/devices/policy"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      policy: "$.result"
+
+assertions:
+  - id: warp_switch_locked
+    expr: "policy.switch_locked == true"
+    severity: high
+    title: The WARP Client Switch Is Locked
+    pass_message: "switch_locked is true"
+    fail_message: "switch_locked is false — users can disable WARP"
+    finding:
+      description: |
+        switch_locked is false, so an end user can turn off the WARP
+        client entirely from the system tray, immediately losing
+        Gateway DNS/HTTP/network filtering, device posture enforcement,
+        and Access-brokered tunnel access for as long as the client
+        stays off.
+
+  - id: warp_not_allowed_to_leave
+    expr: "policy.allowed_to_leave == false"
+    severity: high
+    title: Users Cannot Leave the Zero Trust Organization
+    pass_message: "allowed_to_leave is false"
+    fail_message: "allowed_to_leave is true — users can remove their device from the organization"
+    finding:
+      description: |
+        allowed_to_leave is true, so an end user can remove their
+        device from the Zero Trust organization outright, permanently
+        dropping every WARP-enforced control until an administrator
+        re-enrolls the device.
+
+remediation:
+  description: |
+    Lock the WARP client switch and prevent users from leaving the Zero
+    Trust organization.
+  steps:
+    - "Navigate to Zero Trust → Settings → WARP Client → Device settings profiles"
+    - "Edit the profile and enable 'Lock WARP switch' and disable 'Allow user to leave the organization'"
+  api:
+    method: PATCH
+    url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/devices/policy"
+    headers:
+      Authorization: "Bearer {{CF_API_TOKEN}}"
+    body:
+      switch_locked: true
+      allowed_to_leave: false
+      allow_mode_switch: false
+  manual:
+    - "Document an emergency unlock procedure for support staff before enforcing the lock broadly"

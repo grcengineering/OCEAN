@@ -1,0 +1,79 @@
+id: CF-3.01
+name: Verify a Gateway DNS Security-Threat Blocking Rule Exists
+description: |
+  Verifies that at least one Gateway rule filters DNS traffic with a
+  block action, which is how Gateway stops resolution of malware,
+  phishing, spyware, and command-and-control domains at the DNS layer
+  before a connection is ever attempted.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L1
+tags: [gateway, dns-filtering, zero-trust]
+
+references:
+  cis: ["9.2"]
+  nist: [SC-7, SI-3]
+  hth: "cloudflare:3.1"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_gateway_rules
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      rules: "$.result"
+
+assertions:
+  - id: dns_block_rule_exists
+    expr: 'size(rules.filter(r, r.action == "block" && r.filters.exists(f, f == "dns"))) > 0'
+    severity: high
+    title: A Gateway DNS Security-Threat Blocking Rule Exists
+    pass_message: "At least one Gateway DNS rule blocks security-threat categories"
+    fail_message: "No Gateway DNS rule blocks security-threat categories"
+    finding:
+      description: |
+        No Gateway rule filters DNS traffic with a block action. Without
+        DNS-layer filtering, WARP-enrolled devices can resolve malware,
+        phishing, spyware, and command-and-control domains, letting the
+        connection attempt proceed to a layer where it is harder and
+        more expensive to stop. Create a DNS policy blocking Cloudflare's
+        security threat categories.
+
+remediation:
+  description: |
+    Create a Gateway DNS policy that blocks resolution of known malware,
+    phishing, spyware, and command-and-control domains.
+  steps:
+    - "Navigate to Zero Trust → Gateway → Firewall Policies → DNS"
+    - "Add a policy with Selector = Content Category or Security Category matching malware, phishing, spyware, and command-and-control"
+    - "Set Action to Block and enable the block page"
+  api:
+    method: POST
+    url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+    headers:
+      Authorization: "Bearer {{CF_API_TOKEN}}"
+    body:
+      name: "HTH: Block Security Threats (DNS)"
+      action: "block"
+      filters: ["dns"]
+      traffic: "any(dns.security_category[*] in {80 83 176 178})"
+      enabled: true
+      precedence: 10
+  manual:
+    - "Review Gateway DNS logs periodically to confirm the block rule is actively matching traffic, not just present but unused"

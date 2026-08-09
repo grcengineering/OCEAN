@@ -1,0 +1,106 @@
+id: CF-6.01
+name: Verify Logpush Is Configured for Zero Trust Log Datasets
+description: |
+  Verifies that active Logpush jobs exist for the four Zero Trust log
+  datasets the guide recommends — access_requests, gateway_dns,
+  gateway_http, and gateway_network — so authentication, DNS, HTTP, and
+  network policy decisions all reach a durable log destination.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L1
+tags: [logging, monitoring, zero-trust]
+
+references:
+  cis: ["8.2"]
+  nist: [AU-2, AU-6]
+  hth: "cloudflare:6.1"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, logs:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_logpush_jobs
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/logpush/jobs"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      jobs: "$.result"
+
+assertions:
+  - id: logpush_access_requests_active
+    expr: 'size(jobs.filter(j, j.dataset == "access_requests" && j.enabled == true)) > 0'
+    severity: high
+    title: Logpush Is Active for the access_requests Dataset
+    pass_message: "An active Logpush job exists for access_requests"
+    fail_message: "No active Logpush job exists for access_requests"
+    finding:
+      description: |
+        No enabled Logpush job targets the access_requests dataset,
+        which carries Access application authentication decisions.
+        Without it exported to a durable destination, admin and user
+        access events age out of Cloudflare's retention window with no
+        record for investigation.
+
+  - id: logpush_gateway_dns_active
+    expr: 'size(jobs.filter(j, j.dataset == "gateway_dns" && j.enabled == true)) > 0'
+    severity: high
+    title: Logpush Is Active for the gateway_dns Dataset
+    pass_message: "An active Logpush job exists for gateway_dns"
+    fail_message: "No active Logpush job exists for gateway_dns"
+    finding:
+      description: |
+        No enabled Logpush job targets the gateway_dns dataset. Without
+        it exported, DNS-layer block and allow decisions — the primary
+        signal for malware and phishing domain contact — are not
+        available for SIEM correlation or incident investigation.
+
+  - id: logpush_gateway_http_active
+    expr: 'size(jobs.filter(j, j.dataset == "gateway_http" && j.enabled == true)) > 0'
+    severity: medium
+    title: Logpush Is Active for the gateway_http Dataset
+    pass_message: "An active Logpush job exists for gateway_http"
+    fail_message: "No active Logpush job exists for gateway_http"
+    finding:
+      description: |
+        No enabled Logpush job targets the gateway_http dataset.
+        Without it exported, HTTP-layer filtering decisions, including
+        malware download blocks and browser isolation events, are not
+        available for correlation.
+
+  - id: logpush_gateway_network_active
+    expr: 'size(jobs.filter(j, j.dataset == "gateway_network" && j.enabled == true)) > 0'
+    severity: medium
+    title: Logpush Is Active for the gateway_network Dataset
+    pass_message: "An active Logpush job exists for gateway_network"
+    fail_message: "No active Logpush job exists for gateway_network"
+    finding:
+      description: |
+        No enabled Logpush job targets the gateway_network dataset.
+        Without it exported, L4 network policy decisions — the primary
+        signal for command-and-control and exfiltration over non-HTTP
+        ports — are not available for correlation.
+
+remediation:
+  description: |
+    Configure and enable Logpush jobs for every Zero Trust log dataset
+    and route them to a SIEM or long-term log store.
+  steps:
+    - "Navigate to Analytics & Logs → Logpush"
+    - "Create a Logpush job for each of: access_requests, gateway_dns, gateway_http, gateway_network"
+    - "Point each job's destination at the organization's SIEM or object storage"
+    - "Confirm each job shows an active, recent delivery in the Logpush job status view"
+  manual:
+    - "Alert on Logpush job delivery failures — a silently failing job is functionally the same as no logging at all"

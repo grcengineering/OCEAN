@@ -1,0 +1,68 @@
+id: CF-2.02
+name: Verify a WARP Device Posture Rule Exists
+description: |
+  Verifies that at least one device posture rule of type "warp" exists,
+  which is the mechanism Access policies use to require that a
+  connecting device is running the WARP client rather than reaching an
+  application over the open internet with credentials alone.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L2
+tags: [device-posture, warp, zero-trust]
+
+references:
+  cis: ["4.1", "6.4"]
+  nist: [AC-2(11)]
+  hth: "cloudflare:2.2"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, access:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_posture_rules
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/devices/posture"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      posture_rules: "$.result"
+
+assertions:
+  - id: warp_posture_rule_exists
+    expr: 'size(posture_rules.filter(r, r.type == "warp")) > 0'
+    severity: medium
+    title: A WARP Device Posture Rule Exists
+    pass_message: "A WARP device posture rule is configured"
+    fail_message: "No WARP device posture rule is configured"
+    finding:
+      description: |
+        No device posture rule of type "warp" was found. Without a WARP
+        posture check bound into Access policies, an application can be
+        reached from an unmanaged device using credentials alone,
+        bypassing every device-level control WARP would otherwise
+        enforce (posture checks, tunnel-only routing, DNS/HTTP
+        filtering). Create a WARP posture rule and reference it as a
+        Require condition on sensitive Access applications.
+
+remediation:
+  description: |
+    Create a WARP device posture rule and require it in Access policies
+    for sensitive applications.
+  steps:
+    - "Navigate to Zero Trust → Settings → WARP Client → Device posture"
+    - "Add a new posture check of type WARP"
+    - "Edit each sensitive Access application's policy and add a Require rule referencing the WARP posture check"
+  manual:
+    - "Confirm WARP is deployed to managed devices before enforcing the posture requirement to avoid locking out legitimate users"

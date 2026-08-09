@@ -1,0 +1,70 @@
+id: CF-5.01
+name: Retrieve Cloudflare Tunnel Configuration for Review
+description: |
+  Retrieves the account's active Cloudflare Tunnels as an informational
+  audit. This is a retrieval-and-review control rather than a
+  bright-line pass/fail: tunnel health status and connection count are
+  operational signals the reviewer must interpret in context (a tunnel
+  showing degraded status may be mid-deploy rather than misconfigured),
+  so no single field is asserted as pass/fail here.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L1
+tags: [tunnels, zero-trust, audit]
+
+references:
+  cis: ["12.1"]
+  nist: [SC-7, SC-8]
+  hth: "cloudflare:5.1"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_tunnels
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/cfd_tunnel?is_deleted=false"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      tunnels: "$.result"
+
+assertions:
+  - id: tunnel_configuration_audit
+    expr: "get_tunnels_status_code == 200"
+    severity: medium
+    title: Cloudflare Tunnel Configuration Retrieved for Review
+    pass_message: "Tunnel configuration retrieved — review name, status, and connection count for each tunnel"
+    fail_message: "The Cloudflare Tunnel list could not be retrieved"
+    finding:
+      description: |
+        The cfd_tunnel API did not return 200. Without visibility into
+        active tunnels, a misconfigured or unauthenticated tunnel
+        endpoint exposing an internal service can go unnoticed
+        indefinitely. Confirm the token holds Zero Trust read access
+        and re-run; once reachable, review each tunnel's status and
+        connection count, and confirm every returned tunnel is a
+        recognized, business-justified deployment.
+
+remediation:
+  description: |
+    Review every active tunnel for a recognized owner and business
+    justification, and remove any tunnel that is not.
+  steps:
+    - "Navigate to Zero Trust → Networks → Tunnels"
+    - "Review each tunnel's name, status, and connector count against a documented inventory"
+    - "Delete or investigate any tunnel that is not recognized"
+  manual:
+    - "Cross-reference this list with section 5.2's guidance to confirm every tunnel hostname is protected by an Access application before exposing it further"
