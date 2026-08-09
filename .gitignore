@@ -47,3 +47,16 @@ MEMORY/
 .claude/settings.local.json
 .claude/projects/
 .claude/metadata-updater.sh
+# ADE Bootstrapper — agent memory (sensitive, never committed)
+.ade/memory-store/
+# ADE Bootstrapper — observability
+.ade/audit/
+# ADE Bootstrapper — secrets hygiene
+*.pem
+id_rsa
+id_ed25519
+
+# Serena (machine-local LSP cache + per-machine overrides)
+.serena/cache/
+.serena/project.local.yml
+.serena/memories/

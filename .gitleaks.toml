@@ -1,0 +1,17 @@
+# sscsb sample Gitleaks configuration (.gitleaks.toml).
+# Extends the built-in default ruleset; add project-specific allowlists here
+# rather than weakening rules globally.
+
+title = "sscsb gitleaks config"
+
+[extend]
+useDefault = true
+
+# Example: allowlist generated fixtures that contain entropy but no secrets.
+# (Keep this list SHORT and reviewed — every entry is a scanning blind spot.)
+[[allowlists]]
+description = "sscsb generated non-secret artifacts"
+paths = [
+  '''\.sscsb/out/.*\.cdx\.json''',
+  '''\.sscsb/out/.*\.spdx\.json''',
+]
