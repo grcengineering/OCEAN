@@ -4,7 +4,7 @@ This file provides context for Claude Code sessions working on OCEAN (Open Contr
 
 ## Project Overview
 
-OCEAN is the **"Metasploit for GRC"** — an open-source CLI tool and Go library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring. It is the backend for a **"StatusPage for Compliance"** — radically transparent dashboards showing historical control operating effectiveness metrics.
+OCEAN is the **"Metasploit for GRC"** — an open-source Rust CLI tool and library for evidence acquisition, active control testing, and normalization powering continuous compliance monitoring. It is the backend for a **"StatusPage for Compliance"** — radically transparent dashboards showing historical control operating effectiveness metrics.
 
 OCEAN operates across four pillars:
 1. **Passive Control Monitoring** — Query system APIs to observe configuration state, store as evidence
@@ -52,12 +52,17 @@ All specification work is in `.specify/`:
 
 ## Technology Stack
 
-- **Language**: Go 1.22+
-- **Storage**: SQLite (default), PostgreSQL (enterprise), ClickHouse (analytics)
-- **Schema**: JSON with JSON Schema validation
-- **Expression Engine**: CEL (Common Expression Language) via `github.com/google/cel-go`
+- **Language**: Rust (cargo workspace; sibling path-deps on `../grc-controls/{grc-controls-models,grc-controls-apis}` — clone that repo alongside this one or the build fails)
+- **Storage**: SQLite via `src/storage/sqlite.rs` (default `--db` path)
+- **Schema**: JSON Schema validation (`schemas/*.schema.json`) over `.check.yaml` files
+- **Expression Engine**: CEL via the `cel-interpreter` crate
+- **HTTP**: ureq (check interpreter), axum (`ocean serve` REST API)
 - **Signing/Provenance**: Deferred to Corsair (ADR-001 addendum)
 - **License**: Apache 2.0
+
+> Earlier revisions of this file described a Go implementation; that was
+> documentation drift. See `docs/EXAMINATION-2026-08.md` for the verified
+> as-built architecture.
 
 ## Important Research Sources
 
@@ -86,13 +91,14 @@ The project uses GitHub Spec-Kit. Key commands:
 - [x] Tasks generated (v2.0.0 — 193 tasks across 15 phases)
 - [x] Implementation complete (v2.0.0 — all 193 tasks across 15 phases)
 
-## Modules
+## Modules & Checks
 
-9 modules registered (3 source systems + mock):
-- **Mock**: mock.test (observer), mock.network (observer), mock.safety_test (tester)
-- **Okta**: okta.mfa_policy (observer), okta.mfa_bypass (tester)
-- **AWS**: aws.iam (observer), aws.s3_public_access (tester)
-- **GitHub**: github.branch_protection (observer), github.secret_push (tester)
+Two module surfaces (ADR-001 unified check architecture):
+
+- **`.check.yaml` checks** (`checks/`): 72 files — github 38 (33 observers + 5 testers), okta 15, aws 10, azure 8 — interpreted at runtime by `src/check/interpreter.rs` (template resolution → HTTP → JSONPath extraction → CEL assertions → Evidence) and compiled by `ocean build` into 7 code-pack targets (api-script, gh-cli, python-sdk, go-sdk, opa-rego, terraform, sigma-rule).
+- **Native Rust modules** (`src/modules/`): hand-written observers/testers predating the YAML path (mock, okta, aws, azure, github families), registered through `src/module/registry.rs`.
+
+HTH parity status lives in `docs/PARITY-HTH.md`.
 
 ## Testing Rules
 
