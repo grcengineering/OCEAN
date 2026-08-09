@@ -841,12 +841,23 @@ mod tests {
         assert!(ev.test_transcript.is_none());
     }
 
+    /// KEYS_FRESH with a CreateDate always 10 days before the wall clock the
+    /// observer reads — the static fixture's pinned date aged past the 90-day
+    /// max in April 2026 and turned this test into a time bomb. The parser
+    /// test keeps the static fixture because it pins `now` explicitly.
+    fn keys_fresh_dynamic() -> String {
+        let create_date = (Utc::now() - chrono::Duration::days(10))
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        KEYS_FRESH.replace("2026-01-01T00:00:00Z", &create_date)
+    }
+
     #[test]
     fn iam_observer_user_with_mfa_fresh_key_compliant() {
         let srv = mock_server(vec![
             ONE_USER.to_string(),
             MFA_ONE.to_string(),
-            KEYS_FRESH.to_string(),
+            keys_fresh_dynamic(),
         ]);
         let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
