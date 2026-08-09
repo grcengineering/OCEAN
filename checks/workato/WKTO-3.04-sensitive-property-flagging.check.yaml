@@ -1,0 +1,72 @@
+id: WKTO-3.04
+name: Verify Secret-Looking Environment Properties Are Flagged Sensitive
+description: |
+  Lists environment properties via the Workato API (GET /api/properties)
+  and flags any property whose name suggests it holds a secret (contains
+  KEY, SECRET, TOKEN, or PASSWORD) but is not marked sensitive. Workato
+  masks sensitive properties in the UI, job logs, and version history —
+  a secret-shaped property left unmarked is displayed and logged in
+  plaintext everywhere the value is referenced.
+author: grc-engineering
+version: "1.0"
+source: workato
+profile: L1
+tags: [secrets, data-protection]
+
+references:
+  nist: SC-28
+  hth: "workato:3.4"
+
+credentials:
+  WORKATO_API_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_properties
+    action: api_call
+    request:
+      method: GET
+      url: "https://www.workato.com/api/properties"
+      headers:
+        Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    extract:
+      properties: "$.result"
+
+assertions:
+  - id: secret_shaped_properties_are_marked_sensitive
+    expr: >-
+      size(properties.filter(p, has(p.name) &&
+        (p.name.contains("KEY") || p.name.contains("SECRET") ||
+         p.name.contains("TOKEN") || p.name.contains("PASSWORD")) &&
+        p.sensitive != true)) == 0
+    severity: high
+    title: Secret-Shaped Environment Properties Are Marked Sensitive
+    pass_message: "Every property whose name suggests it holds a secret is marked sensitive"
+    fail_message: "One or more properties whose name suggests a secret are not marked sensitive"
+    finding:
+      description: |
+        At least one environment property whose name contains KEY,
+        SECRET, TOKEN, or PASSWORD is not marked sensitive. Workato only
+        masks sensitive properties in the recipe editor, job logs, and
+        version history — a secret stored in an unmarked property is
+        displayed and logged in plaintext everywhere the property is
+        referenced.
+
+remediation:
+  description: |
+    Mark every property that holds secret material as sensitive.
+  steps:
+    - "Navigate to Workspace Admin -> Properties"
+    - "For each flagged property, confirm whether it holds secret material"
+    - "Re-create the property with sensitive: true, or move it to an external secrets manager integration (see 6.1)"
+  api:
+    method: POST
+    url: "https://www.workato.com/api/properties"
+    headers:
+      Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    body:
+      name: "{{property_name}}"
+      sensitive: true
+  manual:
+    - "Establish a naming convention that makes secret-holding properties self-evident, and enforce sensitive marking in recipe review"

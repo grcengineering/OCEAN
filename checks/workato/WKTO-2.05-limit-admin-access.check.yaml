@@ -1,0 +1,60 @@
+id: WKTO-2.05
+name: Limit Workspace Admin Access
+description: |
+  Lists managed users via the Workato API (GET /api/managed_users) and
+  flags an excessive number of accounts holding the Admin role. Workato
+  Admins can manage every connection, recipe, and credential in the
+  workspace — an inflated admin population widens the blast radius of a
+  single compromised account.
+author: grc-engineering
+version: "1.0"
+source: workato
+profile: L1
+tags: [rbac, admin, least-privilege]
+
+references:
+  nist: "AC-6(5)"
+  hth: "workato:2.5"
+
+credentials:
+  WORKATO_API_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_managed_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://www.workato.com/api/managed_users"
+      headers:
+        Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    extract:
+      users: "$.result"
+
+assertions:
+  - id: admin_count_within_limit
+    expr: 'size(users.filter(u, u.role_name == "Admin")) <= 5'
+    severity: medium
+    title: Workspace Admin Count Is Within Recommended Limit
+    pass_message: "The number of users with the Admin role is within the recommended limit (<=5)"
+    fail_message: "More than 5 users hold the Admin role"
+    finding:
+      description: |
+        More than five workspace members hold the Admin role. Workato
+        Admins can manage every connection, recipe, credential, and
+        billing setting in the workspace — an inflated admin population
+        widens the blast radius of a single compromised account.
+        Downgrade accounts without a documented business need for
+        workspace-wide admin to a scoped custom role instead.
+
+remediation:
+  description: |
+    Reduce the Admin population to the smallest set of accounts with a
+    documented business need for workspace-wide administrative access.
+  steps:
+    - "Navigate to Workspace Admin -> Users"
+    - "Review every member with the Admin role and confirm a documented business justification"
+    - "Downgrade members without justification to a scoped custom role"
+  manual:
+    - "Review the admin list quarterly and reconcile against a privileged-account register"

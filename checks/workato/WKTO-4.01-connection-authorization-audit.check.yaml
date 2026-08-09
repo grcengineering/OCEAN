@@ -1,0 +1,60 @@
+id: WKTO-4.01
+name: Flag Unauthorized or Disconnected Connections
+description: |
+  Lists connections via the Workato API (GET /api/connections) and flags
+  any connection that is not currently authorized. An unauthorized
+  connection is either broken automation or a stale credential grant
+  that was never completed or was revoked upstream — either way it is
+  unmanaged attack surface that should be reauthorized or deleted rather
+  than left in the workspace indefinitely.
+author: grc-engineering
+version: "1.0"
+source: workato
+profile: L1
+tags: [connections, credential-hygiene]
+
+references:
+  nist: [SC-12, IA-5]
+  hth: "workato:4.1"
+
+credentials:
+  WORKATO_API_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_connections
+    action: api_call
+    request:
+      method: GET
+      url: "https://www.workato.com/api/connections"
+      headers:
+        Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    extract:
+      connections: "$.result"
+
+assertions:
+  - id: no_unauthorized_connections
+    expr: "size(connections.filter(c, c.authorized != true)) == 0"
+    severity: medium
+    title: No Unauthorized Connections Remain in the Workspace
+    pass_message: "Every connection in the workspace is authorized"
+    fail_message: "One or more connections in the workspace are not authorized"
+    finding:
+      description: |
+        At least one connection in the workspace is not authorized. An
+        unauthorized connection is either a broken integration or a
+        stale, incomplete credential grant — either way it is unmanaged
+        attack surface. Review each flagged connection and either
+        complete its authorization or delete it.
+
+remediation:
+  description: |
+    Reauthorize or remove every connection that is not currently
+    authorized.
+  steps:
+    - "Navigate to Workspace Admin -> Connections"
+    - "Identify connections showing a disconnected/unauthorized status"
+    - "Reauthorize the connection if it is still needed, or delete it if it is not"
+  manual:
+    - "Review the connection inventory quarterly and confirm every credential is still owned by an active integration"

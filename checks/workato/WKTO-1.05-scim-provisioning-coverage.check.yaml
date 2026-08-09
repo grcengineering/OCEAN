@@ -1,0 +1,64 @@
+id: WKTO-1.05
+name: Verify Managed Users Are SCIM-Provisioned
+description: |
+  Lists managed users via the Workato API (GET /api/managed_users) and
+  flags any user with no external_id set. SCIM-provisioned users carry
+  the identity provider's external_id; a user with no external_id was
+  added manually outside the SCIM pipeline, which means their lifecycle
+  is not tied to IdP deprovisioning — they will not be automatically
+  removed when the identity provider disables the account.
+author: grc-engineering
+version: "1.0"
+source: workato
+profile: L2
+tags: [provisioning, scim, identity]
+
+references:
+  nist: "AC-2(1)"
+  hth: "workato:1.5"
+
+credentials:
+  WORKATO_API_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_managed_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://www.workato.com/api/managed_users"
+      headers:
+        Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    extract:
+      users: "$.result"
+
+assertions:
+  - id: all_users_have_external_id
+    expr: 'size(users.filter(u, !has(u.external_id) || u.external_id == null || u.external_id == "")) == 0'
+    severity: medium
+    title: Every Managed User Has a SCIM external_id
+    pass_message: "Every managed user has a SCIM external_id set"
+    fail_message: "One or more managed users have no external_id set"
+    finding:
+      description: |
+        At least one managed user has no external_id. A user without an
+        external_id was provisioned outside the SCIM pipeline (added
+        manually via the console or API), so their access will not be
+        automatically revoked when the identity provider deprovisions
+        the corresponding account — a standing offboarding gap.
+
+remediation:
+  description: |
+    Identify manually-created users and either bring them under SCIM
+    management or document why they are exempt.
+  steps:
+    - "Navigate to Workspace Admin -> Users and identify accounts with no linked identity provider record"
+    - "Re-provision each account through the SCIM integration, or deprovision it if it is no longer needed"
+  api:
+    method: DELETE
+    url: "https://www.workato.com/api/managed_users/{{user_id}}"
+    headers:
+      Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+  manual:
+    - "Confirm SCIM provisioning is enabled and connected to the identity provider (Workspace Admin -> SSO & Provisioning)"

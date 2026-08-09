@@ -1,0 +1,68 @@
+id: WKTO-8.03
+name: Flag Active Recipes That Have Stopped Running
+description: |
+  Lists active recipes via the Workato API (GET /api/recipes?active=true)
+  and flags any recipe marked active that is not currently running. A
+  recipe that should be running but has silently stopped is a monitoring
+  and integrity gap — data stops flowing between connected systems
+  without an explicit deactivation decision, and the gap can go unnoticed
+  without this check.
+author: grc-engineering
+version: "1.0"
+source: workato
+profile: L1
+tags: [monitoring, recipes, reliability]
+
+references:
+  nist: CA-7
+  hth: "workato:8.3"
+
+credentials:
+  WORKATO_API_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_active_recipes
+    action: api_call
+    request:
+      method: GET
+      url: "https://www.workato.com/api/recipes?active=true"
+      headers:
+        Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    extract:
+      recipes: "$.result"
+
+assertions:
+  - id: no_stopped_active_recipes
+    expr: "size(recipes.filter(r, r.running != true)) == 0"
+    severity: medium
+    title: Every Active Recipe Is Currently Running
+    pass_message: "Every recipe marked active is currently running"
+    fail_message: "One or more recipes marked active are not currently running"
+    finding:
+      description: |
+        At least one recipe marked active is not currently running. A
+        recipe that has silently stopped — due to a connection failure,
+        an unhandled error, or a platform-side interruption — is a
+        monitoring gap: data stops flowing between connected systems
+        without an explicit deactivation decision, and without this
+        check the interruption is only discovered when a downstream
+        consumer notices missing data.
+
+remediation:
+  description: |
+    Investigate and restart every active recipe that has stopped
+    running, and configure error notifications so future stops are
+    caught immediately.
+  steps:
+    - "Navigate to Workspace Admin -> Recipes and identify recipes showing a stopped state despite being marked active"
+    - "Review the recipe's job history for the error that caused the stop"
+    - "Fix the underlying connection or logic issue, then restart the recipe"
+  api:
+    method: PUT
+    url: "https://www.workato.com/api/recipes/{{recipe_id}}/start"
+    headers:
+      Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+  manual:
+    - "Configure recipe error notifications (email/Slack) so a stopped recipe is caught immediately rather than at the next audit"

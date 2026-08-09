@@ -1,0 +1,82 @@
+id: CGPT-6.06
+name: Verify Compliance Logs Platform Is Actively Producing Exportable Events
+description: |
+  Pulls a sample of AUTH_LOG events from the Compliance Logs Platform
+  (GET /v1/compliance/{scope}/{principal_id}/logs?event_type=AUTH_LOG) to
+  confirm the log feed that SIEM-export automation depends on is active.
+  The Compliance Logs Platform retains only 30 days, so continuous export
+  is mandatory for any retention or investigation window beyond that —
+  a feed producing zero events means the SIEM export pipeline has
+  nothing to forward.
+author: grc-engineering
+version: "1.0"
+source: chatgpt-enterprise
+profile: L2
+tags: [audit-logging, siem, compliance-api]
+
+references:
+  nist: [AU-6, AU-12]
+  soc2: [CC7.2, CC7.3]
+  hth: "chatgpt-enterprise:6.6"
+
+credentials:
+  COMPLIANCE_API_KEY:
+    type: api_token
+    required: true
+
+inputs:
+  openai_principal_id:
+    description: Workspace ID (UUID) or organization ID (org-...) to query the Compliance API for
+    env: OPENAI_PRINCIPAL_ID
+    required: true
+  compliance_scope:
+    description: URL path segment for the principal type — "workspaces" or "organizations"
+    env: OPENAI_COMPLIANCE_SCOPE
+    default: "workspaces"
+    required: false
+  after:
+    description: ISO 8601 timestamp to list AUTH_LOG events from (must be within the 30-day retention window)
+    env: OPENAI_COMPLIANCE_AFTER
+    required: true
+
+steps:
+  - id: list_auth_logs
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.chatgpt.com/v1/compliance/{{compliance_scope}}/{{openai_principal_id}}/logs?event_type=AUTH_LOG&after={{after}}&limit=100"
+      headers:
+        Authorization: "Bearer {{COMPLIANCE_API_KEY}}"
+    extract:
+      logs: "$.data"
+
+assertions:
+  - id: auth_log_feed_active
+    expr: "size(logs) > 0"
+    severity: high
+    title: AUTH_LOG Compliance Feed Is Producing Records
+    pass_message: "AUTH_LOG events were retrieved — the Compliance Logs Platform feed is active for SIEM export"
+    fail_message: "The Compliance API returned zero AUTH_LOG events for the queried window"
+    finding:
+      description: |
+        The Compliance Logs Platform returned no AUTH_LOG events for the
+        queried window. AUTH_LOG covers authentication activity and is
+        one of the event families a continuous SIEM export must forward.
+        A zero-event response despite known recent logins means either
+        the export pipeline is pulling from a dead feed, the compliance
+        key lacks scope, or the `after` cursor has drifted past the
+        30-day retention boundary — any of which leaves authentication
+        activity unrecoverable once the retention window rolls off.
+
+remediation:
+  description: |
+    Confirm the Compliance Logs Platform feed is active and that a
+    scheduled export is landing events in the SIEM before the 30-day
+    retention window expires.
+  steps:
+    - "Verify COMPLIANCE_API_KEY carries read access to the AUTH_LOG event type"
+    - "Confirm the scheduled export job (cron or equivalent) is running and advancing its checkpoint on last_end_time"
+    - "Re-query with an `after` value known to have authentication activity"
+  manual:
+    - "Alert if the export job has not advanced its checkpoint within the retention window"
+    - "Forward exported JSONL to Splunk (universal forwarder) or Microsoft Sentinel (Custom Logs DCR) per the guide's streaming pattern"

@@ -1,0 +1,85 @@
+id: ANTH-1.02
+name: Enforce Least-Privilege Organization Roles
+description: |
+  Lists organization members via the Admin API (GET /v1/organizations/users)
+  and flags an excessive number of accounts holding the org-wide admin role.
+  Admin API keys can only be minted by users with the admin role, and admins
+  can manage every workspace, member, and API key in the organization, so an
+  inflated admin population is a standing lateral-movement and blast-radius
+  risk.
+author: grc-engineering
+version: "1.0"
+source: anthropic-claude
+profile: L1
+tags: [rbac, admin, least-privilege]
+
+references:
+  nist: [AC-6, "AC-6(1)"]
+  soc2: [CC6.1, CC6.3]
+  hth: "anthropic-claude:1.2"
+
+credentials:
+  ANTHROPIC_ADMIN_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_users
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.anthropic.com/v1/organizations/users?limit=100"
+      headers:
+        x-api-key: "{{ANTHROPIC_ADMIN_KEY}}"
+        anthropic-version: "2023-06-01"
+    extract:
+      users: "$.data"
+
+assertions:
+  - id: users_api_reachable
+    expr: "status_code == 200"
+    severity: medium
+    title: Organization Members API Reachable
+    pass_message: "GET /v1/organizations/users returned successfully — organization membership is auditable"
+    fail_message: "GET /v1/organizations/users did not return 200 — organization membership cannot be audited"
+    finding:
+      description: |
+        The Admin API's organization users endpoint did not return a
+        successful response. Without a working membership audit, an
+        inflated admin population and other role-hygiene issues can
+        accumulate unnoticed.
+
+  - id: admin_role_within_limit
+    expr: "size(users.filter(u, u.role == \"admin\")) <= 3"
+    severity: medium
+    title: Organization Admin Count Is Within Recommended Limit
+    pass_message: "The number of users with the org-wide admin role is within the recommended limit (<=3)"
+    fail_message: "More than 3 users hold the org-wide admin role"
+    finding:
+      description: |
+        More than three organization members hold the admin role. Admins
+        can create and manage Admin API keys, workspaces, and every other
+        member's role — an inflated admin population widens the blast
+        radius of a single compromised account. Downgrade accounts that do
+        not have a documented business need for org-wide admin to the
+        developer or billing role, or to a workspace-scoped role instead.
+
+remediation:
+  description: |
+    Reduce the organization admin population to the smallest set of
+    accounts with a documented business need for org-wide administrative
+    access.
+  steps:
+    - "Navigate to console.anthropic.com -> Settings -> Members"
+    - "Review every member with the admin role and confirm a documented business justification"
+    - "Downgrade members without justification to developer, billing, or a workspace-scoped role"
+  api:
+    method: POST
+    url: "https://api.anthropic.com/v1/organizations/users/{{user_id}}"
+    headers:
+      x-api-key: "{{ANTHROPIC_ADMIN_KEY}}"
+      anthropic-version: "2023-06-01"
+    body:
+      role: "developer"
+  manual:
+    - "Review the organization admin list quarterly and reconcile against a privileged-account register"
