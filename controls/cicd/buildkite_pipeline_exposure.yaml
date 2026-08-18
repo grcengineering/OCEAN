@@ -16,6 +16,18 @@ description: >
   It can only be attested from the agent host. This control covers the
   control-plane half only; a passing result is not evidence that the agent
   fleet is hardened.
+  INVOCATION — this control resolves under `--target '*'`, not `--target buildkite`.
+  Its observers are YAML checks registered under their own ids (BK-*), and
+  target_matches_module splits a module_id on '.' and compares the first segment,
+  so "BK-1" is never "buildkite". This is a property of the YAML-check namespace,
+  not of Buildkite: GH-*, OKTA-*, SLACK-* and VERCEL-* behave identically. The
+  shipped controls that DO match a vendor target reference native Rust modules
+  (okta.mfa_policy, github.branch_protection), and no native buildkite observer
+  exists yet. Using dotted buildkite.* ids here would satisfy the target filter
+  while resolving to nothing, producing a control that looks wired and can never
+  return a finding — the worse failure. Closing this properly means native Rust
+  observers, or registering YAML checks under a vendor alias.
+
 threat_mitigated: >
   Disclosure of build logs, environment structure and internal tooling through a
   publicly visible pipeline, and execution of untrusted contributor code on
@@ -33,8 +45,8 @@ evidence_requirements:
   - buildkite_pipeline_visibility
   - buildkite_fork_build_settings
 observers:
-  - module_id: buildkite.pipeline_visibility
-  - module_id: buildkite.fork_builds
+  - module_id: BK-2.02
+  - module_id: BK-2.02b
 testers: []
 evaluation:
   cel: "effective_count > 0 && ineffective_count == 0"
