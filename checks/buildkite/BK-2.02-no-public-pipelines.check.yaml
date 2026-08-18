@@ -20,6 +20,12 @@ description: |
     `read_pipelines` scope, or the org slug is wrong, the request will not
     return 200 and the reachability assertion reports that explicitly rather
     than silently passing.
+  - The reachability assertion also requires the response body to actually be
+    a JSON array (`$is_array`), not merely a 200 status. A 200 with a
+    non-array body — an error object, an empty object, a proxy's HTML error
+    page parsed as a JSON string — leaves `pipeline_visibility` unbound rather
+    than defaulted, so guarding on status code alone is not sufficient; see
+    the `no_public_pipelines` assertion below for why this matters.
   - Visibility is compared case-insensitively against both spellings
     ("public" as returned by REST, "PUBLIC" as used by GraphQL and Terraform)
     so a representation change in either surface cannot produce a false pass.
@@ -68,26 +74,30 @@ steps:
     extract:
       pipeline_visibility: "$[*].visibility"
       pipeline_count: "$length"
+      body_is_array: "$is_array"
 
 assertions:
   - id: pipelines_api_reachable
-    expr: "list_pipelines_status_code == 200"
+    expr: "list_pipelines_status_code == 200 && body_is_array"
     severity: medium
     title: Pipeline Inventory Reachable
-    pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 — pipeline visibility is auditable"
-    fail_message: "GET /v2/organizations/{{org}}/pipelines did not return 200 — pipeline visibility could not be audited"
+    pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 with an array body — pipeline visibility is auditable"
+    fail_message: "GET /v2/organizations/{{org}}/pipelines did not return 200, or returned 200 with a body that was not the expected array — pipeline visibility could not be audited"
     finding:
       description: |
         The Buildkite pipelines endpoint did not return a successful
-        response, so pipeline visibility cannot be verified. This is an
+        response, or returned HTTP 200 with a body that was not the expected
+        JSON array (an error object, an empty object, or another non-array
+        shape a proxy or gateway can substitute for the real response). Either
+        way, pipeline visibility cannot be verified. This is an
         audit-coverage failure, not proof of a public pipeline. Confirm the
         organization slug is correct and that the API access token carries
-        the `read_pipelines` scope, then re-run. Until this returns 200 the
-        visibility assertion below is vacuous by design and must not be read
-        as a pass.
+        the `read_pipelines` scope, then re-run. Until this returns 200 with
+        an array body the visibility assertion below is vacuous by design and
+        must not be read as a pass.
 
   - id: no_public_pipelines
-    expr: "list_pipelines_status_code != 200 || size(pipeline_visibility.filter(v, v == \"public\" || v == \"PUBLIC\")) == 0"
+    expr: "list_pipelines_status_code != 200 || !body_is_array || size(pipeline_visibility.filter(v, v == \"public\" || v == \"PUBLIC\")) == 0"
     severity: high
     title: No Public Pipelines
     pass_message: "No public-visibility violation was observed among the pipelines read for '{{org}}' — this row is evidence that no pipeline is public ONLY if 'Pipeline Inventory Reachable' above also passed; when the inventory could not be read it abstains and asserts nothing about any pipeline"
@@ -116,9 +126,12 @@ assertions:
 
         This assertion abstains when the pipelines endpoint is unreachable;
         `pipelines_api_reachable` carries that signal instead. Without the
-        guard a 404 or 403 leaves `pipeline_visibility` unbound, the CEL
-        expression errors, and the interpreter's fail-closed default reports a
-        high-severity public-pipeline finding the operator cannot act on.
+        `!body_is_array` guard, a 404/403 OR an HTTP 200 with a non-array body
+        both leave `pipeline_visibility` unbound, the CEL expression errors,
+        and the interpreter's fail-closed default reports a high-severity
+        public-pipeline finding the operator cannot act on. `$length` does not
+        rescue this case either — it silently falls back to 1 for any
+        non-array body, so a count-based guard alone would not detect it.
 
 remediation:
   description: |

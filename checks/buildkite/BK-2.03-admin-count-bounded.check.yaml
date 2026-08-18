@@ -44,7 +44,11 @@ description: |
   `read_organizations` scope, revoked token — the `members_api_reachable`
   assertion reports that explicitly as an audit-coverage gap, and the bound
   assertion is guarded so that an unreadable member list is never scored as a
-  least-privilege failure.
+  least-privilege failure. The reachability assertion also requires the body
+  to actually be a JSON array (`$is_array`): an HTTP 200 with a non-array body
+  (an error object, an empty object) leaves `member_roles` unbound rather than
+  defaulted, so status code alone is not a sufficient guard — see the
+  `admin_count_within_bound` assertion below.
 author: grc-engineering
 version: "1.0"
 source: buildkite
@@ -98,26 +102,29 @@ steps:
     extract:
       member_roles: "$[*].role"
       member_count: "$length"
+      body_is_array: "$is_array"
 
 assertions:
   - id: members_api_reachable
-    expr: "list_members_status_code == 200"
+    expr: "list_members_status_code == 200 && body_is_array"
     severity: medium
     title: Organization Member Inventory Reachable
-    pass_message: "GET /v2/organizations/{{org}}/members returned 200 — the admin population is auditable"
-    fail_message: "GET /v2/organizations/{{org}}/members did not return 200 — the admin population could not be audited"
+    pass_message: "GET /v2/organizations/{{org}}/members returned 200 with an array body — the admin population is auditable"
+    fail_message: "GET /v2/organizations/{{org}}/members did not return 200, or returned 200 with a body that was not the expected array — the admin population could not be audited"
     finding:
       description: |
         The Buildkite organization members endpoint did not return a
-        successful response, so the number of organization admins could not
-        be determined. This is an audit-coverage failure, not evidence of
-        admin sprawl. Confirm the organization slug is correct and that the
-        API access token carries the `read_organizations` scope, then re-run.
-        Until this returns 200 the least-privilege assertion below is
-        vacuous by design and must not be read as a pass.
+        successful response, or returned HTTP 200 with a body that was not
+        the expected JSON array. Either way, the number of organization
+        admins could not be determined. This is an audit-coverage failure,
+        not evidence of admin sprawl. Confirm the organization slug is
+        correct and that the API access token carries the
+        `read_organizations` scope, then re-run. Until this returns 200 with
+        an array body the least-privilege assertion below is vacuous by
+        design and must not be read as a pass.
 
   - id: admin_count_within_bound
-    expr: "list_members_status_code != 200 || size(member_roles.filter(r, r == \"admin\" || r == \"ADMIN\")) <= max_admins"
+    expr: "list_members_status_code != 200 || !body_is_array || size(member_roles.filter(r, r == \"admin\" || r == \"ADMIN\")) <= max_admins"
     severity: medium
     title: Admin Role Assignment Is Within Bound
     pass_message: "No admin-count violation was observed for '{{org}}' — this row is evidence that at most {{max_admins}} members hold the admin role ONLY if 'Organization Member Inventory Reachable' above also passed; when the member list could not be read it abstains and asserts nothing about the admin population"
@@ -143,6 +150,13 @@ assertions:
         the API. Read `member_count` in the evidence observables: if it is
         100, the population may be truncated and the admin count is a lower
         bound.
+
+        This assertion abstains when the member list is unreachable;
+        `members_api_reachable` carries that signal instead. Without the
+        `!body_is_array` guard, a 403/404 OR an HTTP 200 with a non-array body
+        both leave `member_roles` unbound, the CEL expression errors, and the
+        interpreter's fail-closed default reports a false admin-sprawl
+        finding the operator cannot act on.
 
 remediation:
   description: |

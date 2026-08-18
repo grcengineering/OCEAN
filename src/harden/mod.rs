@@ -583,7 +583,11 @@ fn execute_api_call(action: &ApiAction, config: &HashMap<String, String>) -> Res
                     "{} {} → HTTP {status} but the response carries GraphQL errors: {}",
                     action.method,
                     action.url,
-                    if detail.is_empty() { "(no message field)".to_string() } else { detail }
+                    if detail.is_empty() {
+                        "(no message field)".to_string()
+                    } else {
+                        detail
+                    }
                 ));
             }
         }
@@ -703,7 +707,11 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
                     names.sort();
                     for name in names {
                         // Templates, not values — resolution happens at execute time.
-                        writeln!(out, "      header {name}: {}", mask.scrub(&api.headers[name]))?;
+                        writeln!(
+                            out,
+                            "      header {name}: {}",
+                            mask.scrub(&api.headers[name])
+                        )?;
                     }
                 }
             }
@@ -787,7 +795,10 @@ fn resolve_vars(template: &str, config: &HashMap<String, String>) -> String {
 /// was cloned verbatim, so a templated body was transmitted with the braces
 /// still in it. Substitution is restricted to `ALLOWED_TEMPLATE_VARS` because it
 /// reuses `resolve_vars` (TH-2d).
-fn resolve_json_vars(val: &serde_json::Value, config: &HashMap<String, String>) -> serde_json::Value {
+fn resolve_json_vars(
+    val: &serde_json::Value,
+    config: &HashMap<String, String>,
+) -> serde_json::Value {
     match val {
         serde_json::Value::String(s) => serde_json::Value::String(resolve_vars(s, config)),
         serde_json::Value::Object(map) => serde_json::Value::Object(
@@ -1560,14 +1571,19 @@ remediation:
             "https://api.buildkite.com/v2/organizations/acme/clusters/abc/tokens",
             "https://buildkite.com/organizations/acme/settings/security",
         ] {
-            assert!(validate_remediation_url(u).is_ok(), "should be allowed: {u}");
+            assert!(
+                validate_remediation_url(u).is_ok(),
+                "should be allowed: {u}"
+            );
         }
     }
 
     #[test]
     fn buildkite_lookalike_hosts_are_still_rejected() {
         // Host-parsed, not `starts_with` — the SEC-H014 path-embedding class.
-        assert!(validate_remediation_url("https://evil.example.com/api.buildkite.com/steal").is_err());
+        assert!(
+            validate_remediation_url("https://evil.example.com/api.buildkite.com/steal").is_err()
+        );
         assert!(validate_remediation_url("https://buildkite.com.evil.example.com/v1").is_err());
         assert!(validate_remediation_url("http://graphql.buildkite.com/v1").is_err());
         assert!(validate_remediation_url("https://notbuildkite.com/v1").is_err());
@@ -1578,10 +1594,17 @@ remediation:
         // A credential on the fleet allowlist that is NOT on CREDENTIAL_ENV_VARS
         // reaches stdout, the dry-run JSON and ~/.ocean/audit.log verbatim.
         let mut config = HashMap::new();
-        config.insert("BUILDKITE_API_TOKEN".to_string(), "bkua_deadbeef".to_string());
-        config.insert("BUILDKITE_API_KEY".to_string(), "bkua_altspelling".to_string());
+        config.insert(
+            "BUILDKITE_API_TOKEN".to_string(),
+            "bkua_deadbeef".to_string(),
+        );
+        config.insert(
+            "BUILDKITE_API_KEY".to_string(),
+            "bkua_altspelling".to_string(),
+        );
         let mask = CredentialMask::from_config(&config);
-        let line = "POST https://graphql.buildkite.com/v1 Bearer bkua_deadbeef alt bkua_altspelling";
+        let line =
+            "POST https://graphql.buildkite.com/v1 Bearer bkua_deadbeef alt bkua_altspelling";
         let scrubbed = mask.scrub(line);
         assert!(!scrubbed.contains("bkua_deadbeef"));
         assert!(!scrubbed.contains("bkua_altspelling"));
@@ -1621,9 +1644,18 @@ remediation:
         );
         let plans = plan_harden(tmp.path(), &RemediationMode::All, &HashMap::new(), None).unwrap();
         if let Some(p) = plans.iter().find(|p| p.check_id == "TST-UNLISTED") {
-            assert!(p.api_action.is_none(), "rejected URL must drop the API action");
-            assert!(!p.steps.is_empty(), "manual steps must survive a rejected URL");
-            assert!(p.cli_action.is_some(), "cli action must survive a rejected URL");
+            assert!(
+                p.api_action.is_none(),
+                "rejected URL must drop the API action"
+            );
+            assert!(
+                !p.steps.is_empty(),
+                "manual steps must survive a rejected URL"
+            );
+            assert!(
+                p.cli_action.is_some(),
+                "cli action must survive a rejected URL"
+            );
         }
     }
 
@@ -1639,7 +1671,10 @@ remediation:
             "variables": { "orgId": "{{BUILDKITE_GRAPHQL_ID}}" }
         });
         let resolved = resolve_json_vars(&body, &config);
-        assert_eq!(resolved["variables"]["orgId"], serde_json::json!("T3JnYW5pemF0aW9uLS0t"));
+        assert_eq!(
+            resolved["variables"]["orgId"],
+            serde_json::json!("T3JnYW5pemF0aW9uLS0t")
+        );
         // Query text is untouched: `$orgId` is GraphQL syntax, not a template.
         assert_eq!(resolved["query"], body["query"]);
     }
@@ -1649,7 +1684,10 @@ remediation:
         let mut config = HashMap::new();
         config.insert("MALICIOUS".to_string(), "pwned".to_string());
         let body = serde_json::json!({"v": "{{MALICIOUS}}"});
-        assert_eq!(resolve_json_vars(&body, &config)["v"], serde_json::json!("{{MALICIOUS}}"));
+        assert_eq!(
+            resolve_json_vars(&body, &config)["v"],
+            serde_json::json!("{{MALICIOUS}}")
+        );
     }
 
     #[test]
@@ -1667,7 +1705,10 @@ remediation:
             body: None,
             headers,
         };
-        assert_eq!(action.headers["Authorization"], "Bearer {{BUILDKITE_API_TOKEN}}");
+        assert_eq!(
+            action.headers["Authorization"],
+            "Bearer {{BUILDKITE_API_TOKEN}}"
+        );
         let plan = RemediationPlan {
             check_id: "BK-1.02".to_string(),
             check_name: "n".to_string(),
@@ -1682,8 +1723,14 @@ remediation:
         let mut out = Vec::new();
         print_dry_run(&mut out, std::slice::from_ref(&plan), "table", &config).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("{{BUILDKITE_API_TOKEN}}"), "header template should be shown");
-        assert!(!s.contains("bkua_secret"), "token must never reach dry-run output");
+        assert!(
+            s.contains("{{BUILDKITE_API_TOKEN}}"),
+            "header template should be shown"
+        );
+        assert!(
+            !s.contains("bkua_secret"),
+            "token must never reach dry-run output"
+        );
     }
 
     #[test]

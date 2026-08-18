@@ -36,7 +36,12 @@ description: |
   - DEGRADES, DOES NOT ACCUSE. If the token endpoint is unreachable (wrong
     cluster identifier, token missing `read_clusters`, revoked token), the
     reachability assertion fails loudly and the allowlist assertion abstains
-    rather than reporting a coverage gap as an unrestricted token.
+    rather than reporting a coverage gap as an unrestricted token. The
+    reachability assertion also requires the body to actually be a JSON array
+    (`$is_array`): an HTTP 200 with a non-array body leaves
+    `ip_allowlist_values` unbound while `token_count` (from `$length`)
+    silently binds to 1, so status code alone is not a sufficient guard —
+    see `all_tokens_ip_restricted` below.
   - This check confirms an allowlist is DECLARED, not that it is TIGHT. A token
     scoped to 0.0.0.0/0 satisfies the assertion while restricting nothing;
     review the reported values, do not just read the verdict.
@@ -90,33 +95,37 @@ steps:
     extract:
       token_count: "$length"
       ip_allowlist_values: "$[*].allowed_ip_addresses"
+      body_is_array: "$is_array"
 
 assertions:
   - id: agent_tokens_api_reachable
-    expr: "get_cluster_agent_tokens_status_code == 200"
+    expr: "get_cluster_agent_tokens_status_code == 200 && body_is_array"
     severity: medium
     title: Agent Token Endpoint Reachability
-    pass_message: "Cluster agent token endpoint returned 200 for cluster {{cluster}}"
-    fail_message: "Cluster agent token endpoint was not reachable for cluster {{cluster}}"
+    pass_message: "Cluster agent token endpoint returned 200 with an array body for cluster {{cluster}}"
+    fail_message: "Cluster agent token endpoint was not reachable for cluster {{cluster}}, or returned 200 with a body that was not the expected array"
     finding:
       description: |
-        The cluster agent token endpoint did not return 200, so this check has
-        NO EVIDENCE about IP allowlists. This is an operational or authorization
-        condition, NOT a compliance failure — do not read it as "tokens are
-        unrestricted."
+        The cluster agent token endpoint did not return 200, or returned HTTP
+        200 with a body that was not the expected JSON array. Either way, this
+        check has NO EVIDENCE about IP allowlists. This is an operational or
+        authorization condition, NOT a compliance failure — do not read it as
+        "tokens are unrestricted."
 
         Most likely causes, in order:
         - 404: `cluster` holds the base64 GraphQL node ID instead of the REST
           cluster UUID, or the cluster does not exist in this organization.
         - 403: the API token lacks the `read_clusters` scope.
         - 401: the API token is invalid, revoked, or expired.
+        - 200 with a non-array body: an error object, an empty object, or
+          another shape a proxy or gateway substituted for the real response.
 
         Resolve the access or identifier problem and re-run. Until this
         assertion passes, treat the allowlist assertion below as unevaluated
         rather than as a pass or a fail.
 
   - id: all_tokens_ip_restricted
-    expr: 'get_cluster_agent_tokens_status_code != 200 || (size(ip_allowlist_values) == token_count && ip_allowlist_values.all(v, v != null && v != "" && v.matches("[0-9]")))'
+    expr: 'get_cluster_agent_tokens_status_code != 200 || !body_is_array || (size(ip_allowlist_values) == token_count && ip_allowlist_values.all(v, v != null && v != "" && v.matches("[0-9]")))'
     severity: high
     title: Agent Token IP Allowlist
     pass_message: "No unrestricted agent token was observed in cluster {{cluster}} — this row is evidence that every token declares an IP allowlist ONLY if 'Agent Token Endpoint Reachability' above also passed; when the token list could not be read it abstains and asserts nothing about any token. The number of tokens actually read, if any, is the token_count observable in this check's evidence"
@@ -146,11 +155,14 @@ assertions:
 
         This assertion abstains when the token endpoint is unreachable;
         `agent_tokens_api_reachable` carries that signal instead. Without the
-        guard the two extractions diverge on a 404: `$length` falls back to 1
-        on a non-array error body so `token_count` binds to 1, while
-        `ip_allowlist_values` never binds at all, the CEL expression errors,
-        and the interpreter's fail-closed default reports a high-severity
-        unrestricted-token finding the operator cannot act on.
+        `!body_is_array` guard, the two extractions diverge on ANY non-array
+        body — not just a 404, but also an HTTP 200 whose body is an error
+        object, an empty object, or another non-array shape: `$length` falls
+        back to 1 on a non-array body so `token_count` binds to 1 regardless
+        of status code, while `ip_allowlist_values` never binds at all, the
+        CEL expression errors, and the interpreter's fail-closed default
+        reports a high-severity unrestricted-token finding the operator
+        cannot act on.
 
 remediation:
   description: |

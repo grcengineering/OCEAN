@@ -29,7 +29,10 @@ description: |
   - DEGRADES, DOES NOT ACCUSE. If the endpoint is unreachable (token missing
     `read_rules`, Rules unavailable), the reachability assertion fails loudly
     and the bound assertion abstains rather than reporting a coverage gap as a
-    policy violation.
+    policy violation. The reachability assertion also requires the body to
+    actually be a JSON array (`$is_array`): an HTTP 200 with a non-array body
+    leaves `rule_types` unbound rather than defaulted, so status code alone
+    is not a sufficient guard — see `rule_count_within_bound` below.
 
   Rules are in public preview and available on all plans. Endpoint and field
   names verified against Buildkite's REST rules documentation; not executed
@@ -82,27 +85,30 @@ steps:
       rule_actions: "$[*].action"
       rule_uuids: "$[*].uuid"
       rule_count: "$length"
+      body_is_array: "$is_array"
 
 assertions:
   - id: rules_api_reachable
-    expr: "get_rules_status_code == 200"
+    expr: "get_rules_status_code == 200 && body_is_array"
     severity: medium
     title: Organization Rules Inventory Retrieved
     pass_message: "Rules inventory retrieved for organization {{org}} — review every returned rule against a documented workflow"
-    fail_message: "The rules inventory for organization {{org}} could not be retrieved — this run proves nothing about cross-pipeline access"
+    fail_message: "The rules inventory for organization {{org}} could not be retrieved, or was not returned as the expected array — this run proves nothing about cross-pipeline access"
     finding:
       description: |
-        The organization rules endpoint did not return 200, so this run carries
-        no evidence about cross-pipeline authorization. Treat it as a coverage
-        gap, not as a pass.
+        The organization rules endpoint did not return 200, or returned HTTP
+        200 with a body that was not the expected JSON array. Either way, this
+        run carries no evidence about cross-pipeline authorization. Treat it
+        as a coverage gap, not as a pass.
 
         Confirm the API access token holds the `read_rules` scope and that the
-        organization slug is correct, then re-run. Until it returns, there is
-        no answer to "what can this pipeline reach" — which is exactly the
-        question an unreviewed rule set makes unanswerable.
+        organization slug is correct, then re-run. Until it returns 200 with
+        an array body, there is no answer to "what can this pipeline reach" —
+        which is exactly the question an unreviewed rule set makes
+        unanswerable.
 
   - id: rule_count_within_bound
-    expr: "get_rules_status_code != 200 || size(rule_types) <= max_rules"
+    expr: "get_rules_status_code != 200 || !body_is_array || size(rule_types) <= max_rules"
     severity: high
     title: Rule Count Within the Reviewable Bound
     pass_message: "No rule-count violation was observed for organization {{org}} — this row is evidence that at most {{max_rules}} rules are defined, and an instruction to review each one against a documented workflow, ONLY if 'Organization Rules Inventory Retrieved' above also passed; when the inventory could not be read it abstains and asserts nothing about the rule population. The count that was read, if any, is the rule_count observable in this check's evidence"
@@ -136,7 +142,11 @@ assertions:
         observable only when it is a JSON scalar, and all four of these are
         `$[*]` arrays, so `rule_count` is the only rules value that appears
         there. This assertion abstains when the endpoint is unreachable;
-        `rules_api_reachable` carries that signal instead.
+        `rules_api_reachable` carries that signal instead. Without the
+        `!body_is_array` guard, a non-200 status OR an HTTP 200 with a
+        non-array body both leave `rule_types` unbound, the CEL expression
+        errors, and the interpreter's fail-closed default reports a
+        high-severity rule-count finding the operator cannot act on.
 
 remediation:
   description: |

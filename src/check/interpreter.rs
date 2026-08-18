@@ -58,6 +58,7 @@ fn resolve_headers(
 /// Supported patterns:
 /// - `$status_code`         → special: numeric status code (set separately in ctx)
 /// - `$length`              → length of the root array (or 1 for a non-array)
+/// - `$is_array`            → special: boolean, true iff the root is a JSON array
 /// - `$.field`              → field on root object
 /// - `$.field.nested`       → nested field access
 /// - `$[*].field`           → collect `field` from every element of root array
@@ -69,6 +70,29 @@ fn jsonpath_extract(path: &str, body: &JsonValue) -> Option<JsonValue> {
             _ => 1,
         };
         return Some(JsonValue::Number(len.into()));
+    }
+
+    // Root-shape discriminator. `$[*].field` and `$[*]` are only defined when
+    // the response body is a JSON array; on any other shape (an object, a
+    // string, null, a number — the error-response shapes a REST endpoint can
+    // return with a 200 status) they return `None`, leaving the extracted
+    // variable UNBOUND rather than defaulted. Referencing an unbound variable
+    // in a CEL assertion raises "Undeclared reference", and the interpreter's
+    // fail-closed `.unwrap_or(false)` turns that into an assertion FAILURE —
+    // a false accusation against a response that was never actually read as
+    // the expected array.
+    //
+    // `$is_array` exists so a check can guard against exactly that, the same
+    // way `$length` already lets every REST check bind a count unconditionally.
+    // It is ALWAYS bound (mirrors `$length` and `$`), so a guard written
+    // `!body_is_array || <real assertion>` can short-circuit before ever
+    // dereferencing a wildcard extraction that might be unbound — closing the
+    // gap for REST-backed checks the same way `body_root`-based guards closed
+    // it for the GraphQL-backed ones (those are object-shaped, not
+    // array-shaped, so `has(body_root.field)` was the right primitive there;
+    // this is the array-shaped equivalent).
+    if path == "$is_array" {
+        return Some(JsonValue::Bool(matches!(body, JsonValue::Array(_))));
     }
 
     if path == "$status_code" {
@@ -778,6 +802,45 @@ mod tests {
         let body = serde_json::json!([]);
         let val = jsonpath_extract("$length", &body).unwrap();
         assert_eq!(val, serde_json::json!(0_i64));
+    }
+
+    #[test]
+    fn jsonpath_is_array_true_for_array_root() {
+        let body = serde_json::json!([{"role": "admin"}]);
+        let val = jsonpath_extract("$is_array", &body).unwrap();
+        assert_eq!(val, serde_json::json!(true));
+    }
+
+    #[test]
+    fn jsonpath_is_array_true_for_empty_array_root() {
+        let body = serde_json::json!([]);
+        let val = jsonpath_extract("$is_array", &body).unwrap();
+        assert_eq!(val, serde_json::json!(true));
+    }
+
+    #[test]
+    fn jsonpath_is_array_false_for_object_root() {
+        // The failure shape this exists to catch: an HTTP 200 whose body is an
+        // error object rather than the expected array (e.g. a proxy/gateway
+        // rewriting an upstream error, or an API returning `{"message": ...}`
+        // with a 200 status). `$[*].field` would leave the wildcard extraction
+        // unbound on this body; `$is_array` stays bound and reports false so a
+        // check's guard can abstain instead of dereferencing the unbound var.
+        let body = serde_json::json!({"message": "not found"});
+        let val = jsonpath_extract("$is_array", &body).unwrap();
+        assert_eq!(val, serde_json::json!(false));
+    }
+
+    #[test]
+    fn jsonpath_is_array_false_for_scalar_and_null_root() {
+        assert_eq!(
+            jsonpath_extract("$is_array", &serde_json::json!("just a string")).unwrap(),
+            serde_json::json!(false)
+        );
+        assert_eq!(
+            jsonpath_extract("$is_array", &serde_json::json!(null)).unwrap(),
+            serde_json::json!(false)
+        );
     }
 
     #[test]

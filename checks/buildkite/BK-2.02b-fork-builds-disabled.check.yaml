@@ -35,6 +35,13 @@ description: |
     (`no-command-eval`, `--no-plugins`, `allowed-plugins`, pre-bootstrap
     hooks) and are not visible from any Buildkite control plane. No OCEAN
     check can attest them; they must be verified on the agent.
+  - The reachability assertion requires the response body to actually be a
+    JSON array (`$is_array`), not merely a 200 status. A 200 with a
+    non-array body — an error object, an empty object, a proxy substituting
+    its own error shape — leaves `fork_build_settings` unbound rather than
+    defaulted (this is a root-shape problem, distinct from the per-element
+    missing-field case described above), so a status-code-only guard is not
+    sufficient; see the `fork_builds_disabled` assertion below.
 
   An organization with zero pipelines, or one where no pipeline exposes the
   setting, passes the fork assertion — with the coverage caveat above.
@@ -84,26 +91,28 @@ steps:
     extract:
       fork_build_settings: "$[*].provider.settings.build_pull_request_forks"
       pipeline_count: "$length"
+      body_is_array: "$is_array"
 
 assertions:
   - id: pipelines_api_reachable
-    expr: "list_pipelines_status_code == 200"
+    expr: "list_pipelines_status_code == 200 && body_is_array"
     severity: medium
     title: Pipeline Inventory Reachable
-    pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 — fork-build settings are auditable"
-    fail_message: "GET /v2/organizations/{{org}}/pipelines did not return 200 — fork-build settings could not be audited"
+    pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 with an array body — fork-build settings are auditable"
+    fail_message: "GET /v2/organizations/{{org}}/pipelines did not return 200, or returned 200 with a body that was not the expected array — fork-build settings could not be audited"
     finding:
       description: |
         The Buildkite pipelines endpoint did not return a successful
-        response, so per-pipeline fork-build settings cannot be read. This is
-        an audit-coverage failure, not evidence that fork builds are enabled.
-        Confirm the organization slug is correct and that the API access
-        token carries the `read_pipelines` scope, then re-run. Until this
-        returns 200 the fork-build assertion below is vacuous by design and
-        must not be read as a pass.
+        response, or returned HTTP 200 with a body that was not the expected
+        JSON array. Either way, per-pipeline fork-build settings cannot be
+        read. This is an audit-coverage failure, not evidence that fork
+        builds are enabled. Confirm the organization slug is correct and that
+        the API access token carries the `read_pipelines` scope, then re-run.
+        Until this returns 200 with an array body the fork-build assertion
+        below is vacuous by design and must not be read as a pass.
 
   - id: fork_builds_disabled
-    expr: "list_pipelines_status_code != 200 || size(fork_build_settings.filter(f, f == true)) == 0"
+    expr: "list_pipelines_status_code != 200 || !body_is_array || size(fork_build_settings.filter(f, f == true)) == 0"
     severity: high
     title: Fork Pull-Request Builds Disabled
     pass_message: "No fork-build violation was observed among the pipelines read for '{{org}}' — this row is evidence that no pipeline builds third-party forks ONLY if 'Pipeline Inventory Reachable' above also passed; when the inventory could not be read it abstains and asserts nothing about any pipeline"
@@ -133,9 +142,10 @@ assertions:
 
         This assertion abstains when the pipelines endpoint is unreachable;
         `pipelines_api_reachable` carries that signal instead. Without the
-        guard a 404 or 403 leaves `fork_build_settings` unbound, the CEL
-        expression errors, and the interpreter's fail-closed default reports a
-        high-severity fork-build finding the operator cannot act on.
+        `!body_is_array` guard, a 404/403 OR an HTTP 200 with a non-array body
+        both leave `fork_build_settings` unbound, the CEL expression errors,
+        and the interpreter's fail-closed default reports a high-severity
+        fork-build finding the operator cannot act on.
 
 remediation:
   description: |
