@@ -71,7 +71,7 @@ steps:
 
 assertions:
   - id: pipelines_api_reachable
-    expr: "status_code == 200"
+    expr: "list_pipelines_status_code == 200"
     severity: medium
     title: Pipeline Inventory Reachable
     pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 — pipeline visibility is auditable"
@@ -82,13 +82,15 @@ assertions:
         response, so pipeline visibility cannot be verified. This is an
         audit-coverage failure, not proof of a public pipeline. Confirm the
         organization slug is correct and that the API access token carries
-        the `read_pipelines` scope, then re-run.
+        the `read_pipelines` scope, then re-run. Until this returns 200 the
+        visibility assertion below is vacuous by design and must not be read
+        as a pass.
 
   - id: no_public_pipelines
-    expr: "size(pipeline_visibility.filter(v, v == \"public\" || v == \"PUBLIC\")) == 0"
+    expr: "list_pipelines_status_code != 200 || size(pipeline_visibility.filter(v, v == \"public\" || v == \"PUBLIC\")) == 0"
     severity: high
     title: No Public Pipelines
-    pass_message: "No pipeline in the organization is set to public visibility"
+    pass_message: "No public-visibility violation was observed among the pipelines read for '{{org}}' — this row is evidence that no pipeline is public ONLY if 'Pipeline Inventory Reachable' above also passed; when the inventory could not be read it abstains and asserts nothing about any pipeline"
     fail_message: "One or more pipelines are set to public visibility and are readable without authentication"
     finding:
       description: |
@@ -111,6 +113,12 @@ assertions:
         toggle (Settings -> Security -> Pipelines) governs who is able to
         make the flip at all, and Buildkite exposes no write interface for
         it — it must be verified in the console.
+
+        This assertion abstains when the pipelines endpoint is unreachable;
+        `pipelines_api_reachable` carries that signal instead. Without the
+        guard a 404 or 403 leaves `pipeline_visibility` unbound, the CEL
+        expression errors, and the interpreter's fail-closed default reports a
+        high-severity public-pipeline finding the operator cannot act on.
 
 remediation:
   description: |

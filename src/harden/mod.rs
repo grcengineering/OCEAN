@@ -25,6 +25,16 @@ const CREDENTIAL_ENV_VARS: &[&str] = &[
     "AWS_SESSION_TOKEN",
     "AZURE_CLIENT_SECRET",
     "GCP_SERVICE_ACCOUNT_KEY",
+    // Buildkite issues a single API access token that authenticates BOTH the REST
+    // API and GraphQL. BUILDKITE_API_TOKEN is on the fleet credential allowlist
+    // (`fleet::manifest::allowed_credentials`) and is substituted into remediation
+    // headers, so it must be on the masking plane: a credential that is allowed but
+    // not masked can reach stdout, the dry-run JSON, and ~/.ocean/audit.log
+    // verbatim. BUILDKITE_API_KEY is kept here (masking only, not on the fleet
+    // allowlist) because operators commonly export that spelling for the same
+    // token, and `env_as_config()` reads the whole environment.
+    "BUILDKITE_API_TOKEN",
+    "BUILDKITE_API_KEY",
 ];
 
 /// Scrubs known credential values from a string, replacing them with `***REDACTED***`.
@@ -61,12 +71,13 @@ fn validate_remediation_url(url: &str) -> Result<()> {
         || is_okta_url(url)
         || is_aws_url(url)
         || is_azure_url(url)
+        || is_buildkite_url(url)
     {
         Ok(())
     } else {
         Err(anyhow::anyhow!(
             "remediation URL rejected by allowlist: {url}\n\
-             Allowed: api.github.com, *.okta.com, AWS, Azure endpoints.\n\
+             Allowed: api.github.com, *.okta.com, AWS, Azure, Buildkite endpoints.\n\
              If this is a legitimate endpoint, add it to ALLOWED_URL_PREFIXES in harden/mod.rs"
         ))
     }
@@ -99,6 +110,19 @@ fn is_azure_url(raw: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Buildkite's control plane is SaaS-only: `api.buildkite.com` (REST v2) and
+/// `graphql.buildkite.com` (GraphQL v1). There is no self-hosted Buildkite
+/// control plane, so the host set is fixed and does not need to be templated.
+///
+/// Host-parsed, never `starts_with`, so a path-embedded `buildkite.com` on a
+/// hostile host (`https://evil.example.com/api.buildkite.com/steal`) is rejected
+/// — the SEC-H014 / CISO F-001 bypass class.
+fn is_buildkite_url(raw: &str) -> bool {
+    https_host(raw)
+        .map(|host| host == "buildkite.com" || host.ends_with(".buildkite.com"))
+        .unwrap_or(false)
+}
+
 // ─── Security: Template variable allowlist (TH-2d) ──────────────────────────
 
 const ALLOWED_TEMPLATE_VARS: &[&str] = &[
@@ -116,6 +140,17 @@ const ALLOWED_TEMPLATE_VARS: &[&str] = &[
     "org_name",
     "domain",
     "tenant",
+    // Buildkite. `env_as_config()` is `std::env::vars()`, so the resolvable names
+    // are ENV VAR names — these are exactly the names the buildkite checks already
+    // declare under `inputs[*].env` and that `fleet::manifest::allowed_credentials`
+    // blesses, so a remediation template and a check input read the same variable.
+    // BUILDKITE_API_TOKEN is a credential: it is on CREDENTIAL_ENV_VARS above, so
+    // `resolve_vars_masked` leaves it unresolved for display and `CredentialMask`
+    // scrubs it from any output path that does resolve it.
+    "BUILDKITE_API_TOKEN",
+    "BUILDKITE_ORG_SLUG",
+    "BUILDKITE_CLUSTER_ID",
+    "BUILDKITE_GRAPHQL_ID",
 ];
 
 // ─── Security: Audit logging (TH-2e) ────────────────────────────────────────
@@ -228,11 +263,20 @@ pub struct RemediationPlan {
     pub terraform_resources: Vec<serde_json::Value>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ApiAction {
     pub method: String,
     pub url: String,
     pub body: Option<serde_json::Value>,
+    /// Request headers declared by the check's `remediation.api.headers` block.
+    ///
+    /// Stored UNRESOLVED (`Bearer {{BUILDKITE_API_TOKEN}}`) on purpose: the plan is
+    /// printed by `print_dry_run`/`confirm_apply` and written to `~/.ocean/audit.log`,
+    /// and a header that is never resolved until `execute_api_call` cannot leak a
+    /// token through any of those paths. Empty means "use the built-in
+    /// GitHub/Okta bearer", which is the pre-existing behaviour for every check
+    /// that declares no headers.
+    pub headers: HashMap<String, String>,
 }
 
 /// Result of executing a single remediation plan.
@@ -322,15 +366,26 @@ pub fn plan_harden(
             if let Some(api) = rem.api.as_ref() {
                 let resolved_url = resolve_vars(&api.url, config);
                 // TH-2b: Validate URL against allowlist before including in plan.
-                if let Err(e) = validate_remediation_url(&resolved_url) {
-                    eprintln!("  ⚠ Skipping {}: {e}", check_id);
-                    continue;
+                match validate_remediation_url(&resolved_url) {
+                    Ok(()) => Some(ApiAction {
+                        method: api.method.clone(),
+                        url: resolved_url,
+                        body: api.body.as_ref().map(|b| resolve_json_vars(b, config)),
+                        headers: api.headers.clone(),
+                    }),
+                    Err(e) => {
+                        // A rejected URL disqualifies the API ACTION, not the whole
+                        // plan. The previous `continue` dropped the entire
+                        // RemediationPlan — the operator lost `steps`, `manual`,
+                        // `cli` and `terraform` as well, and `findings = plans.len()`
+                        // in fleet under-reported the run.
+                        eprintln!(
+                            "  ⚠ {}: API remediation dropped ({e}); manual steps, CLI and Terraform remain",
+                            check_id
+                        );
+                        None
+                    }
                 }
-                Some(ApiAction {
-                    method: api.method.clone(),
-                    url: resolved_url,
-                    body: api.body.clone(),
-                })
             } else {
                 None
             }
@@ -451,16 +506,56 @@ fn execute_api_call(action: &ApiAction, config: &HashMap<String, String>) -> Res
         ));
     }
 
-    let auth = config
-        .get("GITHUB_TOKEN")
-        .or_else(|| config.get("OKTA_API_TOKEN"))
-        .map(|t| format!("Bearer {t}"))
-        .unwrap_or_default();
+    let mut req = ureq::request(&method_upper, &action.url);
 
-    let req = ureq::request(&action.method.to_uppercase(), &action.url)
-        .set("Authorization", &auth)
-        .set("Accept", "application/vnd.github+json")
-        .set("X-GitHub-Api-Version", "2022-11-28");
+    if action.headers.is_empty() {
+        // Unchanged legacy path: every check that declares no
+        // `remediation.api.headers` keeps the GitHub/Okta bearer and the GitHub
+        // media-type headers it has always been sent with.
+        let auth = config
+            .get("GITHUB_TOKEN")
+            .or_else(|| config.get("OKTA_API_TOKEN"))
+            .map(|t| format!("Bearer {t}"))
+            .unwrap_or_default();
+        req = req
+            .set("Authorization", &auth)
+            .set("Accept", "application/vnd.github+json")
+            .set("X-GitHub-Api-Version", "2022-11-28");
+    } else {
+        // The check declared its own headers. Honour them verbatim and send NO
+        // GitHub headers — `X-GitHub-Api-Version` on a Buildkite request is at
+        // best noise, and the GitHub/Okta bearer is the wrong credential
+        // entirely. Values are resolved here (not at plan time) so the token
+        // never enters the printed plan or the audit log.
+        let mut names: Vec<&String> = action.headers.keys().collect();
+        names.sort(); // deterministic request construction
+        for name in names {
+            let value = resolve_vars(&action.headers[name], config);
+            if value.contains("{{") {
+                return Err(anyhow::anyhow!(
+                    "header '{name}' still contains an unresolved template after \
+                     substitution — the variable is either unset in the environment or \
+                     not on ALLOWED_TEMPLATE_VARS; refusing to send the request"
+                ));
+            }
+            req = req.set(name, &value);
+        }
+    }
+
+    // The body is resolved at plan time (`resolve_json_vars`). A surviving `{{...}}`
+    // means a required variable was unset or is not on ALLOWED_TEMPLATE_VARS —
+    // sending it would post a literal placeholder as a real value (an invalid
+    // GraphQL node id, an unparseable timestamp) against the tenant.
+    if let Some(body) = &action.body {
+        let rendered = serde_json::to_string(body).unwrap_or_default();
+        if rendered.contains("{{") {
+            return Err(anyhow::anyhow!(
+                "request body still contains an unresolved template after substitution \
+                 — a required variable is unset in the environment or is not on \
+                 ALLOWED_TEMPLATE_VARS; refusing to send the request"
+            ));
+        }
+    }
 
     let resp = if let Some(body) = &action.body {
         req.send_json(body).context("API call failed")?
@@ -468,10 +563,33 @@ fn execute_api_call(action: &ApiAction, config: &HashMap<String, String>) -> Res
         req.call().context("API call failed")?
     };
 
-    Ok(format!(
-        "{} {} → HTTP {}",
-        action.method, action.url, resp.status()
-    ))
+    let status = resp.status();
+    let body_text = resp.into_string().unwrap_or_default();
+
+    // GraphQL reports application-level failure as HTTP 200 with a top-level
+    // `errors` array. ureq only errors on non-2xx, so without this a rejected
+    // mutation (bad variables, missing scope, plan-gated field) was recorded as
+    // SUCCESS in ~/.ocean/audit.log. Buildkite's remediation surface is GraphQL,
+    // so this is the difference between a real fix and a false assurance.
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body_text) {
+        if let Some(errors) = parsed.get("errors").and_then(|e| e.as_array()) {
+            if !errors.is_empty() {
+                let detail = errors
+                    .iter()
+                    .filter_map(|e| e.get("message").and_then(|m| m.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(anyhow::anyhow!(
+                    "{} {} → HTTP {status} but the response carries GraphQL errors: {}",
+                    action.method,
+                    action.url,
+                    if detail.is_empty() { "(no message field)".to_string() } else { detail }
+                ));
+            }
+        }
+    }
+
+    Ok(format!("{} {} → HTTP {status}", action.method, action.url))
 }
 
 fn write_terraform(plan: &RemediationPlan, dir: &Path) -> Result<std::path::PathBuf> {
@@ -560,6 +678,8 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
                         "method": a.method,
                         "url": mask.scrub(&a.url),
                         "body": a.body,
+                        // Unresolved templates by construction — see ApiAction::headers.
+                        "headers": a.headers,
                     })),
                     "cli": p.cli_action.as_ref().map(|c| mask.scrub(c)),
                     "terraform_resources": p.terraform_resources.len(),
@@ -578,6 +698,14 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
             writeln!(out, "  ▸ {} — {}", plan.check_id, plan.check_name)?;
             if let Some(api) = &plan.api_action {
                 writeln!(out, "    API: {} {}", api.method, mask.scrub(&api.url))?;
+                if !api.headers.is_empty() {
+                    let mut names: Vec<&String> = api.headers.keys().collect();
+                    names.sort();
+                    for name in names {
+                        // Templates, not values — resolution happens at execute time.
+                        writeln!(out, "      header {name}: {}", mask.scrub(&api.headers[name]))?;
+                    }
+                }
             }
             if let Some(cmd) = &plan.cli_action {
                 writeln!(out, "    CLI: {}", mask.scrub(cmd))?;
@@ -650,6 +778,28 @@ fn resolve_vars(template: &str, config: &HashMap<String, String>) -> String {
         }
     }
     result
+}
+
+/// Recursively apply `resolve_vars` to every string inside a JSON value.
+///
+/// Remediation request bodies carry `{{VAR}}` placeholders exactly as URLs do
+/// (`{"variables": {"orgId": "{{BUILDKITE_GRAPHQL_ID}}"}}`). Before this, `body`
+/// was cloned verbatim, so a templated body was transmitted with the braces
+/// still in it. Substitution is restricted to `ALLOWED_TEMPLATE_VARS` because it
+/// reuses `resolve_vars` (TH-2d).
+fn resolve_json_vars(val: &serde_json::Value, config: &HashMap<String, String>) -> serde_json::Value {
+    match val {
+        serde_json::Value::String(s) => serde_json::Value::String(resolve_vars(s, config)),
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), resolve_json_vars(v, config)))
+                .collect(),
+        ),
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(|v| resolve_json_vars(v, config)).collect())
+        }
+        other => other.clone(),
+    }
 }
 
 /// Like `resolve_vars` but masks credential values for safe display (TH-1a).
@@ -820,6 +970,7 @@ assertions: []
                 method: "PATCH".to_string(),
                 url: "https://api.github.com/orgs/my-org".to_string(),
                 body: None,
+                ..Default::default()
             }),
             cli_action: Some("gh api orgs/my-org -X PATCH".to_string()),
             terraform_resources: Vec::new(),
@@ -888,6 +1039,7 @@ assertions: []
                 method: "PATCH".to_string(),
                 url: "https://api.github.com/orgs/my-org?auth=ghp_test_secret_token_xyz".to_string(),
                 body: None,
+                ..Default::default()
             }),
             cli_action: None,
             terraform_resources: Vec::new(),
@@ -1003,6 +1155,7 @@ assertions: []
                 method: "PATCH".to_string(),
                 url: "https://api.github.com/orgs/test".to_string(),
                 body: None,
+                ..Default::default()
             }),
             cli_action: None,
             terraform_resources: Vec::new(),
@@ -1060,6 +1213,7 @@ remediation:
                     method: "PATCH".to_string(),
                     url: "https://api.github.com/orgs/test".to_string(),
                     body: Some(serde_json::json!({"require_mfa": true})),
+                    ..Default::default()
                 }),
                 cli_action: None,
                 terraform_resources: Vec::new(),
@@ -1307,6 +1461,7 @@ remediation:
                 method: "PATCH".to_string(),
                 url: "https://api.github.com/orgs/test".to_string(),
                 body: Some(serde_json::json!({"members_can_create_repos": false})),
+                ..Default::default()
             }),
             cli_action: None,
             terraform_resources: Vec::new(),
@@ -1344,6 +1499,7 @@ remediation:
                     method: "PATCH".to_string(),
                     url: "https://api.github.com/orgs/test/mfa".to_string(),
                     body: None,
+                    ..Default::default()
                 }),
                 cli_action: None,
                 terraform_resources: Vec::new(),
@@ -1357,6 +1513,7 @@ remediation:
                     method: "PATCH".to_string(),
                     url: "https://api.github.com/orgs/test/repos".to_string(),
                     body: None,
+                    ..Default::default()
                 }),
                 cli_action: None,
                 terraform_resources: Vec::new(),
@@ -1392,6 +1549,141 @@ remediation:
         config.insert("ORG_NAME".to_string(), "my-company".to_string());
         let result = resolve_vars("https://api.github.com/orgs/{{ORG_NAME}}", &config);
         assert_eq!(result, "https://api.github.com/orgs/my-company");
+    }
+
+    // ── Buildkite: URL allowlist, masking plane, template plumbing ──────────
+
+    #[test]
+    fn buildkite_hosts_pass_the_remediation_url_allowlist() {
+        for u in [
+            "https://graphql.buildkite.com/v1",
+            "https://api.buildkite.com/v2/organizations/acme/clusters/abc/tokens",
+            "https://buildkite.com/organizations/acme/settings/security",
+        ] {
+            assert!(validate_remediation_url(u).is_ok(), "should be allowed: {u}");
+        }
+    }
+
+    #[test]
+    fn buildkite_lookalike_hosts_are_still_rejected() {
+        // Host-parsed, not `starts_with` — the SEC-H014 path-embedding class.
+        assert!(validate_remediation_url("https://evil.example.com/api.buildkite.com/steal").is_err());
+        assert!(validate_remediation_url("https://buildkite.com.evil.example.com/v1").is_err());
+        assert!(validate_remediation_url("http://graphql.buildkite.com/v1").is_err());
+        assert!(validate_remediation_url("https://notbuildkite.com/v1").is_err());
+    }
+
+    #[test]
+    fn buildkite_api_token_is_on_the_masking_plane() {
+        // A credential on the fleet allowlist that is NOT on CREDENTIAL_ENV_VARS
+        // reaches stdout, the dry-run JSON and ~/.ocean/audit.log verbatim.
+        let mut config = HashMap::new();
+        config.insert("BUILDKITE_API_TOKEN".to_string(), "bkua_deadbeef".to_string());
+        config.insert("BUILDKITE_API_KEY".to_string(), "bkua_altspelling".to_string());
+        let mask = CredentialMask::from_config(&config);
+        let line = "POST https://graphql.buildkite.com/v1 Bearer bkua_deadbeef alt bkua_altspelling";
+        let scrubbed = mask.scrub(line);
+        assert!(!scrubbed.contains("bkua_deadbeef"));
+        assert!(!scrubbed.contains("bkua_altspelling"));
+    }
+
+    #[test]
+    fn rejected_url_drops_only_the_api_action_not_the_whole_plan() {
+        // Regression for the `continue` that deleted the entire RemediationPlan —
+        // steps, manual, cli and terraform went with it, and fleet's
+        // `findings = plans.len()` under-counted the run.
+        let tmp = TempDir::new().unwrap();
+        write_check(
+            tmp.path(),
+            "unlisted.check.yaml",
+            r#"
+id: TST-UNLISTED
+name: Unlisted Host
+source: mock
+type: passive
+steps: []
+assertions:
+  - id: always_fails
+    expr: "1 == 2"
+    severity: high
+    title: t
+    pass_message: p
+    fail_message: f
+remediation:
+  description: d
+  steps: ["do the thing by hand"]
+  api:
+    method: POST
+    url: "https://not-on-the-allowlist.example.com/v1"
+  cli:
+    command: "echo fix-me"
+"#,
+        );
+        let plans = plan_harden(tmp.path(), &RemediationMode::All, &HashMap::new(), None).unwrap();
+        if let Some(p) = plans.iter().find(|p| p.check_id == "TST-UNLISTED") {
+            assert!(p.api_action.is_none(), "rejected URL must drop the API action");
+            assert!(!p.steps.is_empty(), "manual steps must survive a rejected URL");
+            assert!(p.cli_action.is_some(), "cli action must survive a rejected URL");
+        }
+    }
+
+    #[test]
+    fn remediation_body_templates_are_resolved() {
+        let mut config = HashMap::new();
+        config.insert(
+            "BUILDKITE_GRAPHQL_ID".to_string(),
+            "T3JnYW5pemF0aW9uLS0t".to_string(),
+        );
+        let body = serde_json::json!({
+            "query": "mutation($orgId: ID!) { x }",
+            "variables": { "orgId": "{{BUILDKITE_GRAPHQL_ID}}" }
+        });
+        let resolved = resolve_json_vars(&body, &config);
+        assert_eq!(resolved["variables"]["orgId"], serde_json::json!("T3JnYW5pemF0aW9uLS0t"));
+        // Query text is untouched: `$orgId` is GraphQL syntax, not a template.
+        assert_eq!(resolved["query"], body["query"]);
+    }
+
+    #[test]
+    fn non_allowlisted_template_var_is_never_substituted_into_a_body() {
+        let mut config = HashMap::new();
+        config.insert("MALICIOUS".to_string(), "pwned".to_string());
+        let body = serde_json::json!({"v": "{{MALICIOUS}}"});
+        assert_eq!(resolve_json_vars(&body, &config)["v"], serde_json::json!("{{MALICIOUS}}"));
+    }
+
+    #[test]
+    fn declared_headers_reach_the_plan_unresolved() {
+        // Headers stay templated in the plan so the token cannot leak into the
+        // dry-run output or the audit log; resolution happens in execute_api_call.
+        let mut headers = HashMap::new();
+        headers.insert(
+            "Authorization".to_string(),
+            "Bearer {{BUILDKITE_API_TOKEN}}".to_string(),
+        );
+        let action = ApiAction {
+            method: "POST".to_string(),
+            url: "https://graphql.buildkite.com/v1".to_string(),
+            body: None,
+            headers,
+        };
+        assert_eq!(action.headers["Authorization"], "Bearer {{BUILDKITE_API_TOKEN}}");
+        let plan = RemediationPlan {
+            check_id: "BK-1.02".to_string(),
+            check_name: "n".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(action),
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let mut config = HashMap::new();
+        config.insert("BUILDKITE_API_TOKEN".to_string(), "bkua_secret".to_string());
+        let mut out = Vec::new();
+        print_dry_run(&mut out, std::slice::from_ref(&plan), "table", &config).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("{{BUILDKITE_API_TOKEN}}"), "header template should be shown");
+        assert!(!s.contains("bkua_secret"), "token must never reach dry-run output");
     }
 
     #[test]

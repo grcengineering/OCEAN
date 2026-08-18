@@ -33,6 +33,10 @@ description: |
     rather than silently shrinking the sample.
   - Zero tokens in the cluster passes vacuously — there is no unrestricted
     credential to find.
+  - DEGRADES, DOES NOT ACCUSE. If the token endpoint is unreachable (wrong
+    cluster identifier, token missing `read_clusters`, revoked token), the
+    reachability assertion fails loudly and the allowlist assertion abstains
+    rather than reporting a coverage gap as an unrestricted token.
   - This check confirms an allowlist is DECLARED, not that it is TIGHT. A token
     scoped to 0.0.0.0/0 satisfies the assertion while restricting nothing;
     review the reported values, do not just read the verdict.
@@ -112,10 +116,10 @@ assertions:
         rather than as a pass or a fail.
 
   - id: all_tokens_ip_restricted
-    expr: 'size(ip_allowlist_values) == token_count && ip_allowlist_values.all(v, v != null && v != "" && v.matches("[0-9]"))'
+    expr: 'get_cluster_agent_tokens_status_code != 200 || (size(ip_allowlist_values) == token_count && ip_allowlist_values.all(v, v != null && v != "" && v.matches("[0-9]")))'
     severity: high
     title: Agent Token IP Allowlist
-    pass_message: "All {{token_count}} agent token(s) in cluster {{cluster}} declare an IP allowlist"
+    pass_message: "No unrestricted agent token was observed in cluster {{cluster}} — this row is evidence that every token declares an IP allowlist ONLY if 'Agent Token Endpoint Reachability' above also passed; when the token list could not be read it abstains and asserts nothing about any token. The number of tokens actually read, if any, is the token_count observable in this check's evidence"
     fail_message: "One or more agent tokens in cluster {{cluster}} are redeemable from any IP address"
     finding:
       description: |
@@ -140,6 +144,14 @@ assertions:
         ranges your agents do not actually egress from will stop them
         registering. Confirm the real egress addresses before applying.
 
+        This assertion abstains when the token endpoint is unreachable;
+        `agent_tokens_api_reachable` carries that signal instead. Without the
+        guard the two extractions diverge on a 404: `$length` falls back to 1
+        on a non-array error body so `token_count` binds to 1, while
+        `ip_allowlist_values` never binds at all, the CEL expression errors,
+        and the interpreter's fail-closed default reports a high-severity
+        unrestricted-token finding the operator cannot act on.
+
 remediation:
   description: |
     Unlike `expires_at`, the IP allowlist is mutable, so existing tokens can be
@@ -161,21 +173,10 @@ remediation:
   steps:
     - "Determine the real egress CIDRs of the agents that redeem each token (NAT gateway addresses for cloud runners, office/VPN ranges for self-hosted)."
     - "Read each token's current description so it can be passed back unchanged in the update mutation."
-    - "Apply clusterAgentTokenUpdate with allowedIpAddresses set to the space-separated CIDR list (see the api block below)."
+    - "Apply clusterAgentTokenUpdate with allowedIpAddresses set to the space-separated CIDR list (see the cli command below)."
     - "Confirm agents still register and pick up jobs; an over-tight allowlist silently stops registration."
     - "Re-run this check to confirm every token now reports a populated allowed_ip_addresses, and review the values for over-broad ranges such as 0.0.0.0/0."
-  api:
-    method: POST
-    url: "https://graphql.buildkite.com/v1"
-    headers:
-      Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
-      Content-Type: application/json
-    body:
-      query: "mutation UpdateTokenIPs($id: ID!, $org: ID!, $desc: String!, $ips: String) { clusterAgentTokenUpdate(input: {id: $id, organizationId: $org, description: $desc, allowedIpAddresses: $ips}) { clusterAgentToken { id description allowedIpAddresses } } }"
-      variables:
-        id: "REPLACE_WITH_TOKEN_GRAPHQL_ID"
-        org: "REPLACE_WITH_ORGANIZATION_GRAPHQL_ID"
-        desc: "REPLACE_WITH_EXISTING_TOKEN_DESCRIPTION"
-        ips: "REPLACE_WITH_SPACE_SEPARATED_CIDRS"
   cli:
     command: "curl -sS -X POST -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"query\":\"mutation($id:ID!,$org:ID!,$desc:String!,$ips:String){clusterAgentTokenUpdate(input:{id:$id,organizationId:$org,description:$desc,allowedIpAddresses:$ips}){clusterAgentToken{id allowedIpAddresses}}}\",\"variables\":{\"id\":\"TOKEN_GRAPHQL_ID\",\"org\":\"ORG_GRAPHQL_ID\",\"desc\":\"EXISTING_DESCRIPTION\",\"ips\":\"203.0.113.0/24 198.51.100.0/24\"}}' https://graphql.buildkite.com/v1"
+  manual:
+    - "NO AUTONOMOUS `remediation.api` BLOCK — deliberate. clusterAgentTokenUpdate needs four values OCEAN does not hold: the token's GraphQL node id, the organization's GraphQL node id, the token's CURRENT description (omitting it fails the mutation and passing the wrong one silently renames the token), and the true egress CIDRs of the agents. Every one was a REPLACE_WITH_ placeholder, so the block could only ever post an invalid mutation — and GraphQL answers application errors with HTTP 200, which would previously have been recorded as a successful remediation. This control is also lockout-capable: a wrong allowlist stops agent registration. The cli command above is display-only and is the sanctioned path."

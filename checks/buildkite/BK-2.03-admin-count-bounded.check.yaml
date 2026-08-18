@@ -27,15 +27,15 @@ description: |
   carry `role` directly, which `$[*].role` extracts cleanly. That is the only
   reason this check is REST-shaped; it is not a preference.
 
-  Bound configuration. The bound is declared as the `max_admins` input
-  (default 3) so the intended threshold is discoverable and overridable in
-  messages and tooling. The threshold that is ACTUALLY ENFORCED is the
-  numeric literal in the `admin_count_within_bound` assertion, because the
-  CEL evaluation context receives only JSONPath extractions and step status
-  codes — declared inputs are never injected into it, and `InputDef.default`
-  is parsed but not applied at runtime. Raising or lowering the bound
-  therefore requires editing BOTH the input default and the literal in the
-  assertion expression. They are kept equal (3) here.
+  Bound configuration. The bound is the `max_admins` input (default 3) and it
+  is the threshold ACTUALLY ENFORCED — `admin_count_within_bound` compares
+  against the input by name, not against a duplicated literal. The interpreter
+  resolves the input from BUILDKITE_MAX_ADMINS, falls back to the declared
+  default, coerces it to a number, and binds it into the CEL context alongside
+  the JSONPath extractions. Raising or lowering the bound is therefore a
+  single change: set BUILDKITE_MAX_ADMINS, or edit `inputs.max_admins.default`.
+  An extracted variable of the same name would always win, so an input can
+  never shadow observed data.
 
   Degradation. The role comparison accepts both `admin` (REST spelling) and
   `ADMIN` (the `OrganizationMemberRole` GraphQL enum spelling) so a
@@ -70,8 +70,8 @@ inputs:
   max_admins:
     description: >-
       Maximum number of organization members permitted to hold the admin role.
-      Documentary only — the enforced value is the literal in the
-      admin_count_within_bound assertion (see description); keep both in sync.
+      This is the enforced value: `admin_count_within_bound` compares against
+      `max_admins` directly. Override per-tenant with BUILDKITE_MAX_ADMINS.
     env: BUILDKITE_MAX_ADMINS
     default: "3"
     required: false
@@ -117,11 +117,11 @@ assertions:
         vacuous by design and must not be read as a pass.
 
   - id: admin_count_within_bound
-    expr: "list_members_status_code != 200 || size(member_roles.filter(r, r == \"admin\" || r == \"ADMIN\")) <= 3"
+    expr: "list_members_status_code != 200 || size(member_roles.filter(r, r == \"admin\" || r == \"ADMIN\")) <= max_admins"
     severity: medium
     title: Admin Role Assignment Is Within Bound
-    pass_message: "3 or fewer organization members hold the admin role"
-    fail_message: "More than 3 organization members hold the admin role"
+    pass_message: "No admin-count violation was observed for '{{org}}' — this row is evidence that at most {{max_admins}} members hold the admin role ONLY if 'Organization Member Inventory Reachable' above also passed; when the member list could not be read it abstains and asserts nothing about the admin population"
+    fail_message: "More than {{max_admins}} organization members hold the admin role"
     finding:
       description: |
         More than the permitted number of members hold the Buildkite
@@ -156,15 +156,10 @@ remediation:
     - "For anyone who holds admin only to manage an agent cluster's tokens, queues, or secrets, add them as a maintainer of that cluster (see BK-3.07) before removing the admin grant"
     - "Change each remaining unjustified member from Administrator to Member"
     - "Confirm every retained admin has 2FA enforced (BK-1.02) and, where SSO is configured, is set to required rather than optional"
-  api:
-    method: POST
-    url: "https://graphql.buildkite.com/v1"
-    headers:
-      Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
-      Content-Type: application/json
-    body:
-      query: "mutation DemoteMember($id: ID!) { organizationMemberUpdate(input: {id: $id, role: MEMBER}) { clientMutationId } }"
+  cli:
+    command: "curl -sS -X POST -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"query\":\"mutation DemoteMember($id:ID!){organizationMemberUpdate(input:{id:$id,role:MEMBER}){organizationMember{id role}}}\",\"variables\":{\"id\":\"REPLACE_WITH_MEMBER_GRAPHQL_ID\"}}' https://graphql.buildkite.com/v1"
   manual:
+    - "NO AUTONOMOUS `remediation.api` BLOCK — deliberate. organizationMemberUpdate requires the GraphQL node id of ONE specific member, and which admin to demote is a judgement call OCEAN does not have the standing to make: the check counts admins, it does not decide which grant is unjustified. A block declaring `$id: ID!` with no `variables` would post an always-invalid mutation, and because GraphQL answers application errors with HTTP 200 that would previously have been recorded as a successful remediation. The command above is display-only (`ocean harden` never shell-execs a cli action) and carries the placeholder that must be filled in first."
     - "Buildkite exposes no REST write interface for organization member roles — the role change is a GraphQL mutation (organizationMemberUpdate, input OrganizationMemberUpdateInput { id: ID!, role: OrganizationMemberRole }) or a console action. The member's GraphQL node ID must be resolved first; it is not the REST member id."
     - "Re-run this check on a schedule and as part of quarterly access review: admin sprawl accumulates through one-off grants that are never revisited, and no drift signal exists for a role change made in the console."
     - "Organizations with more than 100 members are only partially evaluated until Link-header pagination lands in the interpreter (see GRC-28); until then, corroborate the admin count in the console for orgs of that size."

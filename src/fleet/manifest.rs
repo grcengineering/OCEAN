@@ -45,17 +45,37 @@ fn allowed_credentials(source: &str) -> Option<&'static [&'static str]> {
             "AZURE_TENANT_ID",
             "AZURE_SUBSCRIPTION_ID",
         ]),
-        // Buildkite exposes REST and GraphQL behind a single API access token.
-        // Both naming conventions are allowed: BUILDKITE_API_TOKEN matches Buildkite's
-        // own docs, BUILDKITE_API_KEY matches the credential name operators actually
-        // ship in their secret stores. GRAPHQL_URL/ID cover self-hosted and org-pinned
-        // GraphQL endpoints.
+        // Buildkite exposes REST and GraphQL behind a single API access token,
+        // named BUILDKITE_API_TOKEN after Buildkite's own docs. The former
+        // BUILDKITE_API_KEY alias was removed: no check declared it, so a target
+        // authored with that spelling passed validation and then ran every check
+        // unauthenticated. A validation error naming the right variable is a
+        // better failure than a silent one. (It stays on
+        // `harden::CREDENTIAL_ENV_VARS` so that if an operator happens to export
+        // it, the value is still scrubbed from output.)
+        //
+        // Every entry below is consumed by something. A fleet target can only ever
+        // supply what this list blesses (`fleet::executor` passes `target.credentials`
+        // as the module config verbatim), so an input a check declares but this list
+        // omits is unsettable in fleet mode, and an entry no check reads is dead
+        // surface on a security allowlist. Consumers:
+        //   _API_TOKEN             — `credentials:` on all 12 BK-* checks
+        //   _ORG_SLUG              — input `org` on all 12
+        //   _CLUSTER_ID            — input `cluster` on BK-3.01a/3.01b/3.05/3.07
+        //   _GRAPHQL_ID            — organization GraphQL node id, substituted into
+        //                            the BK-1.02 / BK-2.05b remediation bodies
+        //   _MAX_*                 — threshold inputs on BK-2.03/2.07/3.07
+        // BUILDKITE_GRAPHQL_URL was removed: it had zero consumers, and its stated
+        // rationale ("self-hosted GraphQL endpoints") does not exist — Buildkite's
+        // control plane is SaaS-only at the fixed host graphql.buildkite.com.
         "buildkite" => Some(&[
             "BUILDKITE_API_TOKEN",
-            "BUILDKITE_API_KEY",
             "BUILDKITE_ORG_SLUG",
-            "BUILDKITE_GRAPHQL_URL",
             "BUILDKITE_GRAPHQL_ID",
+            "BUILDKITE_CLUSTER_ID",
+            "BUILDKITE_MAX_ADMINS",
+            "BUILDKITE_MAX_RULES",
+            "BUILDKITE_MAX_MAINTAINERS",
         ]),
         _ => None,
     }

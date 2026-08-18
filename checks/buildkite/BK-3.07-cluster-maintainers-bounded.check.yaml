@@ -34,14 +34,12 @@ description: |
   DRIFT-CHECKED-ONLY until the response has been observed against a real
   cluster.
 
-  Bound configuration. The bound is declared as the `max_maintainers` input
-  (default 3) so the intended threshold is discoverable. The threshold
-  ACTUALLY ENFORCED is the numeric literal in the
-  `maintainer_count_within_bound` assertion: OCEAN's CEL context receives
-  only JSONPath extractions and step status codes, declared inputs are never
-  injected into it, and `InputDef.default` is parsed but not applied at
-  runtime. Changing the bound requires editing both the input default and the
-  assertion literal. They are kept equal (3) here.
+  Bound configuration. The bound is the `max_maintainers` input (default 3)
+  and it is the threshold ACTUALLY ENFORCED — `maintainer_count_within_bound`
+  compares against the input by name. The interpreter resolves it from
+  BUILDKITE_MAX_MAINTAINERS, falls back to the declared default, coerces it to
+  a number and binds it into the CEL context alongside the JSONPath
+  extractions. Changing the bound is a single change in a single place.
 
   Scope note for reviewers. A count of 0 passes this check, and that is
   correct — a cluster nobody has been delegated is not a sprawl finding. It
@@ -74,15 +72,18 @@ inputs:
     description: >-
       UUID of the agent cluster whose maintainer list is being evaluated. One
       cluster per run — the REST maintainers endpoint is per-cluster and the
-      interpreter cannot fan a step out over a list of clusters.
-    env: BUILDKITE_CLUSTER_UUID
+      interpreter cannot fan a step out over a list of clusters. Read from
+      BUILDKITE_CLUSTER_ID, the same variable BK-3.01a, BK-3.01b and BK-3.05
+      use for the same `cluster` input: the value is the REST `id` field of the
+      cluster, which is a UUID, and one input must not have two env-var names.
+    env: BUILDKITE_CLUSTER_ID
     required: true
   max_maintainers:
     description: >-
-      Maximum number of maintainers permitted on a single cluster.
-      Documentary only — the enforced value is the literal in the
-      maintainer_count_within_bound assertion (see description); keep both in
-      sync.
+      Maximum number of maintainers permitted on a single cluster. This is the
+      enforced value: `maintainer_count_within_bound` compares against
+      `max_maintainers` directly. Override per-tenant with
+      BUILDKITE_MAX_MAINTAINERS.
     env: BUILDKITE_MAX_MAINTAINERS
     default: "3"
     required: false
@@ -125,7 +126,7 @@ assertions:
         and it is deliberately reported separately so that a plan, scope, or
         identifier problem is never presented as a compliance failure.
 
-        Check, in order: that BUILDKITE_CLUSTER_UUID is the cluster's UUID
+        Check, in order: that BUILDKITE_CLUSTER_ID is the cluster's UUID
         (not its GraphQL node ID and not its name), that the organization
         slug is correct, and that the API access token carries the
         `read_clusters` scope. Note also that this endpoint has not been
@@ -135,11 +136,11 @@ assertions:
         pass.
 
   - id: maintainer_count_within_bound
-    expr: "list_maintainers_status_code != 200 || maintainer_count <= 3"
+    expr: "list_maintainers_status_code != 200 || maintainer_count <= max_maintainers"
     severity: medium
     title: Cluster Maintainer Count Is Within Bound
-    pass_message: "3 or fewer maintainers are assigned to this cluster"
-    fail_message: "More than 3 maintainers are assigned to this cluster"
+    pass_message: "No maintainer-count violation was observed for cluster {{cluster}} — this row is evidence that at most {{max_maintainers}} maintainers are assigned ONLY if 'Cluster Maintainer Inventory Reachable' above also passed; when the maintainer list could not be read it abstains and asserts nothing about the maintainer population"
+    fail_message: "More than {{max_maintainers}} maintainers are assigned to this cluster"
     finding:
       description: |
         This agent cluster has more maintainers than the configured bound.
@@ -184,5 +185,5 @@ remediation:
       - type: buildkite_cluster_maintainer
         name: example_team_maintainer
         attributes:
-          cluster_uuid: "{{cluster}}"
+          cluster_uuid: "{{BUILDKITE_CLUSTER_ID}}"
           team_uuid: "REPLACE_WITH_TEAM_UUID"

@@ -219,10 +219,86 @@ fn evaluate_assertion(
     assertion: &CheckAssertion,
     extracted: &HashMap<String, JsonValue>,
 ) -> Result<bool> {
+    evaluate_assertion_with_inputs(assertion, extracted, &HashMap::new())
+}
+
+/// CEL identifiers are `[A-Za-z_][A-Za-z0-9_]*`. A declared input whose name is
+/// not a legal identifier can never be referenced from an assertion, so it is
+/// skipped rather than surfaced as a binding error.
+fn is_cel_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Coerce a declared input's string value into the JSON type an assertion will
+/// compare against. Inputs arrive as strings (env vars and YAML `default:` are
+/// both textual), but a threshold input is only useful to CEL as a number:
+/// `size(admins) <= max_admins` is a type error when `max_admins` is the string
+/// `"3"`, and a type error is evaluated fail-closed as an accusation.
+fn coerce_input_value(raw: &str) -> JsonValue {
+    if let Ok(i) = raw.parse::<i64>() {
+        return JsonValue::Number(i.into());
+    }
+    if let Ok(f) = raw.parse::<f64>() {
+        if let Some(n) = serde_json::Number::from_f64(f) {
+            return JsonValue::Number(n);
+        }
+    }
+    match raw {
+        "true" => JsonValue::Bool(true),
+        "false" => JsonValue::Bool(false),
+        other => JsonValue::String(other.to_string()),
+    }
+}
+
+/// Build the CEL bindings contributed by a check's declared `inputs:` block.
+///
+/// Before this existed, `inputs` were visible only to `{{template}}` substitution
+/// in step URLs, headers and bodies — an input declared purely as a policy
+/// threshold (`max_admins`, `max_rules`, `max_maintainers`) advertised an `env:`
+/// contract through the loader and the docs while being unreachable from every
+/// assertion, so setting it was a silent no-op.
+///
+/// Extractions always win: a name produced by a step is observed truth, and an
+/// input must never be able to shadow it.
+fn input_cel_bindings(
+    def: &CheckDefinition,
+    ctx: &HashMap<String, String>,
+    extracted: &HashMap<String, JsonValue>,
+) -> HashMap<String, JsonValue> {
+    let mut bindings = HashMap::new();
+    for name in def.inputs.keys() {
+        if extracted.contains_key(name) || !is_cel_identifier(name) {
+            continue;
+        }
+        if let Some(raw) = ctx.get(name) {
+            bindings.insert(name.clone(), coerce_input_value(raw));
+        }
+    }
+    bindings
+}
+
+fn evaluate_assertion_with_inputs(
+    assertion: &CheckAssertion,
+    extracted: &HashMap<String, JsonValue>,
+    inputs: &HashMap<String, JsonValue>,
+) -> Result<bool> {
     let program =
         Program::compile(&assertion.expr).map_err(|e| anyhow!("CEL compile error: {}", e))?;
 
     let mut ctx = CelContext::default();
+
+    for (name, value) in inputs {
+        if extracted.contains_key(name) {
+            continue; // extraction wins; see input_cel_bindings
+        }
+        ctx.add_variable(name.as_str(), value.clone())
+            .map_err(|e| anyhow!("CEL input variable '{}': {}", name, e))?;
+    }
 
     for (name, value) in extracted {
         // Convert serde_json::Value to a type CEL can accept (via Serialize).
@@ -253,14 +329,25 @@ fn build_input_context(
 ) -> HashMap<String, String> {
     let mut ctx = config.clone();
 
-    // Resolve declared inputs: prefer config[name], fall back to config[env_var].
+    // Resolve declared inputs: prefer config[name], fall back to config[env_var],
+    // and finally to the input's declared `default:`.
+    //
+    // The `default:` arm was previously absent, so a declared default never took
+    // effect: an unset input left `{{name}}` in the template verbatim and left the
+    // name unbound in CEL. Checks that depend on a default had to duplicate the
+    // value as a literal and keep the two in sync by hand.
     for (name, input_def) in &def.inputs {
-        if !ctx.contains_key(name) {
-            if !input_def.env.is_empty() {
-                if let Some(v) = config.get(&input_def.env) {
-                    ctx.insert(name.clone(), v.clone());
-                }
+        if ctx.contains_key(name) {
+            continue;
+        }
+        if !input_def.env.is_empty() {
+            if let Some(v) = config.get(&input_def.env) {
+                ctx.insert(name.clone(), v.clone());
+                continue;
             }
+        }
+        if !input_def.default.is_empty() {
+            ctx.insert(name.clone(), input_def.default.clone());
         }
     }
 
@@ -364,8 +451,11 @@ fn evaluate_all_assertions(
 ) -> Vec<Evidence> {
     let mut results = Vec::new();
 
+    let input_bindings = input_cel_bindings(def, ctx, extracted);
+
     for assertion in &def.assertions {
-        let passed = evaluate_assertion(assertion, extracted).unwrap_or(false);
+        let passed =
+            evaluate_assertion_with_inputs(assertion, extracted, &input_bindings).unwrap_or(false);
 
         let status_id = if passed {
             StatusId::Effective
@@ -842,6 +932,107 @@ mod tests {
         assert!(json_to_string(&serde_json::json!({"key": "val"})).is_none());
         assert!(json_to_string(&serde_json::json!([1, 2, 3])).is_none());
         assert!(json_to_string(&serde_json::json!(null)).is_none());
+    }
+
+    // ── declared inputs: defaults + CEL visibility ───────────────────────────
+
+    fn def_with_threshold(name: &str, env: &str, default: &str) -> CheckDefinition {
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            name.to_string(),
+            super::super::definition::InputDef {
+                description: String::new(),
+                env: env.to_string(),
+                default: default.to_string(),
+                required: false,
+            },
+        );
+        CheckDefinition {
+            inputs,
+            ..default_check_def()
+        }
+    }
+
+    #[test]
+    fn build_input_context_applies_declared_default() {
+        let def = def_with_threshold("max_admins", "BUILDKITE_MAX_ADMINS", "3");
+        let ctx = build_input_context(&def, &HashMap::new());
+        assert_eq!(ctx.get("max_admins").map(String::as_str), Some("3"));
+    }
+
+    #[test]
+    fn build_input_context_env_beats_default() {
+        let def = def_with_threshold("max_admins", "BUILDKITE_MAX_ADMINS", "3");
+        let mut config = HashMap::new();
+        config.insert("BUILDKITE_MAX_ADMINS".to_string(), "7".to_string());
+        let ctx = build_input_context(&def, &config);
+        assert_eq!(ctx.get("max_admins").map(String::as_str), Some("7"));
+    }
+
+    #[test]
+    fn coerce_input_value_types() {
+        assert_eq!(coerce_input_value("3"), serde_json::json!(3));
+        assert_eq!(coerce_input_value("true"), serde_json::json!(true));
+        assert_eq!(coerce_input_value("acme"), serde_json::json!("acme"));
+    }
+
+    #[test]
+    fn threshold_input_is_visible_to_cel_and_changes_the_verdict() {
+        let def = def_with_threshold("max_admins", "BUILDKITE_MAX_ADMINS", "3");
+        let mut extracted = HashMap::new();
+        extracted.insert(
+            "member_roles".to_string(),
+            serde_json::json!(["ADMIN", "ADMIN", "ADMIN", "member"]),
+        );
+        let assertion = CheckAssertion {
+            id: "admin_count_within_bound".to_string(),
+            expr: "size(member_roles.filter(r, r == \"ADMIN\")) <= max_admins".to_string(),
+            severity: "high".to_string(),
+            title: String::new(),
+            pass_message: String::new(),
+            fail_message: String::new(),
+            finding: None,
+        };
+
+        // Default 3: three admins is within bound.
+        let ctx = build_input_context(&def, &HashMap::new());
+        let bindings = input_cel_bindings(&def, &ctx, &extracted);
+        assert_eq!(bindings.get("max_admins"), Some(&serde_json::json!(3)));
+        assert!(evaluate_assertion_with_inputs(&assertion, &extracted, &bindings).unwrap());
+
+        // Operator tightens the bound via the env var the input advertises.
+        let mut config = HashMap::new();
+        config.insert("BUILDKITE_MAX_ADMINS".to_string(), "2".to_string());
+        let ctx = build_input_context(&def, &config);
+        let bindings = input_cel_bindings(&def, &ctx, &extracted);
+        assert!(!evaluate_assertion_with_inputs(&assertion, &extracted, &bindings).unwrap());
+    }
+
+    #[test]
+    fn extraction_always_shadows_an_input_of_the_same_name() {
+        let def = def_with_threshold("count", "SOME_ENV", "99");
+        let ctx = build_input_context(&def, &HashMap::new());
+        let mut extracted = HashMap::new();
+        extracted.insert("count".to_string(), serde_json::json!(1));
+        let bindings = input_cel_bindings(&def, &ctx, &extracted);
+        assert!(!bindings.contains_key("count"));
+    }
+
+    #[test]
+    fn non_identifier_input_names_are_skipped() {
+        assert!(is_cel_identifier("max_admins"));
+        assert!(!is_cel_identifier("2bad"));
+        assert!(!is_cel_identifier("has-dash"));
+        let def = def_with_threshold("has-dash", "X", "1");
+        let ctx = build_input_context(&def, &HashMap::new());
+        assert!(input_cel_bindings(&def, &ctx, &HashMap::new()).is_empty());
+    }
+
+    #[test]
+    fn checks_without_inputs_bind_nothing() {
+        let def = default_check_def();
+        let ctx = build_input_context(&def, &HashMap::new());
+        assert!(input_cel_bindings(&def, &ctx, &HashMap::new()).is_empty());
     }
 
     // ── jsonpath edge cases ──────────────────────────────────────────────────

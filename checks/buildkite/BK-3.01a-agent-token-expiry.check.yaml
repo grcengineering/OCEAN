@@ -30,6 +30,10 @@ description: |
     rather than silently shrinking the sample.
   - Zero tokens in the cluster passes vacuously — there is no unexpiring
     credential to find. This is a correct result, not a skipped one.
+  - DEGRADES, DOES NOT ACCUSE. If the token endpoint is unreachable (wrong
+    cluster identifier, token missing `read_clusters`, revoked token), the
+    reachability assertion fails loudly and the expiry assertion abstains
+    rather than reporting a coverage gap as a non-expiring token.
 author: grc-engineering
 version: "1.0"
 source: buildkite
@@ -106,10 +110,10 @@ assertions:
         rather than as a pass or a fail.
 
   - id: all_tokens_expire
-    expr: 'size(expiry_values) == token_count && expiry_values.all(v, v != null && v != "")'
+    expr: 'get_cluster_agent_tokens_status_code != 200 || (size(expiry_values) == token_count && expiry_values.all(v, v != null && v != ""))'
     severity: high
     title: Agent Token Expiry
-    pass_message: "All {{token_count}} agent token(s) in cluster {{cluster}} carry an expiry"
+    pass_message: "No non-expiring agent token was observed in cluster {{cluster}} — this row is evidence that every token carries an expiry ONLY if 'Agent Token Endpoint Reachability' above also passed; when the token list could not be read it abstains and asserts nothing about any token. The number of tokens actually read, if any, is the token_count observable in this check's evidence"
     fail_message: "One or more agent tokens in cluster {{cluster}} never expire"
     finding:
       description: |
@@ -128,6 +132,14 @@ assertions:
         Remediate by issuing a replacement token that carries `expires_at`,
         rolling agents onto it, and then revoking the original.
 
+        This assertion abstains when the token endpoint is unreachable;
+        `agent_tokens_api_reachable` carries that signal instead. Without the
+        guard the two extractions diverge on a 404: `$length` falls back to 1
+        on a non-array error body so `token_count` binds to 1, while
+        `expiry_values` never binds at all, the CEL expression errors, and the
+        interpreter's fail-closed default reports a high-severity
+        non-expiring-token finding the operator cannot act on.
+
 remediation:
   description: |
     Agent token expiry cannot be added to an existing token — `expires_at` is
@@ -143,20 +155,12 @@ remediation:
     Route it straight into your secret manager rather than letting it land in
     shell history or a CI log.
   steps:
-    - "Create a replacement token with an explicit expires_at (see the api block below), capturing the returned token value directly into your secret manager."
+    - "Create a replacement token with an explicit expires_at (see the cli command below), capturing the returned token value directly into your secret manager."
     - "Roll the cluster's agents onto the new token, confirming each reconnects and picks up a job before proceeding."
     - "Revoke the original non-expiring token via GraphQL clusterAgentTokenRevoke (ClusterAgentTokenRevokeInput requires organizationId in addition to the token id — introspect the current input shape before scripting it)."
     - "Confirm remediation by re-running this check; token_count should be unchanged and every expires_at populated."
     - "Set a calendar reminder ahead of the new expiry, since an expired token stops agent registration and there is no in-place renewal."
-  api:
-    method: POST
-    url: "https://api.buildkite.com/v2/organizations/{{org}}/clusters/{{cluster}}/tokens"
-    headers:
-      Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
-      Content-Type: application/json
-    body:
-      description: "replacement token with expiry - set by OCEAN remediation"
-      expires_at: "REPLACE_WITH_RFC3339_UTC_AT_LEAST_10_MINUTES_AHEAD"
-      allowed_ip_addresses: "REPLACE_WITH_SPACE_SEPARATED_CIDRS"
   cli:
-    command: "curl -sS -X POST -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"description\":\"replacement token with expiry\",\"expires_at\":\"2026-12-31T23:59:59Z\"}' https://api.buildkite.com/v2/organizations/{{org}}/clusters/{{cluster}}/tokens"
+    command: "curl -sS -X POST -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"description\":\"replacement token with expiry\",\"expires_at\":\"2026-12-31T23:59:59Z\"}' https://api.buildkite.com/v2/organizations/{{BUILDKITE_ORG_SLUG}}/clusters/{{BUILDKITE_CLUSTER_ID}}/tokens"
+  manual:
+    - "NO AUTONOMOUS `remediation.api` BLOCK — deliberate. The fix is a token ROTATION, not an edit: `expires_at` is immutable after creation, so remediating means minting a NEW credential, rolling every agent onto it, and revoking the old one. Two of the three required values (the expiry timestamp and the CIDR allowlist) are operator decisions OCEAN cannot supply, and an `api` block carrying REPLACE_WITH_ placeholders would sit in the `--apply` lane creating real agent tokens with invalid fields. The cli command above is display-only (`ocean harden` never shell-execs a cli action) and is the sanctioned path."

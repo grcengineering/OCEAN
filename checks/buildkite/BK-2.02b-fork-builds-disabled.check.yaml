@@ -87,7 +87,7 @@ steps:
 
 assertions:
   - id: pipelines_api_reachable
-    expr: "status_code == 200"
+    expr: "list_pipelines_status_code == 200"
     severity: medium
     title: Pipeline Inventory Reachable
     pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 — fork-build settings are auditable"
@@ -98,13 +98,15 @@ assertions:
         response, so per-pipeline fork-build settings cannot be read. This is
         an audit-coverage failure, not evidence that fork builds are enabled.
         Confirm the organization slug is correct and that the API access
-        token carries the `read_pipelines` scope, then re-run.
+        token carries the `read_pipelines` scope, then re-run. Until this
+        returns 200 the fork-build assertion below is vacuous by design and
+        must not be read as a pass.
 
   - id: fork_builds_disabled
-    expr: "size(fork_build_settings.filter(f, f == true)) == 0"
+    expr: "list_pipelines_status_code != 200 || size(fork_build_settings.filter(f, f == true)) == 0"
     severity: high
     title: Fork Pull-Request Builds Disabled
-    pass_message: "No pipeline exposing the fork-build setting has builds from third-party forks enabled"
+    pass_message: "No fork-build violation was observed among the pipelines read for '{{org}}' — this row is evidence that no pipeline builds third-party forks ONLY if 'Pipeline Inventory Reachable' above also passed; when the inventory could not be read it abstains and asserts nothing about any pipeline"
     fail_message: "One or more pipelines build pull requests from third-party forks"
     finding:
       description: |
@@ -128,6 +130,12 @@ assertions:
         `build_pull_request_forks` are not represented in this result. A pass
         means "nothing that exposes the setting has it on", not "fork
         execution is impossible".
+
+        This assertion abstains when the pipelines endpoint is unreachable;
+        `pipelines_api_reachable` carries that signal instead. Without the
+        guard a 404 or 403 leaves `fork_build_settings` unbound, the CEL
+        expression errors, and the interpreter's fail-closed default reports a
+        high-severity fork-build finding the operator cannot act on.
 
 remediation:
   description: |

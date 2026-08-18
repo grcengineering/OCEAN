@@ -26,11 +26,34 @@ description: |
   the finding says so explicitly, and no remediation here can close it.
 
   Degradation. When the GraphQL read itself fails (token without GraphQL API Access,
-  wrong slug, an allowlist that already excludes the scanner, expired token)
-  Buildkite resolves `data.organization` to null. The `organization_readable`
-  assertion is the discriminator: when it FAILS, the allowlist verdict below is
-  UNKNOWN and must not be reported as non-compliance. Both assertions passing is the
+  wrong slug, an allowlist that already excludes the scanner, expired token) no
+  organization object comes back. The `organization_readable` assertion is the
+  discriminator: when it FAILS, the allowlist verdict below ABSTAINS rather than
+  reporting a collection failure as non-compliance. Both assertions passing is the
   only state that certifies the control.
+
+  Why the guard is written against `body_root` and not against a scalar. GraphQL
+  reports request-level errors with HTTP 200 in three distinct shapes:
+  `data.organization` null, `data` itself null (query validation failed), and no
+  `data` key at all. Only the first leaves `org_object` bound. In the other two every
+  extracted name is UNBOUND, a guard written against `org_object` raises "Undeclared
+  reference to 'org_object'", and the interpreter's fail-closed `.unwrap_or(false)`
+  converts that CEL error into a FAILURE — reporting "no API IP allowlist" for an
+  organization that was never read. The guard therefore walks the response body from
+  the root down (`body_root` is bound for every response shape, because
+  `jsonpath_extract` returns the body verbatim for `$` before attempting any
+  navigation): `has(data)`, `data != null`, `has(organization)`, `organization !=
+  null`, in that order, so no clause is ever reached with an unnavigable receiver.
+  Verified against cel-interpreter 0.10.0 on nine response shapes: it raises on none
+  and abstains on all eight unreadable ones.
+
+  What the abstention does NOT do. OCEAN emits an assertion's `pass_message` whenever
+  it evaluates Effective, and an abstaining assertion is Effective. The verdict's
+  `pass_message` is therefore worded to be true in BOTH states rather than asserting
+  that an allowlist is set — and it no longer interpolates the allowlist value, which
+  is UNBOUND on every abstention path and previously rendered as the literal text
+  `{{allowed_api_ip_addresses}}` inside a sentence claiming API access was restricted
+  to it. The value stays available as an evidence observable.
 
   Lockout risk runs BOTH ways. This is not a setting to enable reflexively. A CIDR
   list that omits the network you automate from severs your own REST and GraphQL
@@ -71,9 +94,8 @@ steps:
       being interpolated into the query string. `Query.organization(slug: ID)`,
       `Organization.slug: String!` and `Organization.allowedApiIpAddresses: String`
       were confirmed against live tenant introspection on 2026-08-18. The endpoint is
-      hardcoded rather than templated from BUILDKITE_GRAPHQL_URL because the check
-      engine does not apply input defaults — an unset input would leave the literal
-      placeholder in the URL and fail the whole step.
+      hardcoded because Buildkite's control plane is SaaS-only: graphql.buildkite.com
+      is the single GraphQL host, so there is nothing for an endpoint input to vary.
     request:
       method: POST
       url: "https://graphql.buildkite.com/v1"
@@ -86,17 +108,37 @@ steps:
         variables:
           org: "{{org}}"
     extract:
+      # Reachability discriminator. `$` is the ONLY JSONPath the interpreter
+      # binds unconditionally: `jsonpath_extract` returns `Some(body.clone())`
+      # for it before any navigation is attempted, so `body_root` is bound for
+      # EVERY response shape — including the ones where nothing else is.
+      #
+      # This is what makes the guards below total. GraphQL answers
+      # request-level errors (query validation, an Enterprise-gated field on a
+      # lower plan, a malformed query) with HTTP 200 and either `"data": null`
+      # or no `data` key at all. In both of those shapes `$.data.organization`
+      # navigates to nothing, so `org_object` and every scalar below are
+      # UNBOUND, a guard written against them raises "Undeclared reference",
+      # and the interpreter's fail-closed `.unwrap_or(false)` converts a
+      # collection failure into a false accusation. Guarding on `body_root`
+      # instead cannot reach that state.
+      body_root: "$"
+      # Retained for evidence observables (an operator reading the evidence
+      # sees the null organization directly). NOT used as a guard: it is
+      # UNBOUND whenever `data` is null or absent, which is precisely the
+      # failure mode the guards have to survive.
+      org_object: "$.data.organization"
       org_id: "$.data.organization.id"
       org_slug: "$.data.organization.slug"
       allowed_api_ip_addresses: "$.data.organization.allowedApiIpAddresses"
 
 assertions:
   - id: organization_readable
-    expr: "org_id != ''"
+    expr: "get_org_api_ip_allowlist_status_code == 200 && body_root != null && has(body_root.data) && body_root.data != null && has(body_root.data.organization) && body_root.data.organization != null && body_root.data.organization.id != ''"
     severity: info
     title: Organization Readable Over GraphQL
-    pass_message: "GraphQL resolved organization '{{org}}'; the API IP allowlist verdict below is authoritative"
-    fail_message: "GraphQL did not resolve organization '{{org}}' (HTTP {{status_code}}) — the API IP allowlist verdict is UNKNOWN, not a finding"
+    pass_message: "GraphQL resolved organization '{{org}}' and returned an organization object; the API IP allowlist verdict below was actually evaluated"
+    fail_message: "GraphQL returned no organization object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdicts below abstain and assert nothing in either direction"
     finding:
       description: |
         The Buildkite GraphQL API did not return an organization object for this
@@ -115,10 +157,10 @@ assertions:
         Re-run after correcting the credential, then re-read the allowlist result.
 
   - id: api_ip_allowlist_configured
-    expr: "allowed_api_ip_addresses != null && allowed_api_ip_addresses != ''"
+    expr: "get_org_api_ip_allowlist_status_code != 200 || body_root == null || !has(body_root.data) || body_root.data == null || !has(body_root.data.organization) || body_root.data.organization == null || (allowed_api_ip_addresses != null && allowed_api_ip_addresses != '')"
     severity: medium
     title: Organization API IP Allowlist Configured
-    pass_message: "API access to organization '{{org}}' is restricted to: {{allowed_api_ip_addresses}}"
+    pass_message: "No missing-API-IP-allowlist violation was observed for '{{org}}' — this row is evidence that an allowlist is set ONLY if 'Organization Readable Over GraphQL' above also passed; when the organization could not be read it abstains and asserts nothing about the allowlist. The observed value, when one was read, is the allowed_api_ip_addresses observable in this check's evidence"
     fail_message: "Organization '{{org}}' has no API IP allowlist — any network holding a valid token can reach the REST and GraphQL APIs"
     finding:
       description: |
@@ -141,8 +183,15 @@ assertions:
            lower plan the only real remediation is a purchasing decision, and the
            honest disposition is a recorded, risk-accepted gap.
 
-        2. Readability. If the companion `organization_readable` assertion also
-           failed, this result is UNKNOWN rather than non-compliant.
+        2. Readability. This finding cannot be raised by an unreadable
+           organization. The assertion is guarded from the response root down —
+           non-200, a null body, a missing or null `data`, or a missing or null
+           `data.organization` all short-circuit it to abstain — so
+           `organization_readable` failing produces no allowlist finding at all. The
+           guard covers the GraphQL request-level error shapes (`data: null` and no
+           `data` key), which an earlier `org_object`-based guard did not: those leave
+           every extracted scalar unbound, and the resulting CEL error was evaluated
+           fail-closed into this very finding.
 
         LOCKOUT WARNING — read the remediation before acting. Setting this wrong
         severs your own API access, including the access needed to undo it.
@@ -171,13 +220,20 @@ remediation:
     - "Apply the allowlist as a reviewed change (Terraform stanza below, or the GraphQL mutation in the manual notes), then immediately re-run this check FROM AN ALLOWLISTED ADDRESS to confirm both API access and the new value."
   manual:
     - "Undo path (run from an allowlisted network): POST https://graphql.buildkite.com/v1 with mutation OceanUndoApiIpAllowlist($orgId: ID!, $ips: String!) { organizationApiIpAllowlistUpdate(input: {organizationID: $orgId, ipAddresses: $ips}) { clientMutationId } } — note the input field is organizationID with a capital D, unlike organizationId on the sibling organization mutations. Confirmed by live schema introspection 2026-08-18; the lowercase spelling fails schema validation before it executes."
-    - "ipAddresses is a single String (a space-separated list), NOT a list type. The Terraform attribute of the same purpose on buildkite_portal is likewise a string. Do not send an array."
+    - "SHAPE DIFFERS BY SURFACE — check which one you are on before formatting the value. GraphQL: organizationApiIpAllowlistUpdate.ipAddresses is a single String holding a space-separated list (\"203.0.113.0/24 198.51.100.0/24\"), NOT a list type — do not send an array to the mutation. Terraform: buildkite_organization.allowed_api_ip_addresses is list(string) in provider v1.38.0 and DOES take an array — the stanza below is a list for that reason, and passing it a single space-separated string is a type error at plan time. The two surfaces genuinely disagree, and the provider does the splitting for you. (buildkite_portal.allowed_ip_addresses is a plain string, but that is a different resource governing Portal access, not organization API access — do not read its shape across to this attribute. buildkite_cluster_agent_token.allowed_ip_addresses is list(string) like the organization one, while the GraphQL clusterAgentTokenUpdate.allowedIpAddresses that BK-3.01b uses is a String: the same split runs through the agent-token controls.) All four types read from tofu providers schema -json against provider v1.38.0 on 2026-08-18."
     - "Terraform singleton conflict: buildkite_organization represents the ONE organization object and is also used by the 2FA control (HTH buildkite 1.2) and the audit-logging control (4.1). Declaring it twice makes two Terraform resources manage one remote object and produces perpetual drift. Adopt ONE resource for all organization settings, or merge them."
     - "Terraform plan-gate side effect: the provider touches allowed_api_ip_addresses on create even when the configuration never sets it, so buildkite_organization fails to create at all on plans without the feature — including for configurations that only want enforce_2fa."
     - "This is distinct from the agent-token IP allowlist in HTH buildkite 3.1 (BK-3.01b), which carries no lockout risk because agent tokens are not the credential you administer with."
+    - "EMITTED SHAPE: `ocean harden` writes remediation.terraform blocks with serde_json::to_string_pretty (src/harden/mod.rs generate_terraform_hcl), so the .tf file it produces is JSON-serialized, not HCL. Two consequences for this stanza. First, an HCL expression such as a `var.` reference cannot survive that path — it would be emitted as the literal string \"var.allowed_api_ip_addresses\", so the placeholder below is a concrete CIDR list you replace, not a variable reference. Second, treat the emitted file as a starting point to port into your own HCL rather than something to apply as-is."
   terraform:
     resources:
       - type: buildkite_organization
         name: api_restrictions
         attributes:
-          allowed_api_ip_addresses: "var.allowed_api_ip_addresses"
+          # list(string) per provider v1.38.0 — NOT the space-separated string the
+          # GraphQL mutation takes. Replace every element with a CIDR you have
+          # confirmed is a real, static egress address for something that must keep
+          # REST and GraphQL access; an omitted range is a self-sealing lockout.
+          allowed_api_ip_addresses:
+            - "REPLACE_WITH_CI_RUNNER_EGRESS_CIDR"
+            - "REPLACE_WITH_ADMIN_OR_VPN_EGRESS_CIDR"

@@ -23,9 +23,31 @@ description: |
   rather than reporting an unreadable setting as a compliance failure: the
   `organization_readable` assertion is the discriminator. When the GraphQL read
   fails (invalid or non-GraphQL-enabled token, wrong organization slug, API IP
-  allowlist block) Buildkite resolves `data.organization` to null,
-  `organization_readable` FAILS, and the visibility verdict below must be read as
-  UNKNOWN, not as a real finding.
+  allowlist block) no organization object comes back, `organization_readable` FAILS,
+  and the visibility verdict below ABSTAINS rather than being emitted as a
+  high-severity "organization is PUBLIC" finding.
+
+  Why the guard is written against `body_root` and not against a scalar. GraphQL
+  reports request-level errors with HTTP 200 in three distinct shapes:
+  `data.organization` null, `data` itself null (query validation failed), and no
+  `data` key at all. Only the first leaves `org_object` bound. In the other two every
+  extracted name is UNBOUND, a guard written against `org_object` raises "Undeclared
+  reference to 'org_object'", and the interpreter's fail-closed `.unwrap_or(false)`
+  converts that CEL error into a FAILURE — emitting the "organization is PUBLIC"
+  accusation against an organization that was never read. The guard therefore walks
+  the response body from the root down (`body_root` is bound for every response
+  shape, because `jsonpath_extract` returns the body verbatim for `$` before
+  attempting any navigation): `has(data)`, `data != null`, `has(organization)`,
+  `organization != null`, in that order, so no clause is ever reached with an
+  unnavigable receiver. Verified against cel-interpreter 0.10.0 on nine response
+  shapes: it raises on none and abstains on all eight unreadable ones.
+
+  What the abstention does NOT do. OCEAN emits an assertion's `pass_message` whenever
+  it evaluates Effective, and an abstaining assertion is Effective. The verdict's
+  `pass_message` is therefore worded to be true in BOTH states — it reports that no
+  violation was observed and names its dependency on `organization_readable` — rather
+  than asserting that the organization is private. An abstaining row must never read
+  as an attestation that the control is in place.
 author: grc-engineering
 version: "1.0"
 source: buildkite
@@ -37,7 +59,15 @@ references:
   nist: ["AC-3", "AC-22"]
   soc2: CC6.1
   iso27001: A.9.4.1
-  hth: "buildkite:4.1"
+  # Maps to HTH buildkite 2.2 "Configure Pipeline Permissions", NOT to the
+  # check id's own 4.x band. The guide has no organization-visibility control:
+  # 4.1 is "Configure Audit Logging" and 4.2 is "Contain a Compromised Build
+  # Fleet". 2.2 is the control this check actually mirrors — its Step 1 sets
+  # per-pipeline visibility and its Step 3 covers the organization-wide
+  # "Change Pipeline Visibility" toggle, which are precisely the two
+  # remediation steps below. BK-2.02 maps to the same guide control from the
+  # per-pipeline side; this check covers the organization-level scalar.
+  hth: "buildkite:2.2"
 
 credentials:
   BUILDKITE_API_TOKEN:
@@ -71,17 +101,37 @@ steps:
         variables:
           org: "{{org}}"
     extract:
+      # Reachability discriminator. `$` is the ONLY JSONPath the interpreter
+      # binds unconditionally: `jsonpath_extract` returns `Some(body.clone())`
+      # for it before any navigation is attempted, so `body_root` is bound for
+      # EVERY response shape — including the ones where nothing else is.
+      #
+      # This is what makes the guards below total. GraphQL answers
+      # request-level errors (query validation, an Enterprise-gated field on a
+      # lower plan, a malformed query) with HTTP 200 and either `"data": null`
+      # or no `data` key at all. In both of those shapes `$.data.organization`
+      # navigates to nothing, so `org_object` and every scalar below are
+      # UNBOUND, a guard written against them raises "Undeclared reference",
+      # and the interpreter's fail-closed `.unwrap_or(false)` converts a
+      # collection failure into a false accusation. Guarding on `body_root`
+      # instead cannot reach that state.
+      body_root: "$"
+      # Retained for evidence observables (an operator reading the evidence
+      # sees the null organization directly). NOT used as a guard: it is
+      # UNBOUND whenever `data` is null or absent, which is precisely the
+      # failure mode the guards have to survive.
+      org_object: "$.data.organization"
       org_id: "$.data.organization.id"
       org_slug: "$.data.organization.slug"
       org_public: "$.data.organization.public"
 
 assertions:
   - id: organization_readable
-    expr: "org_id != ''"
+    expr: "get_org_visibility_status_code == 200 && body_root != null && has(body_root.data) && body_root.data != null && has(body_root.data.organization) && body_root.data.organization != null && body_root.data.organization.id != ''"
     severity: info
     title: Organization Readable Over GraphQL
-    pass_message: "GraphQL resolved organization '{{org}}'; the visibility verdict below is authoritative"
-    fail_message: "GraphQL did not resolve organization '{{org}}' (HTTP {{status_code}}) — the visibility verdict is UNKNOWN, not a finding"
+    pass_message: "GraphQL resolved organization '{{org}}' and returned an organization object; the visibility verdict below was actually evaluated"
+    fail_message: "GraphQL returned no organization object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdicts below abstain and assert nothing in either direction"
     finding:
       description: |
         The Buildkite GraphQL API did not return an organization object for this
@@ -97,10 +147,10 @@ assertions:
         Re-run after correcting the credential, then re-read the visibility result.
 
   - id: organization_not_public
-    expr: "org_public == false"
+    expr: "get_org_visibility_status_code != 200 || body_root == null || !has(body_root.data) || body_root.data == null || !has(body_root.data.organization) || body_root.data.organization == null || org_public == false"
     severity: high
     title: Organization Visibility
-    pass_message: "Organization '{{org}}' is not publicly visible"
+    pass_message: "No public-visibility violation was observed for '{{org}}' — this row is evidence that the organization is private ONLY if 'Organization Readable Over GraphQL' above also passed; when the organization could not be read it abstains and asserts nothing about visibility"
     fail_message: "Organization '{{org}}' is PUBLICLY visible — pipeline names and build activity are exposed to anyone"
     finding:
       description: |
@@ -115,8 +165,14 @@ assertions:
         Remediation is console-only: Buildkite exposes no write interface for
         organization visibility. Set every pipeline that does not need to be public
         back to private, and review the organization's public profile page.
-        If the companion `organization_readable` assertion also failed, this result
-        is UNKNOWN rather than non-compliant — fix the credential first.
+        This finding cannot be raised by an unreadable organization. The assertion
+        is guarded from the response root down — non-200, a null body, a missing or
+        null `data`, or a missing or null `data.organization` all short-circuit it to
+        abstain — so `organization_readable` failing produces no visibility finding at
+        all. The guard covers the GraphQL request-level error shapes (`data: null` and
+        no `data` key), which an earlier `org_object`-based guard did not: those leave
+        every extracted scalar unbound, and the resulting CEL error was evaluated
+        fail-closed into this very finding.
 
 remediation:
   description: |
@@ -129,7 +185,7 @@ remediation:
     make individual pipelines private and to close the organization-level toggle that
     lets any member flip a pipeline back to public.
   steps:
-    - "Navigate to buildkite.com/organizations/{{org}}/pipelines and identify every pipeline with public visibility"
+    - "Navigate to buildkite.com/organizations/{{BUILDKITE_ORG_SLUG}}/pipelines and identify every pipeline with public visibility"
     - "For each pipeline that does not need to be public: Pipeline Settings -> General -> set Visibility to Private"
     - "For any pipeline that must stay public, disable builds from forked repositories and run it on an agent pool holding no production credentials"
     - "Navigate to Organization Settings -> Security -> Pipelines and disable 'Change Pipeline Visibility' so members cannot re-publish a private pipeline"

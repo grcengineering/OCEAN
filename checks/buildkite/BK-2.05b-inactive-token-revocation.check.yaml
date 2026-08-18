@@ -37,10 +37,37 @@ description: |
   platform-side guarantee is armed.
 
   Degradation. When the GraphQL read itself fails (token without GraphQL API Access,
-  wrong slug, an API IP allowlist excluding the scanner, expired token) Buildkite
-  resolves `data.organization` to null. The `organization_readable` assertion is the
-  discriminator: when it FAILS, the revocation verdicts below are UNKNOWN and must
-  not be reported as non-compliance.
+  wrong slug, an API IP allowlist excluding the scanner, expired token) no
+  organization object comes back. The `organization_readable` assertion is the
+  discriminator: when it FAILS, both revocation verdicts below ABSTAIN rather than
+  reporting a collection failure as non-compliance. The guard changes nothing about
+  the tri-state reading on a successful read: an unset window (null) and an explicit
+  NEVER both still fail, and they still fail on separate assertions so operator
+  intent stays distinguishable.
+
+  Why the guard is written against `body_root` and not against a scalar. GraphQL
+  reports request-level errors with HTTP 200 in three distinct shapes:
+  `data.organization` null, `data` itself null (query validation failed), and no
+  `data` key at all. Only the first leaves `org_object` bound. In the other two every
+  extracted name is UNBOUND, a guard written against `org_object` raises "Undeclared
+  reference to 'org_object'", and the interpreter's fail-closed `.unwrap_or(false)`
+  converts that CEL error into a FAILURE on BOTH revocation assertions — reporting an
+  organization that was never read as having no revocation window. The guard
+  therefore walks the response body from the root down (`body_root` is bound for
+  every response shape, because `jsonpath_extract` returns the body verbatim for `$`
+  before attempting any navigation): `has(data)`, `data != null`, `has(organization)`,
+  `organization != null`, in that order, so no clause is ever reached with an
+  unnavigable receiver. Verified against cel-interpreter 0.10.0 on nine response
+  shapes: it raises on none and abstains on all eight unreadable ones.
+
+  What the abstention does NOT do. OCEAN emits an assertion's `pass_message` whenever
+  it evaluates Effective, and an abstaining assertion is Effective. Both verdict
+  `pass_message`s are therefore worded to be true in BOTH states rather than
+  asserting that a window is configured — and the "configured" one no longer
+  interpolates the period, which is UNBOUND on every abstention path and previously
+  rendered as the literal text `{{revoke_inactive_tokens_after}}` inside a sentence
+  claiming tokens were revoked after it. The value stays available as an evidence
+  observable.
 author: grc-engineering
 version: "1.0"
 source: buildkite
@@ -73,10 +100,9 @@ steps:
       being interpolated into the query string. `Query.organization(slug: ID)`,
       `Organization.slug: String!` and `Organization.revokeInactiveTokensAfter:
       RevokeInactiveTokenPeriod` were confirmed against live tenant introspection on
-      2026-08-18. The endpoint is hardcoded rather than templated from
-      BUILDKITE_GRAPHQL_URL because the check engine does not apply input defaults —
-      an unset input would leave the literal placeholder in the URL and fail the
-      whole step.
+      2026-08-18. The endpoint is hardcoded because Buildkite's control plane is
+      SaaS-only: graphql.buildkite.com is the single GraphQL host, so there is
+      nothing for an endpoint input to vary.
     request:
       method: POST
       url: "https://graphql.buildkite.com/v1"
@@ -89,17 +115,37 @@ steps:
         variables:
           org: "{{org}}"
     extract:
+      # Reachability discriminator. `$` is the ONLY JSONPath the interpreter
+      # binds unconditionally: `jsonpath_extract` returns `Some(body.clone())`
+      # for it before any navigation is attempted, so `body_root` is bound for
+      # EVERY response shape — including the ones where nothing else is.
+      #
+      # This is what makes the guards below total. GraphQL answers
+      # request-level errors (query validation, an Enterprise-gated field on a
+      # lower plan, a malformed query) with HTTP 200 and either `"data": null`
+      # or no `data` key at all. In both of those shapes `$.data.organization`
+      # navigates to nothing, so `org_object` and every scalar below are
+      # UNBOUND, a guard written against them raises "Undeclared reference",
+      # and the interpreter's fail-closed `.unwrap_or(false)` converts a
+      # collection failure into a false accusation. Guarding on `body_root`
+      # instead cannot reach that state.
+      body_root: "$"
+      # Retained for evidence observables (an operator reading the evidence
+      # sees the null organization directly). NOT used as a guard: it is
+      # UNBOUND whenever `data` is null or absent, which is precisely the
+      # failure mode the guards have to survive.
+      org_object: "$.data.organization"
       org_id: "$.data.organization.id"
       org_slug: "$.data.organization.slug"
       revoke_inactive_tokens_after: "$.data.organization.revokeInactiveTokensAfter"
 
 assertions:
   - id: organization_readable
-    expr: "org_id != ''"
+    expr: "get_org_token_revocation_status_code == 200 && body_root != null && has(body_root.data) && body_root.data != null && has(body_root.data.organization) && body_root.data.organization != null && body_root.data.organization.id != ''"
     severity: info
     title: Organization Readable Over GraphQL
-    pass_message: "GraphQL resolved organization '{{org}}'; the token-revocation verdicts below are authoritative"
-    fail_message: "GraphQL did not resolve organization '{{org}}' (HTTP {{status_code}}) — the token-revocation verdicts are UNKNOWN, not a finding"
+    pass_message: "GraphQL resolved organization '{{org}}' and returned an organization object; the token-revocation verdicts below were actually evaluated"
+    fail_message: "GraphQL returned no organization object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdicts below abstain and assert nothing in either direction"
     finding:
       description: |
         The Buildkite GraphQL API did not return an organization object for this
@@ -118,10 +164,10 @@ assertions:
         the credential or the slug, not the plan.
 
   - id: inactive_token_revocation_configured
-    expr: "revoke_inactive_tokens_after != null"
+    expr: "get_org_token_revocation_status_code != 200 || body_root == null || !has(body_root.data) || body_root.data == null || !has(body_root.data.organization) || body_root.data.organization == null || revoke_inactive_tokens_after != null"
     severity: medium
     title: Inactive-Token Revocation Period Configured
-    pass_message: "Organization '{{org}}' revokes inactive API access tokens after {{revoke_inactive_tokens_after}}"
+    pass_message: "No unset-revocation-period violation was observed for '{{org}}' — this row is evidence that a period is configured ONLY if 'Organization Readable Over GraphQL' above also passed; when the organization could not be read it abstains and asserts nothing about revocation. The observed period, when one was read, is the revoke_inactive_tokens_after observable in this check's evidence"
     fail_message: "Organization '{{org}}' has no inactive-token revocation period set — unused API access tokens stay live indefinitely"
     finding:
       description: |
@@ -146,14 +192,19 @@ assertions:
         operator negligence: the honest disposition is a recorded, risk-accepted gap
         with a scheduled manual token review as the compensating control.
 
-        If the companion `organization_readable` assertion also failed, this result
-        is UNKNOWN rather than non-compliant.
+        This finding cannot be raised by an unreadable organization. The assertion
+        is guarded from the response root down — non-200, a null body, a missing or
+        null `data`, or a missing or null `data.organization` all short-circuit it to
+        abstain. The guard covers the GraphQL request-level error shapes (`data: null`
+        and no `data` key), which an earlier `org_object`-based guard did not: those
+        leave every extracted scalar unbound, and the resulting CEL error was
+        evaluated fail-closed into this very finding.
 
   - id: inactive_token_revocation_effective
-    expr: "revoke_inactive_tokens_after != null && revoke_inactive_tokens_after != 'NEVER'"
+    expr: "get_org_token_revocation_status_code != 200 || body_root == null || !has(body_root.data) || body_root.data == null || !has(body_root.data.organization) || body_root.data.organization == null || (revoke_inactive_tokens_after != null && revoke_inactive_tokens_after != 'NEVER')"
     severity: medium
     title: Inactive-Token Revocation Period Is Not NEVER
-    pass_message: "Organization '{{org}}' has an effective inactive-token revocation window (not NEVER)"
+    pass_message: "No ineffective-revocation-window violation was observed for '{{org}}' — this row is evidence of a real window (neither unset nor NEVER) ONLY if 'Organization Readable Over GraphQL' above also passed; when the organization could not be read it abstains and asserts nothing about the window"
     fail_message: "Organization '{{org}}' has no effective inactive-token revocation window — the period is unset or explicitly NEVER"
     finding:
       description: |
@@ -168,9 +219,11 @@ assertions:
         starting point; DAYS_30 is stronger. Valid values: DAYS_30, DAYS_60, DAYS_90,
         DAYS_180, DAYS_365, NEVER.
 
-        Same two caveats as the companion assertion: on a non-Enterprise plan this
-        cannot be remediated (record it as plan-limited), and if
-        `organization_readable` also failed this result is UNKNOWN.
+        Same plan caveat as the companion assertion, and the same root-anchored
+        reachability guard: on a non-Enterprise plan this cannot be remediated (record
+        it as plan-limited), and an unreadable organization — including the GraphQL
+        request-level error shapes `data: null` and no `data` key — abstains here
+        rather than producing a verdict you have to reinterpret.
 
 remediation:
   description: |
@@ -212,7 +265,7 @@ remediation:
     body:
       query: "mutation OceanSetInactiveTokenRevocation($orgId: ID!, $period: RevokeInactiveTokenPeriod!) { organizationRevokeInactiveTokensAfterUpdate(input: {organizationId: $orgId, revokeInactiveTokensAfter: $period}) { organization { id revokeInactiveTokensAfter } } }"
       variables:
-        orgId: "{{org_id}}"
+        orgId: "{{BUILDKITE_GRAPHQL_ID}}"
         period: "DAYS_90"
   cli:
-    command: "curl -sS -X POST https://graphql.buildkite.com/v1 -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"variables\":{\"orgId\":\"{{org_id}}\",\"period\":\"DAYS_90\"},\"query\":\"mutation OceanSetInactiveTokenRevocation($orgId: ID!, $period: RevokeInactiveTokenPeriod!) { organizationRevokeInactiveTokensAfterUpdate(input: {organizationId: $orgId, revokeInactiveTokensAfter: $period}) { organization { id revokeInactiveTokensAfter } } }\"}'"
+    command: "curl -sS -X POST https://graphql.buildkite.com/v1 -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"variables\":{\"orgId\":\"{{BUILDKITE_GRAPHQL_ID}}\",\"period\":\"DAYS_90\"},\"query\":\"mutation OceanSetInactiveTokenRevocation($orgId: ID!, $period: RevokeInactiveTokenPeriod!) { organizationRevokeInactiveTokensAfterUpdate(input: {organizationId: $orgId, revokeInactiveTokensAfter: $period}) { organization { id revokeInactiveTokensAfter } } }\"}'"
