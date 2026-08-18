@@ -1,0 +1,170 @@
+id: BK-2.03
+name: Organization Admin Population Is Within Bound
+description: |
+  Enumerates every member of the Buildkite organization via the REST API
+  (GET /v2/organizations/{org}/members) and fails when more than 3 members
+  hold the organization `admin` role. Buildkite organization admins can
+  change SSO configuration, member roles, pipeline permissions, agent
+  registration tokens, and billing — a single compromised admin account is a
+  full-organization compromise, and every additional admin is another
+  phishable path to the same outcome.
+
+  Why this check uses REST and not GraphQL. Two OCEAN constraints combine to
+  make GraphQL unreachable here, and both are structural today:
+
+    1. `Organization.members` exposes no `role` filter, so the GraphQL server
+       cannot be asked to return only admins. The filtering would have to
+       happen client-side.
+    2. The check interpreter's `jsonpath_extract` (src/check/interpreter.rs)
+       supports the `$[*].field` wildcard ONLY at the root of the response
+       array. A GraphQL response is a nested object, so the path that would
+       be needed — `$.data.organization.members.edges[*].node.role` — cannot
+       be expressed at all. Only `$.data.organization.<scalar>` and Relay
+       connection `count` fields are reachable on the GraphQL surface.
+
+  Taken together, declarative admin enumeration through GraphQL is impossible
+  in OCEAN. The REST members endpoint returns a ROOT ARRAY whose elements
+  carry `role` directly, which `$[*].role` extracts cleanly. That is the only
+  reason this check is REST-shaped; it is not a preference.
+
+  Bound configuration. The bound is declared as the `max_admins` input
+  (default 3) so the intended threshold is discoverable and overridable in
+  messages and tooling. The threshold that is ACTUALLY ENFORCED is the
+  numeric literal in the `admin_count_within_bound` assertion, because the
+  CEL evaluation context receives only JSONPath extractions and step status
+  codes — declared inputs are never injected into it, and `InputDef.default`
+  is parsed but not applied at runtime. Raising or lowering the bound
+  therefore requires editing BOTH the input default and the literal in the
+  assertion expression. They are kept equal (3) here.
+
+  Degradation. The role comparison accepts both `admin` (REST spelling) and
+  `ADMIN` (the `OrganizationMemberRole` GraphQL enum spelling) so a
+  representation change on either surface cannot produce a false pass. If the
+  members endpoint does not return 200 — wrong org slug, missing
+  `read_organizations` scope, revoked token — the `members_api_reachable`
+  assertion reports that explicitly as an audit-coverage gap, and the bound
+  assertion is guarded so that an unreadable member list is never scored as a
+  least-privilege failure.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L1
+tags: [rbac, admin, least-privilege, organization, access-review]
+
+references:
+  cis: "5.4"
+  nist: ["AC-6(1)"]
+  hth: "buildkite:2.3"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_organizations]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+  max_admins:
+    description: >-
+      Maximum number of organization members permitted to hold the admin role.
+      Documentary only — the enforced value is the literal in the
+      admin_count_within_bound assertion (see description); keep both in sync.
+    env: BUILDKITE_MAX_ADMINS
+    default: "3"
+    required: false
+
+steps:
+  - id: list_members
+    action: api_call
+    note: |
+      Root-array response — the only response shape from which the
+      interpreter can extract a per-element field. per_page is set to the API
+      maximum because Link-header pagination is not yet implemented in the
+      interpreter (the paginate flag currently returns the first page only),
+      so an organization with more than 100 members will have only its first
+      page evaluated. `member_count` is extracted alongside the roles so the
+      evidence carries the size of the population that was actually read and
+      a truncated run is visible to a reviewer rather than silent.
+    request:
+      method: GET
+      url: "https://api.buildkite.com/v2/organizations/{{org}}/members?per_page=100"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Accept: application/json
+      paginate: true
+    extract:
+      member_roles: "$[*].role"
+      member_count: "$length"
+
+assertions:
+  - id: members_api_reachable
+    expr: "list_members_status_code == 200"
+    severity: medium
+    title: Organization Member Inventory Reachable
+    pass_message: "GET /v2/organizations/{{org}}/members returned 200 — the admin population is auditable"
+    fail_message: "GET /v2/organizations/{{org}}/members did not return 200 — the admin population could not be audited"
+    finding:
+      description: |
+        The Buildkite organization members endpoint did not return a
+        successful response, so the number of organization admins could not
+        be determined. This is an audit-coverage failure, not evidence of
+        admin sprawl. Confirm the organization slug is correct and that the
+        API access token carries the `read_organizations` scope, then re-run.
+        Until this returns 200 the least-privilege assertion below is
+        vacuous by design and must not be read as a pass.
+
+  - id: admin_count_within_bound
+    expr: "list_members_status_code != 200 || size(member_roles.filter(r, r == \"admin\" || r == \"ADMIN\")) <= 3"
+    severity: medium
+    title: Admin Role Assignment Is Within Bound
+    pass_message: "3 or fewer organization members hold the admin role"
+    fail_message: "More than 3 organization members hold the admin role"
+    finding:
+      description: |
+        More than the permitted number of members hold the Buildkite
+        organization admin role. Organization admins can change SSO and 2FA
+        enforcement, alter member roles, create and revoke agent registration
+        tokens, change pipeline permissions, and manage billing — the role
+        carries no scoping, so each holder is an independent path to full
+        organization compromise, and admin grants are the most common form of
+        access that outlives the reason it was granted.
+
+        Reduce the admin population to the smallest set with a documented,
+        current business need. Where someone holds admin only in order to
+        operate a specific agent cluster's tokens, queues, or secrets, make
+        them a cluster maintainer instead (BK-3.07) and remove the org-wide
+        grant — that is the least-privilege substitution this control and
+        BK-3.07 exist to make possible.
+
+        Note that this check reads at most the first 100 members returned by
+        the API. Read `member_count` in the evidence observables: if it is
+        100, the population may be truncated and the admin count is a lower
+        bound.
+
+remediation:
+  description: |
+    Demote every admin without a current, documented need back to the member
+    role, and replace cluster-operations admin grants with cluster
+    maintainership so the wider privilege is not required to do the narrower
+    job.
+  steps:
+    - "Open buildkite.com/organizations/{org}/users and list every member whose role is Administrator"
+    - "For each one, record whether the admin grant is still justified by a current responsibility"
+    - "For anyone who holds admin only to manage an agent cluster's tokens, queues, or secrets, add them as a maintainer of that cluster (see BK-3.07) before removing the admin grant"
+    - "Change each remaining unjustified member from Administrator to Member"
+    - "Confirm every retained admin has 2FA enforced (BK-1.02) and, where SSO is configured, is set to required rather than optional"
+  api:
+    method: POST
+    url: "https://graphql.buildkite.com/v1"
+    headers:
+      Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+      Content-Type: application/json
+    body:
+      query: "mutation DemoteMember($id: ID!) { organizationMemberUpdate(input: {id: $id, role: MEMBER}) { clientMutationId } }"
+  manual:
+    - "Buildkite exposes no REST write interface for organization member roles — the role change is a GraphQL mutation (organizationMemberUpdate, input OrganizationMemberUpdateInput { id: ID!, role: OrganizationMemberRole }) or a console action. The member's GraphQL node ID must be resolved first; it is not the REST member id."
+    - "Re-run this check on a schedule and as part of quarterly access review: admin sprawl accumulates through one-off grants that are never revisited, and no drift signal exists for a role change made in the console."
+    - "Organizations with more than 100 members are only partially evaluated until Link-header pagination lands in the interpreter (see GRC-28); until then, corroborate the admin count in the console for orgs of that size."

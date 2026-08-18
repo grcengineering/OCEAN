@@ -45,6 +45,18 @@ fn allowed_credentials(source: &str) -> Option<&'static [&'static str]> {
             "AZURE_TENANT_ID",
             "AZURE_SUBSCRIPTION_ID",
         ]),
+        // Buildkite exposes REST and GraphQL behind a single API access token.
+        // Both naming conventions are allowed: BUILDKITE_API_TOKEN matches Buildkite's
+        // own docs, BUILDKITE_API_KEY matches the credential name operators actually
+        // ship in their secret stores. GRAPHQL_URL/ID cover self-hosted and org-pinned
+        // GraphQL endpoints.
+        "buildkite" => Some(&[
+            "BUILDKITE_API_TOKEN",
+            "BUILDKITE_API_KEY",
+            "BUILDKITE_ORG_SLUG",
+            "BUILDKITE_GRAPHQL_URL",
+            "BUILDKITE_GRAPHQL_ID",
+        ]),
         _ => None,
     }
 }
@@ -216,7 +228,7 @@ fn is_valid_target_id(id: &str) -> bool {
 }
 
 /// Known source types.
-const KNOWN_SOURCES: &[&str] = &["github", "okta", "aws", "azure"];
+const KNOWN_SOURCES: &[&str] = &["github", "okta", "aws", "azure", "buildkite"];
 
 fn validate_target(raw: RawFleetTarget) -> Result<FleetTarget> {
     // F7: Target ID validation

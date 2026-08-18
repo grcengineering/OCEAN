@@ -1,0 +1,183 @@
+id: BK-2.05a
+name: Restrict Organization API Access With an IP Allowlist
+description: |
+  Verifies that the Buildkite organization sets an API IP allowlist, read from the
+  GraphQL Organization object field `allowedApiIpAddresses` (`String`, nullable).
+  The allowlist is a hard network restriction on BOTH the REST and GraphQL APIs, so
+  an API access token that leaks outside those ranges is inert wherever the attacker
+  holds it. It is the organization-wide complement to the per-token controls in HTH
+  buildkite 2.5 Step 2.
+
+  Read surface and its limits. Only root-level scalars on `data.organization` are
+  extracted. OCEAN's JSONPath support resolves `$[*].field` at the root array only,
+  so Relay connection traversal (`apiAccessTokens.edges[*].node.ipAddress`) cannot be
+  expressed declaratively — per-token IP restriction is therefore out of scope here
+  and must come from a native observer. `Organization.apiAccessTokens` also exposes
+  no `count` field, so even the token population cannot be sized from a declarative
+  check.
+
+  Plan gating — the READ is not gated, the WRITE is. `allowedApiIpAddresses` is
+  readable on every Buildkite plan and returns null when unset; verified against a
+  live non-Enterprise organization on 2026-08-18, where it read as null with no
+  error. The FEATURE that lets you set it is plan-gated: Buildkite rejects the write
+  with "The API IP allowlist feature is not available for your organization. Please
+  upgrade your plan to access it." On such a plan a failing result is a plan
+  limitation to record and route to a purchasing decision, NOT operator negligence —
+  the finding says so explicitly, and no remediation here can close it.
+
+  Degradation. When the GraphQL read itself fails (token without GraphQL API Access,
+  wrong slug, an allowlist that already excludes the scanner, expired token)
+  Buildkite resolves `data.organization` to null. The `organization_readable`
+  assertion is the discriminator: when it FAILS, the allowlist verdict below is
+  UNKNOWN and must not be reported as non-compliance. Both assertions passing is the
+  only state that certifies the control.
+
+  Lockout risk runs BOTH ways. This is not a setting to enable reflexively. A CIDR
+  list that omits the network you automate from severs your own REST and GraphQL
+  access the moment it applies — including the access required to reverse it, since
+  the undo path (`organizationApiIpAllowlistUpdate`) is itself an API call. A wrong
+  list is self-sealing. That risk is why this check ships no executable `api:` or
+  `cli:` remediation: the fix must be a reviewed change with an egress inventory
+  behind it, never a one-click harden action.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L2
+tags: [api-tokens, credentials, network-restriction, organization, graphql]
+
+references:
+  cis: "5.4"
+  nist: ["IA-5", "AC-6"]
+  soc2: CC6.6
+  hth: "buildkite:2.5"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_organizations]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+
+steps:
+  - id: get_org_api_ip_allowlist
+    action: api_call
+    note: >-
+      GraphQL POST. The organization slug travels as a GraphQL variable rather than
+      being interpolated into the query string. `Query.organization(slug: ID)`,
+      `Organization.slug: String!` and `Organization.allowedApiIpAddresses: String`
+      were confirmed against live tenant introspection on 2026-08-18. The endpoint is
+      hardcoded rather than templated from BUILDKITE_GRAPHQL_URL because the check
+      engine does not apply input defaults — an unset input would leave the literal
+      placeholder in the URL and fail the whole step.
+    request:
+      method: POST
+      url: "https://graphql.buildkite.com/v1"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        query: "query OceanBuildkiteApiIpAllowlist($org: ID!) { organization(slug: $org) { id slug allowedApiIpAddresses } }"
+        variables:
+          org: "{{org}}"
+    extract:
+      org_id: "$.data.organization.id"
+      org_slug: "$.data.organization.slug"
+      allowed_api_ip_addresses: "$.data.organization.allowedApiIpAddresses"
+
+assertions:
+  - id: organization_readable
+    expr: "org_id != ''"
+    severity: info
+    title: Organization Readable Over GraphQL
+    pass_message: "GraphQL resolved organization '{{org}}'; the API IP allowlist verdict below is authoritative"
+    fail_message: "GraphQL did not resolve organization '{{org}}' (HTTP {{status_code}}) — the API IP allowlist verdict is UNKNOWN, not a finding"
+    finding:
+      description: |
+        The Buildkite GraphQL API did not return an organization object for this
+        slug, so no setting was actually observed. This is a collection failure, not
+        a compliance failure — do not treat the accompanying allowlist result as
+        evidence of a misconfiguration.
+        Common causes, in order of likelihood:
+          - The API access token does not have GraphQL API Access enabled
+            (a separate toggle from REST scopes on the token settings page).
+          - BUILDKITE_ORG_SLUG does not match a slug this token can see.
+          - An API IP allowlist is ALREADY set and excludes the address OCEAN scans
+            from. In that case the control is arguably working and the scanner is the
+            thing that needs allowlisting — check from an allowlisted network before
+            concluding anything.
+          - The token is expired or revoked.
+        Re-run after correcting the credential, then re-read the allowlist result.
+
+  - id: api_ip_allowlist_configured
+    expr: "allowed_api_ip_addresses != null && allowed_api_ip_addresses != ''"
+    severity: medium
+    title: Organization API IP Allowlist Configured
+    pass_message: "API access to organization '{{org}}' is restricted to: {{allowed_api_ip_addresses}}"
+    fail_message: "Organization '{{org}}' has no API IP allowlist — any network holding a valid token can reach the REST and GraphQL APIs"
+    finding:
+      description: |
+        `Organization.allowedApiIpAddresses` is unset, so Buildkite accepts REST and
+        GraphQL calls for this organization from any source address that presents a
+        valid API access token. A token exfiltrated from a laptop, a CI log, or a
+        third-party integration is immediately usable from the attacker's own
+        network, and nothing about the request looks anomalous to Buildkite. An
+        allowlist collapses that to "usable only from networks you named", which is
+        the single control that survives the token itself leaking.
+
+        BEFORE CONCLUDING THIS IS A FINDING, check two things:
+
+        1. Plan. The API IP allowlist feature is plan-gated. On a plan without it,
+           the write fails with "The API IP allowlist feature is not available for
+           your organization. Please upgrade your plan to access it." The field still
+           READS as null on those plans — which is exactly the state observed here —
+           so this result cannot distinguish "not purchased" from "purchased and not
+           configured". Confirm the plan before assigning this to an operator; on a
+           lower plan the only real remediation is a purchasing decision, and the
+           honest disposition is a recorded, risk-accepted gap.
+
+        2. Readability. If the companion `organization_readable` assertion also
+           failed, this result is UNKNOWN rather than non-compliant.
+
+        LOCKOUT WARNING — read the remediation before acting. Setting this wrong
+        severs your own API access, including the access needed to undo it.
+
+remediation:
+  description: |
+    Set `Organization.allowedApiIpAddresses` to the CIDR ranges that legitimately
+    reach the Buildkite REST and GraphQL APIs.
+
+    THIS CHECK DELIBERATELY SHIPS NO EXECUTABLE `api:` OR `cli:` REMEDIATION. The
+    allowlist is a hard network restriction on the same APIs used to change it, so an
+    incorrect list is self-sealing: the undo path
+    (`organizationApiIpAllowlistUpdate`) is itself an API call that the new list may
+    now be blocking. This must be a reviewed change with a verified egress inventory
+    behind it, not a one-click harden action. Verify your egress addresses FIRST.
+
+    Plan gate: the feature is unavailable on lower plans and the write is rejected
+    with "The API IP allowlist feature is not available for your organization."
+    `terraform validate` and `terraform plan` both pass on such a plan — the failure
+    appears only at `apply`.
+  steps:
+    - "STOP. Before changing anything, inventory every source address that must retain REST and GraphQL access: CI runners and their NAT egress IPs, admin workstations or the VPN they exit from, OCEAN and any other scanner, Terraform runners, and every third-party integration holding an API access token."
+    - "Confirm each of those addresses is STATIC. A dynamic or auto-scaling egress IP that rotates out of the allowlist produces a delayed, self-sealing outage."
+    - "Verify the organization's plan includes the API IP allowlist feature. If it does not, stop here and record the gap as plan-limited rather than assigning it as a misconfiguration."
+    - "Keep a known-good route in from an allowlisted network, open and tested, for the duration of the change."
+    - "Apply the allowlist as a reviewed change (Terraform stanza below, or the GraphQL mutation in the manual notes), then immediately re-run this check FROM AN ALLOWLISTED ADDRESS to confirm both API access and the new value."
+  manual:
+    - "Undo path (run from an allowlisted network): POST https://graphql.buildkite.com/v1 with mutation OceanUndoApiIpAllowlist($orgId: ID!, $ips: String!) { organizationApiIpAllowlistUpdate(input: {organizationID: $orgId, ipAddresses: $ips}) { clientMutationId } } — note the input field is organizationID with a capital D, unlike organizationId on the sibling organization mutations. Confirmed by live schema introspection 2026-08-18; the lowercase spelling fails schema validation before it executes."
+    - "ipAddresses is a single String (a space-separated list), NOT a list type. The Terraform attribute of the same purpose on buildkite_portal is likewise a string. Do not send an array."
+    - "Terraform singleton conflict: buildkite_organization represents the ONE organization object and is also used by the 2FA control (HTH buildkite 1.2) and the audit-logging control (4.1). Declaring it twice makes two Terraform resources manage one remote object and produces perpetual drift. Adopt ONE resource for all organization settings, or merge them."
+    - "Terraform plan-gate side effect: the provider touches allowed_api_ip_addresses on create even when the configuration never sets it, so buildkite_organization fails to create at all on plans without the feature — including for configurations that only want enforce_2fa."
+    - "This is distinct from the agent-token IP allowlist in HTH buildkite 3.1 (BK-3.01b), which carries no lockout risk because agent tokens are not the credential you administer with."
+  terraform:
+    resources:
+      - type: buildkite_organization
+        name: api_restrictions
+        attributes:
+          allowed_api_ip_addresses: "var.allowed_api_ip_addresses"

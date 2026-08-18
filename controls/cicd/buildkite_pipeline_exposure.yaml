@@ -1,0 +1,40 @@
+id: cicd.buildkite_pipeline_exposure
+name: Buildkite Pipeline Exposure Controls
+description: >
+  Verifies that no pipeline is publicly visible and that pipelines do not build
+  pull requests from forks without gating. Read from the REST pipelines
+  collection, whose responses are root arrays.
+  Pipeline visibility is optional-and-computed in the Terraform provider, so an
+  unmanaged attribute means Terraform adopts whatever the server reports and
+  never drift-corrects. A console flip to public therefore survives every apply,
+  and this control is the only thing that detects it.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Roughly 40% of the Buildkite hardening surface is agent-side configuration
+  (no-command-eval, allowed-plugins, redacted-vars, verification-jwks-file,
+  pre-bootstrap hooks) and is NOT visible from any Buildkite control plane.
+  It can only be attested from the agent host. This control covers the
+  control-plane half only; a passing result is not evidence that the agent
+  fleet is hardened.
+threat_mitigated: >
+  Disclosure of build logs, environment structure and internal tooling through a
+  publicly visible pipeline, and execution of untrusted contributor code on
+  agents holding production credentials via unguarded fork builds.
+framework_mappings:
+  - framework: soc2
+    control: CC6.1
+  - framework: iso27001
+    control: A.9.4.1
+  - framework: nist_csf
+    control: PR.AC-3
+  - framework: cis_controls
+    control: "5.4"
+evidence_requirements:
+  - buildkite_pipeline_visibility
+  - buildkite_fork_build_settings
+observers:
+  - module_id: buildkite.pipeline_visibility
+  - module_id: buildkite.fork_builds
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

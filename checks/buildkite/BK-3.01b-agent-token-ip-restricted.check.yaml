@@ -1,0 +1,181 @@
+id: BK-3.01b
+name: Cluster Agent Tokens Are IP-Restricted
+description: |
+  Verifies that every agent registration token in a Buildkite cluster declares a
+  non-empty `allowed_ip_addresses` allowlist, so a stolen token can only be
+  redeemed from your own runner egress ranges.
+
+  Why this check earns its keep: Buildkite's default for `allowed_ip_addresses`
+  is UNRESTRICTED. Nothing in the UI or API prompts for it, no warning is
+  emitted, and an unrestricted token looks identical to a restricted one in
+  every listing. Silence is the failure mode — which is precisely why a scanner
+  that reads the actual value is worth more than a policy that asserts the
+  intent. Without the allowlist, an agent token exfiltrated from a CI log, a
+  terraform state file, or a runner image can be redeemed from anywhere on the
+  internet; with it, the attacker also has to be inside your egress ranges.
+
+  Field shape: `allowed_ip_addresses` is a single SPACE-SEPARATED STRING of
+  CIDRs (e.g. "203.0.113.0/24 198.51.100.0/24"), not a JSON array — despite the
+  Terraform provider modelling the same attribute as `list(string)`. Unrestricted
+  is represented as `null`, `""`, or a whitespace-only value, so the assertion
+  requires at least one digit to be present rather than merely testing for a
+  non-empty string.
+
+  Scope and honest limits:
+  - This check evaluates ONE cluster per run, identified by `cluster` (the
+    cluster UUID). Run once per cluster to cover an org.
+  - The request asks for `per_page=100`. OCEAN's `paginate` flag is currently a
+    stub that returns only the first page, so it is deliberately NOT set here.
+    A cluster holding more than 100 agent tokens would be assessed on the first
+    100 only.
+  - The assertion compares the extracted array length against the total token
+    count so a token missing the `allowed_ip_addresses` key entirely fails
+    rather than silently shrinking the sample.
+  - Zero tokens in the cluster passes vacuously — there is no unrestricted
+    credential to find.
+  - This check confirms an allowlist is DECLARED, not that it is TIGHT. A token
+    scoped to 0.0.0.0/0 satisfies the assertion while restricting nothing;
+    review the reported values, do not just read the verdict.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L2
+tags: [agents, tokens, network-restriction, buildkite]
+
+references:
+  nist: ["AC-3", "SC-7"]
+  soc2: CC6.6
+  hth: "buildkite:3.1"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_clusters]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug (e.g. "grcengineering")
+    env: BUILDKITE_ORG_SLUG
+    required: true
+  cluster:
+    description: >-
+      Cluster UUID whose agent tokens are assessed. This is the REST UUID, NOT
+      the base64 GraphQL node ID — the REST path rejects the GraphQL ID. List
+      candidates with `GET /v2/organizations/{org}/clusters` and take the `id`
+      field of the cluster you want. This is supplied as an input rather than
+      discovered in a prior step because OCEAN's interpreter can only thread a
+      JSON SCALAR from one step into a later step's URL template; a cluster
+      list extracts as a JSON array, which never enters the template context,
+      and an unresolved `{{cluster}}` would be sent to Buildkite verbatim.
+    env: BUILDKITE_CLUSTER_ID
+    required: true
+
+steps:
+  - id: get_cluster_agent_tokens
+    action: api_call
+    note: >-
+      Root-array REST response. Each element is an agent token object carrying
+      `id`, `description`, `expires_at`, and `allowed_ip_addresses`.
+    request:
+      method: GET
+      url: "https://api.buildkite.com/v2/organizations/{{org}}/clusters/{{cluster}}/tokens?per_page=100"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Accept: application/json
+    extract:
+      token_count: "$length"
+      ip_allowlist_values: "$[*].allowed_ip_addresses"
+
+assertions:
+  - id: agent_tokens_api_reachable
+    expr: "get_cluster_agent_tokens_status_code == 200"
+    severity: medium
+    title: Agent Token Endpoint Reachability
+    pass_message: "Cluster agent token endpoint returned 200 for cluster {{cluster}}"
+    fail_message: "Cluster agent token endpoint was not reachable for cluster {{cluster}}"
+    finding:
+      description: |
+        The cluster agent token endpoint did not return 200, so this check has
+        NO EVIDENCE about IP allowlists. This is an operational or authorization
+        condition, NOT a compliance failure — do not read it as "tokens are
+        unrestricted."
+
+        Most likely causes, in order:
+        - 404: `cluster` holds the base64 GraphQL node ID instead of the REST
+          cluster UUID, or the cluster does not exist in this organization.
+        - 403: the API token lacks the `read_clusters` scope.
+        - 401: the API token is invalid, revoked, or expired.
+
+        Resolve the access or identifier problem and re-run. Until this
+        assertion passes, treat the allowlist assertion below as unevaluated
+        rather than as a pass or a fail.
+
+  - id: all_tokens_ip_restricted
+    expr: 'size(ip_allowlist_values) == token_count && ip_allowlist_values.all(v, v != null && v != "" && v.matches("[0-9]"))'
+    severity: high
+    title: Agent Token IP Allowlist
+    pass_message: "All {{token_count}} agent token(s) in cluster {{cluster}} declare an IP allowlist"
+    fail_message: "One or more agent tokens in cluster {{cluster}} are redeemable from any IP address"
+    finding:
+      description: |
+        At least one cluster agent token has an empty or absent
+        `allowed_ip_addresses` value, so it can be redeemed from anywhere on the
+        internet. This is Buildkite's default: the field is optional, unset
+        means unrestricted, and no warning is surfaced anywhere in the product.
+
+        The practical consequence is that the token becomes a
+        single-factor, location-independent key to the build fleet. A copy
+        leaked through a CI log, a committed terraform state file, a
+        decommissioned runner image, or a developer laptop is immediately usable
+        by an attacker to register an agent, receive jobs, and read the secrets
+        and source those jobs are given.
+
+        Unlike expiry, this IS correctable in place: `allowedIpAddresses` can be
+        updated on an existing token via GraphQL `clusterAgentTokenUpdate`.
+        Scope each token to the egress CIDRs of the runners that actually use
+        it.
+
+        Note that this allowlist is lockout-capable — a token restricted to
+        ranges your agents do not actually egress from will stop them
+        registering. Confirm the real egress addresses before applying.
+
+remediation:
+  description: |
+    Unlike `expires_at`, the IP allowlist is mutable, so existing tokens can be
+    corrected in place with `clusterAgentTokenUpdate` — no rotation required.
+
+    Two traps to know before scripting this:
+    1. `ClusterAgentTokenUpdateInput` requires `description` as well as `id`,
+       `organizationId`, and `allowedIpAddresses`. Omitting `description` fails
+       the mutation, so read the token's current description and pass it back
+       unchanged unless you intend to rename it.
+    2. `allowedIpAddresses` is a single SPACE-SEPARATED STRING in both the API
+       and GraphQL, even though the Terraform provider models the same
+       attribute as `list(string)`. Pass "203.0.113.0/24 198.51.100.0/24", not
+       a JSON array.
+
+    This allowlist is lockout-capable. Determine your agents' true egress
+    addresses first — NAT gateway EIPs, the egress ranges of your cloud subnets,
+    or your office/VPN ranges — and verify agents reconnect after applying.
+  steps:
+    - "Determine the real egress CIDRs of the agents that redeem each token (NAT gateway addresses for cloud runners, office/VPN ranges for self-hosted)."
+    - "Read each token's current description so it can be passed back unchanged in the update mutation."
+    - "Apply clusterAgentTokenUpdate with allowedIpAddresses set to the space-separated CIDR list (see the api block below)."
+    - "Confirm agents still register and pick up jobs; an over-tight allowlist silently stops registration."
+    - "Re-run this check to confirm every token now reports a populated allowed_ip_addresses, and review the values for over-broad ranges such as 0.0.0.0/0."
+  api:
+    method: POST
+    url: "https://graphql.buildkite.com/v1"
+    headers:
+      Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+      Content-Type: application/json
+    body:
+      query: "mutation UpdateTokenIPs($id: ID!, $org: ID!, $desc: String!, $ips: String) { clusterAgentTokenUpdate(input: {id: $id, organizationId: $org, description: $desc, allowedIpAddresses: $ips}) { clusterAgentToken { id description allowedIpAddresses } } }"
+      variables:
+        id: "REPLACE_WITH_TOKEN_GRAPHQL_ID"
+        org: "REPLACE_WITH_ORGANIZATION_GRAPHQL_ID"
+        desc: "REPLACE_WITH_EXISTING_TOKEN_DESCRIPTION"
+        ips: "REPLACE_WITH_SPACE_SEPARATED_CIDRS"
+  cli:
+    command: "curl -sS -X POST -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"query\":\"mutation($id:ID!,$org:ID!,$desc:String!,$ips:String){clusterAgentTokenUpdate(input:{id:$id,organizationId:$org,description:$desc,allowedIpAddresses:$ips}){clusterAgentToken{id allowedIpAddresses}}}\",\"variables\":{\"id\":\"TOKEN_GRAPHQL_ID\",\"org\":\"ORG_GRAPHQL_ID\",\"desc\":\"EXISTING_DESCRIPTION\",\"ips\":\"203.0.113.0/24 198.51.100.0/24\"}}' https://graphql.buildkite.com/v1"

@@ -1,0 +1,139 @@
+id: BK-4.01
+name: Organization Is Not Publicly Visible
+description: |
+  Verifies that the Buildkite organization is not publicly visible, read from the
+  GraphQL Organization object field `public`.
+
+  Why it matters. A public organization exposes its pipeline names and build
+  activity to anyone on the internet, with no Buildkite account required. Pipeline
+  names alone leak the shape of an estate — service names, environment names,
+  release cadence, which repositories exist — and build activity leaks when
+  deployments happen and when they fail. That is free reconnaissance for anyone
+  choosing a target, and it is visible long before any credential is involved.
+
+  Read surface and its limits. Only root-level scalars on `data.organization` are
+  extracted. OCEAN's JSONPath support resolves `$[*].field` at the root array only,
+  so Relay connection traversal (`pipelines.edges[*].node.visibility`) cannot be
+  expressed declaratively. This check therefore answers the organization-level
+  question only; per-pipeline visibility must come from a REST-backed check against
+  `GET /v2/organizations/{org}/pipelines` (a root array, so `$[*].visibility` works).
+
+  Plan gating. `Organization.public` is a non-null Boolean readable on every
+  Buildkite plan; it is not Enterprise-gated. The check still degrades explicitly
+  rather than reporting an unreadable setting as a compliance failure: the
+  `organization_readable` assertion is the discriminator. When the GraphQL read
+  fails (invalid or non-GraphQL-enabled token, wrong organization slug, API IP
+  allowlist block) Buildkite resolves `data.organization` to null,
+  `organization_readable` FAILS, and the visibility verdict below must be read as
+  UNKNOWN, not as a real finding.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L1
+tags: [visibility, information-disclosure, organization, graphql]
+
+references:
+  cis: "3.3"
+  nist: ["AC-3", "AC-22"]
+  soc2: CC6.1
+  iso27001: A.9.4.1
+  hth: "buildkite:4.1"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_organizations]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+
+steps:
+  - id: get_org_visibility
+    action: api_call
+    note: >-
+      GraphQL POST. The organization slug travels as a GraphQL variable rather than
+      being interpolated into the query string. `Query.organization(slug: ID)` and
+      `Organization.public: Boolean!` were confirmed against live tenant
+      introspection on 2026-08-18.
+    request:
+      method: POST
+      url: "https://graphql.buildkite.com/v1"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        query: "query OceanBuildkiteOrgVisibility($org: ID!) { organization(slug: $org) { id slug public } }"
+        variables:
+          org: "{{org}}"
+    extract:
+      org_id: "$.data.organization.id"
+      org_slug: "$.data.organization.slug"
+      org_public: "$.data.organization.public"
+
+assertions:
+  - id: organization_readable
+    expr: "org_id != ''"
+    severity: info
+    title: Organization Readable Over GraphQL
+    pass_message: "GraphQL resolved organization '{{org}}'; the visibility verdict below is authoritative"
+    fail_message: "GraphQL did not resolve organization '{{org}}' (HTTP {{status_code}}) — the visibility verdict is UNKNOWN, not a finding"
+    finding:
+      description: |
+        The Buildkite GraphQL API did not return an organization object for this
+        slug, so no setting was actually observed. This is a collection failure,
+        not a compliance failure — do not treat the accompanying visibility result
+        as evidence of a misconfiguration.
+        Common causes, in order of likelihood:
+          - The API access token does not have GraphQL API Access enabled
+            (a separate toggle from REST scopes on the token settings page).
+          - BUILDKITE_ORG_SLUG does not match a slug this token can see.
+          - The organization's API IP allowlist excludes the address OCEAN scans from.
+          - The token is expired or revoked.
+        Re-run after correcting the credential, then re-read the visibility result.
+
+  - id: organization_not_public
+    expr: "org_public == false"
+    severity: high
+    title: Organization Visibility
+    pass_message: "Organization '{{org}}' is not publicly visible"
+    fail_message: "Organization '{{org}}' is PUBLICLY visible — pipeline names and build activity are exposed to anyone"
+    finding:
+      description: |
+        The Buildkite organization is publicly visible. Its pipeline names and build
+        activity can be read by anyone on the internet without a Buildkite account
+        and without any credential.
+        What that discloses: the inventory and naming of services and environments,
+        which repositories are built, how often releases run, and when builds fail —
+        a map of the estate and its release rhythm, handed to whoever wants it.
+        Combined with a public pipeline that accepts builds from forked repositories,
+        it also tells an attacker exactly which entry point to aim at.
+        Remediation is console-only: Buildkite exposes no write interface for
+        organization visibility. Set every pipeline that does not need to be public
+        back to private, and review the organization's public profile page.
+        If the companion `organization_readable` assertion also failed, this result
+        is UNKNOWN rather than non-compliant — fix the credential first.
+
+remediation:
+  description: |
+    ClickOps only — Buildkite exposes no write interface for organization visibility.
+    REST `/v2/organizations` is read-only, none of the 85 GraphQL mutations sets
+    organization or pipeline visibility, and the `buildkite_organization` Terraform
+    resource exposes only `allowed_api_ip_addresses` and `enforce_2fa` (verified
+    against live schema introspection and provider schema v1.38.0 on 2026-08-18).
+    Organization exposure is driven by pipeline visibility, so the durable fix is to
+    make individual pipelines private and to close the organization-level toggle that
+    lets any member flip a pipeline back to public.
+  steps:
+    - "Navigate to buildkite.com/organizations/{{org}}/pipelines and identify every pipeline with public visibility"
+    - "For each pipeline that does not need to be public: Pipeline Settings -> General -> set Visibility to Private"
+    - "For any pipeline that must stay public, disable builds from forked repositories and run it on an agent pool holding no production credentials"
+    - "Navigate to Organization Settings -> Security -> Pipelines and disable 'Change Pipeline Visibility' so members cannot re-publish a private pipeline"
+    - "Re-run this check and confirm `public` reads false"
+  manual:
+    - "Organization visibility has no API, CLI, or Terraform write path — every step above is performed in the Buildkite console."
+    - "If `public` still reads true after all pipelines are private, contact Buildkite support to confirm the organization's public profile state."

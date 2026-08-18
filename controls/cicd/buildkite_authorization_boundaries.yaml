@@ -1,0 +1,46 @@
+id: cicd.buildkite_authorization_boundaries
+name: Buildkite Authorization Boundaries
+description: >
+  Verifies that organization administrators and cluster maintainers are bounded,
+  and inventories the cross-pipeline Rules that grant build-triggering and
+  artifact-read access between pipelines.
+  Administrator enumeration uses REST rather than GraphQL for two verified
+  reasons: the GraphQL members connection exposes no role filter, and OCEAN's
+  JSONPath extraction resolves only at the root array, so it cannot traverse
+  edges to node to role. REST returns a root array it can read.
+  Rules override the usual trigger-step permission checks and can grant artifact
+  reads across cluster boundaries, so an unreviewed rule is a standing
+  lateral-movement grant rather than a configuration detail.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Roughly 40% of the Buildkite hardening surface is agent-side configuration
+  (no-command-eval, allowed-plugins, redacted-vars, verification-jwks-file,
+  pre-bootstrap hooks) and is NOT visible from any Buildkite control plane.
+  It can only be attested from the agent host. This control covers the
+  control-plane half only; a passing result is not evidence that the agent
+  fleet is hardened.
+threat_mitigated: >
+  Privilege escalation through an unbounded administrator population, undetected
+  delegation of cluster secret and token authority via maintainer grants, and
+  lateral movement from a low-trust pipeline into production pipelines through
+  unreviewed cross-pipeline rules.
+framework_mappings:
+  - framework: soc2
+    control: CC6.3
+  - framework: iso27001
+    control: A.9.2.3
+  - framework: nist_csf
+    control: PR.AC-4
+  - framework: cis_controls
+    control: "6.8"
+evidence_requirements:
+  - buildkite_admin_roster
+  - buildkite_cluster_maintainers
+  - buildkite_organization_rules
+observers:
+  - module_id: buildkite.admin_count
+  - module_id: buildkite.cluster_maintainers
+  - module_id: buildkite.organization_rules
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

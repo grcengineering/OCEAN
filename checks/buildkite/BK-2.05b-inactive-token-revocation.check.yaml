@@ -1,0 +1,218 @@
+id: BK-2.05b
+name: Automatically Revoke Inactive API Access Tokens
+description: |
+  Verifies that the Buildkite organization sets an inactive-token revocation window,
+  read from the GraphQL Organization object field `revokeInactiveTokensAfter`
+  (`RevokeInactiveTokenPeriod`, nullable enum). When set, Buildkite revokes any API
+  access token that has not been used within the window, turning a recurring manual
+  token review into a platform guarantee. It is the highest-leverage
+  organization-wide setting on HTH buildkite 2.5.
+
+  Valid values, confirmed by live schema introspection on 2026-08-18:
+  DAYS_30, DAYS_60, DAYS_90, DAYS_180, DAYS_365, NEVER.
+  NEVER is the insecure setting and is equivalent in effect to leaving it unset,
+  which is why this check asserts both "configured" and "not NEVER" separately —
+  the two states carry identical risk but different operator intent, and an
+  explicit NEVER is a decision somebody made rather than one nobody made.
+
+  ENTERPRISE GATING — the READ is not gated, only the WRITE. This is the key point
+  and the reason the check is valid on every plan:
+    - `Organization.revokeInactiveTokensAfter` READS on any plan and returns null
+      when unset. Verified against a live non-Enterprise organization on 2026-08-18,
+      where it read as null with no error and no plan message.
+    - The mutation `organizationRevokeInactiveTokensAfterUpdate` requires Enterprise
+      and returns a plan error on lower tiers.
+  So the check runs and produces a truthful reading everywhere; it is the
+  REMEDIATION that is plan-gated. On a non-Enterprise organization a failing result
+  is a plan limitation to record and compensate for (scheduled manual token review
+  against the token inventory), not operator negligence — the finding says exactly
+  that, and no automated fix here can close it.
+
+  Read surface and its limits. Only root-level scalars on `data.organization` are
+  extracted. OCEAN's JSONPath support resolves `$[*].field` at the root array only,
+  so the token population itself (`apiAccessTokens.edges[*].node.lastAccessedAt`)
+  cannot be traversed declaratively — and `Organization.apiAccessTokens` exposes no
+  `count` field, so it cannot even be sized server-side. Identifying WHICH tokens are
+  stale requires the HTH pack or a native observer; this check verifies only that the
+  platform-side guarantee is armed.
+
+  Degradation. When the GraphQL read itself fails (token without GraphQL API Access,
+  wrong slug, an API IP allowlist excluding the scanner, expired token) Buildkite
+  resolves `data.organization` to null. The `organization_readable` assertion is the
+  discriminator: when it FAILS, the revocation verdicts below are UNKNOWN and must
+  not be reported as non-compliance.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L2
+tags: [api-tokens, credentials, lifecycle, organization, graphql]
+
+references:
+  cis: "5.4"
+  nist: ["IA-5", "AC-6"]
+  soc2: CC6.6
+  hth: "buildkite:2.5"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_organizations]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+
+steps:
+  - id: get_org_token_revocation
+    action: api_call
+    note: >-
+      GraphQL POST. The organization slug travels as a GraphQL variable rather than
+      being interpolated into the query string. `Query.organization(slug: ID)`,
+      `Organization.slug: String!` and `Organization.revokeInactiveTokensAfter:
+      RevokeInactiveTokenPeriod` were confirmed against live tenant introspection on
+      2026-08-18. The endpoint is hardcoded rather than templated from
+      BUILDKITE_GRAPHQL_URL because the check engine does not apply input defaults —
+      an unset input would leave the literal placeholder in the URL and fail the
+      whole step.
+    request:
+      method: POST
+      url: "https://graphql.buildkite.com/v1"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        query: "query OceanBuildkiteTokenRevocation($org: ID!) { organization(slug: $org) { id slug revokeInactiveTokensAfter } }"
+        variables:
+          org: "{{org}}"
+    extract:
+      org_id: "$.data.organization.id"
+      org_slug: "$.data.organization.slug"
+      revoke_inactive_tokens_after: "$.data.organization.revokeInactiveTokensAfter"
+
+assertions:
+  - id: organization_readable
+    expr: "org_id != ''"
+    severity: info
+    title: Organization Readable Over GraphQL
+    pass_message: "GraphQL resolved organization '{{org}}'; the token-revocation verdicts below are authoritative"
+    fail_message: "GraphQL did not resolve organization '{{org}}' (HTTP {{status_code}}) — the token-revocation verdicts are UNKNOWN, not a finding"
+    finding:
+      description: |
+        The Buildkite GraphQL API did not return an organization object for this
+        slug, so no setting was actually observed. This is a collection failure, not
+        a compliance failure — do not treat the accompanying revocation results as
+        evidence of a misconfiguration.
+        Common causes, in order of likelihood:
+          - The API access token does not have GraphQL API Access enabled
+            (a separate toggle from REST scopes on the token settings page).
+          - BUILDKITE_ORG_SLUG does not match a slug this token can see.
+          - The organization's API IP allowlist excludes the address OCEAN scans from.
+          - The token is expired or revoked.
+        Note what is NOT on that list: plan tier. `revokeInactiveTokensAfter` is
+        readable on every plan, so a non-Enterprise organization reaches this step
+        successfully and simply reads null. If this assertion failed, the cause is
+        the credential or the slug, not the plan.
+
+  - id: inactive_token_revocation_configured
+    expr: "revoke_inactive_tokens_after != null"
+    severity: medium
+    title: Inactive-Token Revocation Period Configured
+    pass_message: "Organization '{{org}}' revokes inactive API access tokens after {{revoke_inactive_tokens_after}}"
+    fail_message: "Organization '{{org}}' has no inactive-token revocation period set — unused API access tokens stay live indefinitely"
+    finding:
+      description: |
+        `Organization.revokeInactiveTokensAfter` is unset, so Buildkite never expires
+        an API access token for disuse. Tokens accumulate silently in CI systems,
+        laptops, scripts, and third-party integrations until nobody can say which are
+        still needed. Every one of them carries the permissions of the user who
+        created it, so a broad token minted by an admin is an admin credential
+        sitting in a forgotten script — and standing access is exactly what an
+        attacker inherits from a stale secret in an old repository or backup.
+
+        Setting a window converts the manual "review the token inventory and revoke
+        what stopped appearing" task into a platform guarantee that runs whether or
+        not anyone remembers.
+
+        BEFORE CONCLUDING THIS IS A FINDING, check the plan. Setting this value
+        requires Buildkite ENTERPRISE; the mutation returns a plan error on lower
+        tiers. The field nonetheless READS on every plan and returns null there,
+        which is exactly the state observed here — so this result cannot distinguish
+        "Enterprise and not configured" from "not Enterprise and therefore unable to
+        configure". On a non-Enterprise organization this is a plan limitation, not
+        operator negligence: the honest disposition is a recorded, risk-accepted gap
+        with a scheduled manual token review as the compensating control.
+
+        If the companion `organization_readable` assertion also failed, this result
+        is UNKNOWN rather than non-compliant.
+
+  - id: inactive_token_revocation_effective
+    expr: "revoke_inactive_tokens_after != null && revoke_inactive_tokens_after != 'NEVER'"
+    severity: medium
+    title: Inactive-Token Revocation Period Is Not NEVER
+    pass_message: "Organization '{{org}}' has an effective inactive-token revocation window (not NEVER)"
+    fail_message: "Organization '{{org}}' has no effective inactive-token revocation window — the period is unset or explicitly NEVER"
+    finding:
+      description: |
+        The revocation period is either unset or explicitly set to NEVER. The two are
+        equivalent in effect: no API access token is ever revoked for disuse. NEVER is
+        the insecure member of the enum, and the fact that it can be chosen
+        deliberately is why it is asserted separately from "unset" — an explicit
+        NEVER is a decision that should have an owner and a rationale attached to it,
+        where an unset value usually has neither.
+
+        Choose the shortest window your integrations tolerate. DAYS_90 is a common
+        starting point; DAYS_30 is stronger. Valid values: DAYS_30, DAYS_60, DAYS_90,
+        DAYS_180, DAYS_365, NEVER.
+
+        Same two caveats as the companion assertion: on a non-Enterprise plan this
+        cannot be remediated (record it as plan-limited), and if
+        `organization_readable` also failed this result is UNKNOWN.
+
+remediation:
+  description: |
+    Set an inactive-token revocation window on the organization.
+
+    PLAN GATE — remediation only. Reading the current value works on every plan; the
+    `organizationRevokeInactiveTokensAfterUpdate` mutation requires ENTERPRISE and
+    returns a plan error below it. On a non-Enterprise organization there is no
+    remediation to apply: record the gap, and compensate with a scheduled review of
+    the API access token inventory (the HTH buildkite 2.5 pack's `inventory` and
+    `stale` subcommands enumerate tokens and their last-used timestamps, which is the
+    manual equivalent of what this setting automates).
+
+    SIDE EFFECT — this control revokes real credentials. Any token not used within
+    the window WILL be revoked. Before applying, confirm no legitimate integration
+    has a duty cycle longer than the window you pick: quarterly compliance exports,
+    annual DR rehearsals, and seldom-run release jobs are the usual casualties. Pick
+    the window against the token inventory, not in the abstract.
+
+    There is no Terraform path: the provider exposes no attribute for this setting.
+    GraphQL is the only write surface.
+  steps:
+    - "Confirm the organization is on the Enterprise plan. If it is not, stop — record the gap as plan-limited and schedule a manual token review instead."
+    - "Inventory the organization's API access tokens and their last-used timestamps first, so the window is chosen against real duty cycles rather than guessed."
+    - "Choose a window: DAYS_30, DAYS_60, DAYS_90, DAYS_180 or DAYS_365. NEVER is the insecure setting and is equivalent to leaving it unset."
+    - "Apply the change, then re-run this check to confirm the value reads back as the window you set."
+    - "Re-inventory tokens after the first window elapses to confirm the revocations that occurred were the ones you intended."
+  manual:
+    - "The input type name carries a 'Mutation' infix: OrganizationRevokeInactiveTokensAfterUpdateMutationInput. The shorter ...UpdateInput spelling does not exist and fails schema validation before the mutation ever executes. Confirmed by live schema introspection 2026-08-18."
+    - "The mutation takes organizationId (lowercase d) — unlike organizationApiIpAllowlistUpdate, which takes organizationID with a capital D. The two sibling organization mutations genuinely disagree on the casing."
+    - "organizationId is the GraphQL node ID (the base64 Organization---<uuid> form returned as data.organization.id by this check's own query), not the organization slug and not the UUID."
+    - "Revocation is scoped to API access tokens. It does not touch cluster agent tokens, whose separate expiry control is HTH buildkite 3.1 (BK-3.01a)."
+  api:
+    method: POST
+    url: "https://graphql.buildkite.com/v1"
+    headers:
+      Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+      Content-Type: application/json
+    body:
+      query: "mutation OceanSetInactiveTokenRevocation($orgId: ID!, $period: RevokeInactiveTokenPeriod!) { organizationRevokeInactiveTokensAfterUpdate(input: {organizationId: $orgId, revokeInactiveTokensAfter: $period}) { organization { id revokeInactiveTokensAfter } } }"
+      variables:
+        orgId: "{{org_id}}"
+        period: "DAYS_90"
+  cli:
+    command: "curl -sS -X POST https://graphql.buildkite.com/v1 -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"variables\":{\"orgId\":\"{{org_id}}\",\"period\":\"DAYS_90\"},\"query\":\"mutation OceanSetInactiveTokenRevocation($orgId: ID!, $period: RevokeInactiveTokenPeriod!) { organizationRevokeInactiveTokensAfterUpdate(input: {organizationId: $orgId, revokeInactiveTokensAfter: $period}) { organization { id revokeInactiveTokensAfter } } }\"}'"

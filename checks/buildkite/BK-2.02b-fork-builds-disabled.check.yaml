@@ -1,0 +1,155 @@
+id: BK-2.02b
+name: Fork Pull-Request Builds Disabled on Pipelines
+description: |
+  Enumerates every pipeline in the Buildkite organization via the REST API
+  (GET /v2/organizations/{org}/pipelines) and fails if any pipeline is
+  configured to build pull requests originating from third-party forks. A
+  fork build executes contributor-authored code on your agents with whatever
+  credentials those agents hold, which turns an open-source contribution into
+  a credential-harvesting opportunity.
+
+  Field path and its limits — read this before acting on a result:
+  - The setting is read at `$[*].provider.settings.build_pull_request_forks`.
+    The attribute name is confirmed against the Buildkite Terraform provider
+    v1.38.0 schema, where `buildkite_pipeline.provider_settings` declares
+    `build_pull_request_forks` (bool, optional+computed, "Whether to create
+    builds for pull requests from third-party forks"). The REST pipeline
+    object nests the same settings object under `provider.settings`. The
+    exact REST JSON was NOT round-tripped against a live tenant during
+    authoring — the reference tenant (grcengineering) has zero pipelines — so
+    this path is schema-and-doc verified, not tenant-verified. If a live run
+    shows the fork assertion passing on a pipeline you know builds forks,
+    verify the REST key name before trusting the result.
+  - The `provider.settings` block VARIES BY SCM PROVIDER. The settings keys
+    are largely GitHub-shaped (fork builds, merge-group checks, check runs);
+    pipelines backed by other providers, or pipelines with no repository
+    connected at all, may omit `build_pull_request_forks` entirely. The
+    interpreter's `$[*].field` extraction drops elements where the path does
+    not resolve, so an absent field contributes nothing to the assertion and
+    CANNOT read as a failure. That is deliberate: a missing key means the
+    concept does not apply to that pipeline, not that it is misconfigured.
+    The consequence is that this check proves "no pipeline that exposes the
+    setting has it enabled" — it does not prove that fork execution is
+    impossible org-wide.
+  - The durable defenses for untrusted input live on the agent host
+    (`no-command-eval`, `--no-plugins`, `allowed-plugins`, pre-bootstrap
+    hooks) and are not visible from any Buildkite control plane. No OCEAN
+    check can attest them; they must be verified on the agent.
+
+  An organization with zero pipelines, or one where no pipeline exposes the
+  setting, passes the fork assertion — with the coverage caveat above.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L2
+tags: [pipelines, untrusted-input, fork-builds, supply-chain, poisoned-pipeline]
+
+references:
+  cis: "16.1"
+  nist: ["SI-10", "CM-7"]
+  soc2: CC8.1
+  iso27001: A.14.2.2
+  hth: "buildkite:2.4"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_pipelines]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+
+steps:
+  - id: list_pipelines
+    action: api_call
+    note: |
+      Root-array response, which is the only shape `$[*].field` extraction
+      supports. `provider.settings.build_pull_request_forks` is a nested dot
+      path evaluated per array element — elements missing the path are
+      dropped from the extracted list rather than yielding null.
+      per_page is set to the API maximum because Link-header pagination is
+      not yet implemented in the interpreter — organizations with more than
+      100 pipelines will only have the first page evaluated.
+    request:
+      method: GET
+      url: "https://api.buildkite.com/v2/organizations/{{org}}/pipelines?per_page=100"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Accept: application/json
+      paginate: true
+    extract:
+      fork_build_settings: "$[*].provider.settings.build_pull_request_forks"
+      pipeline_count: "$length"
+
+assertions:
+  - id: pipelines_api_reachable
+    expr: "status_code == 200"
+    severity: medium
+    title: Pipeline Inventory Reachable
+    pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 — fork-build settings are auditable"
+    fail_message: "GET /v2/organizations/{{org}}/pipelines did not return 200 — fork-build settings could not be audited"
+    finding:
+      description: |
+        The Buildkite pipelines endpoint did not return a successful
+        response, so per-pipeline fork-build settings cannot be read. This is
+        an audit-coverage failure, not evidence that fork builds are enabled.
+        Confirm the organization slug is correct and that the API access
+        token carries the `read_pipelines` scope, then re-run.
+
+  - id: fork_builds_disabled
+    expr: "size(fork_build_settings.filter(f, f == true)) == 0"
+    severity: high
+    title: Fork Pull-Request Builds Disabled
+    pass_message: "No pipeline exposing the fork-build setting has builds from third-party forks enabled"
+    fail_message: "One or more pipelines build pull requests from third-party forks"
+    finding:
+      description: |
+        At least one pipeline has `build_pull_request_forks` enabled, so a
+        pull request opened from any third-party fork causes contributor-
+        authored code to run on your agents. The build inherits whatever the
+        agent holds: cloned credentials, cloud instance roles, artifact-store
+        write access, and any secret the pipeline injects. This is the
+        canonical poisoned-pipeline-execution path.
+
+        Disable fork builds on the pipeline unless there is a specific reason
+        to allow them. If fork builds are genuinely required (a public
+        open-source project), route them to a dedicated agent pool that holds
+        no production credentials, and pair that with the agent-side controls
+        the pipeline file cannot switch off: reject command evaluation and
+        dynamic step uploads, pin or disallow third-party plugins, and put
+        enforcement in agent lifecycle hooks on the host rather than in
+        `pipeline.yml`.
+
+        Coverage caveat: pipelines whose provider settings do not expose
+        `build_pull_request_forks` are not represented in this result. A pass
+        means "nothing that exposes the setting has it on", not "fork
+        execution is impossible".
+
+remediation:
+  description: |
+    Turn off fork pull-request builds on each flagged pipeline. Where fork
+    builds must stay on, isolate them onto a credential-free agent pool and
+    enforce the untrusted-input controls on the agent host, since a malicious
+    `pipeline.yml` can override anything defined inside the pipeline.
+  steps:
+    - "Open Pipeline Settings -> GitHub (or the connected SCM provider) for each flagged pipeline"
+    - "Under Pull Requests, clear 'Build pull requests from third-party forked repositories'"
+    - "If fork builds must remain enabled, enable 'Prefix third-party fork branch names' and move the pipeline to an agent queue whose agents hold no production credentials"
+    - "Pin the setting in Terraform (see below) so the value stops being computed from server state"
+  manual:
+    - "Agent-side hardening is NOT observable from any Buildkite API and must be verified on the agent host: set no-command-eval, run with --no-plugins or a pinned allowed-plugins list, enable the reject-secrets guard, and place enforcement in agent lifecycle hooks."
+    - "Pin every plugin reference to a specific version or commit — a floating plugin reference is unreviewed third-party code executing inside the build."
+    - "Set job time limits so a hijacked fork build cannot mine, scan, or exfiltrate indefinitely."
+    - "Pipelines whose SCM provider does not expose build_pull_request_forks are outside this check's evidence — review those pipelines' provider settings manually."
+  terraform:
+    resources:
+      - type: buildkite_pipeline
+        name: example
+        attributes:
+          provider_settings:
+            build_pull_request_forks: false
+            prefix_pull_request_fork_branch_names: true

@@ -1,0 +1,40 @@
+id: cicd.buildkite_api_token_posture
+name: Buildkite API Token Posture
+description: >
+  Verifies that the organization restricts where API access tokens may be used
+  and automatically revokes tokens after a period of inactivity. Both are
+  organization-wide scalars on the GraphQL Organization object.
+  Note that setting inactive-token revocation is an Enterprise capability while
+  reading it is not: on lower plans the value reads null and the finding is a
+  genuine gap the operator cannot remediate without a plan change. That
+  distinction belongs in the report, not in a silent pass.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Roughly 40% of the Buildkite hardening surface is agent-side configuration
+  (no-command-eval, allowed-plugins, redacted-vars, verification-jwks-file,
+  pre-bootstrap hooks) and is NOT visible from any Buildkite control plane.
+  It can only be attested from the agent host. This control covers the
+  control-plane half only; a passing result is not evidence that the agent
+  fleet is hardened.
+threat_mitigated: >
+  Standing API access from tokens that leaked, were never rotated, or belong to
+  departed integrations, and use of a stolen token from outside the network the
+  organization operates from.
+framework_mappings:
+  - framework: soc2
+    control: CC6.6
+  - framework: iso27001
+    control: A.9.4.3
+  - framework: nist_csf
+    control: PR.AC-1
+  - framework: cis_controls
+    control: "5.3"
+evidence_requirements:
+  - buildkite_api_ip_allowlist
+  - buildkite_inactive_token_revocation_period
+observers:
+  - module_id: buildkite.api_ip_allowlist
+  - module_id: buildkite.inactive_token_revocation
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"
