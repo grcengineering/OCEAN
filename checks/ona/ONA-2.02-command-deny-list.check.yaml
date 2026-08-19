@@ -13,8 +13,8 @@ description: |
   `GetDotfilesConfiguration` takes no `userId`, so an admin cannot even enumerate
   what members have set) and arbitrary prompt-driven tool use. An empty deny list
   means an agent that is persuaded — by a poisoned repository, a malicious issue
-  body, or an injected instruction in fetched content — to run `curl … | sh`
-  meets no organization-level resistance.
+  body, or an injected instruction in fetched content — to fetch a remote script
+  and pipe it straight into a shell meets no organization-level resistance.
 
   Host, proto3 omission, and abstention follow the same design as ONA-1.02, which
   documents it in full. In short: the request goes to `app.gitpod.io` because the
