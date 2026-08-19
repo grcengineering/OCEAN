@@ -21,11 +21,39 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-07-23"
 end = "2027-03-29"
 
+[[trusted.atomic]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2019-02-22"
+end = "2027-03-29"
+notes = "Publisher Amanieu d'Antras (Amanieu), crates.io login 'Amanieu', long-standing maintainer of parking_lot/hashbrown/lock_api; isrg, mozilla and ariel-os already carry trusted entries for this publisher."
+
+[[trusted.by_address]]
+criteria = "safe-to-deploy"
+user-id = 2017 # Matt Brubeck (mbrubeck)
+start = "2019-04-22"
+end = "2027-03-29"
+notes = "Publisher Matt Brubeck (mbrubeck), crates.io login 'mbrubeck', long-standing Servo/Mozilla contributor; mozilla and ariel-os already carry trusted entries for this publisher."
+
 [[trusted.crypto-common]]
 criteria = "safe-to-deploy"
 user-id = 5059 # Artyom Pavlov (newpavlov)
 start = "2021-02-10"
 end = "2027-03-29"
+
+[[trusted.derive_more]]
+criteria = "safe-to-deploy"
+user-id = 3797 # Jelte Fennema-Nio (JelteF)
+start = "2019-05-25"
+end = "2027-03-29"
+notes = "Publisher Jelte Fennema-Nio (JelteF), crates.io login 'JelteF', long-standing derive_more maintainer; mozilla already carries a trusted entry for this publisher."
+
+[[trusted.derive_more-impl]]
+criteria = "safe-to-deploy"
+user-id = 3797 # Jelte Fennema-Nio (JelteF)
+start = "2023-07-23"
+end = "2027-03-29"
+notes = "Publisher Jelte Fennema-Nio (JelteF), crates.io login 'JelteF', long-standing derive_more maintainer; mozilla already carries a trusted entry for this publisher."
 
 [[trusted.digest]]
 criteria = "safe-to-deploy"
@@ -51,17 +79,66 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-05-02"
 end = "2027-03-29"
 
+[[trusted.libm]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2024-10-26"
+end = "2027-03-29"
+notes = "Publisher is the rust-lang org owner account ('rust-lang-owner'); isrg, mozilla and ariel-os already carry trusted entries for this publisher."
+
+[[trusted.linux-raw-sys]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-06-12"
+end = "2027-03-29"
+notes = "Publisher Dan Gohman (sunfishcode), crates.io login 'sunfishcode', author/maintainer of rustix and linux-raw-sys; isrg, mozilla and ariel-os already carry trusted entries for this publisher."
+
 [[trusted.memchr]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-07-07"
 end = "2027-03-29"
 
+[[trusted.ordered-float]]
+criteria = "safe-to-deploy"
+user-id = 2017 # Matt Brubeck (mbrubeck)
+start = "2019-03-13"
+end = "2027-03-29"
+notes = "Publisher Matt Brubeck (mbrubeck), crates.io login 'mbrubeck', long-standing Servo/Mozilla contributor; mozilla and ariel-os already carry trusted entries for this publisher."
+
 [[trusted.paste]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-19"
 end = "2027-03-29"
+
+[[trusted.phf]]
+criteria = "safe-to-deploy"
+user-id = 51017 # Yuki Okushi (JohnTitor)
+start = "2021-06-17"
+end = "2027-03-29"
+notes = "Publisher Yuki Okushi (JohnTitor), crates.io login 'JohnTitor', Rust project member and phf maintainer; isrg, mozilla and ariel-os already carry trusted entries for this publisher."
+
+[[trusted.phf_codegen]]
+criteria = "safe-to-deploy"
+user-id = 51017 # Yuki Okushi (JohnTitor)
+start = "2021-06-17"
+end = "2027-03-29"
+notes = "Publisher Yuki Okushi (JohnTitor), crates.io login 'JohnTitor', Rust project member and phf maintainer; isrg, mozilla and ariel-os already carry trusted entries for this publisher."
+
+[[trusted.phf_generator]]
+criteria = "safe-to-deploy"
+user-id = 51017 # Yuki Okushi (JohnTitor)
+start = "2021-06-17"
+end = "2027-03-29"
+notes = "Publisher Yuki Okushi (JohnTitor), crates.io login 'JohnTitor', Rust project member and phf maintainer; isrg, mozilla and ariel-os already carry trusted entries for this publisher."
+
+[[trusted.phf_macros]]
+criteria = "safe-to-deploy"
+user-id = 51017 # Yuki Okushi (JohnTitor)
+start = "2021-06-17"
+end = "2027-03-29"
+notes = "Publisher Yuki Okushi (JohnTitor), crates.io login 'JohnTitor', Rust project member and phf maintainer; isrg, mozilla and ariel-os already carry trusted entries for this publisher."
 
 [[trusted.prettyplease]]
 criteria = "safe-to-deploy"
@@ -116,6 +193,13 @@ criteria = "safe-to-deploy"
 user-id = 2342 # Brian Smith (briansmith)
 start = "2019-07-03"
 end = "2027-03-29"
+
+[[trusted.rustix]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-10-29"
+end = "2027-03-29"
+notes = "Publisher Dan Gohman (sunfishcode), crates.io login 'sunfishcode', author/maintainer of rustix and linux-raw-sys; isrg, mozilla and ariel-os already carry trusted entries for this publisher."
 
 [[trusted.rustls]]
 criteria = "safe-to-deploy"
