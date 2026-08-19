@@ -389,7 +389,10 @@ server:
     #[test]
     #[serial_test::serial]
     fn load_via_ocean_config_env_var() {
-        let dir = std::env::temp_dir();
+        // tempfile::TempDir gives a 0700, unpredictably-named directory instead
+        // of the shared world-writable temp base (predictable-name/symlink race).
+        // .keep() hands back the PathBuf; the directory lives for the test binary.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_env_cfg_{}.yaml", uuid::Uuid::new_v4()))
             .to_str()
@@ -420,7 +423,10 @@ server:
 
     #[test]
     fn load_bad_yaml_returns_error() {
-        let dir = std::env::temp_dir();
+        // tempfile::TempDir gives a 0700, unpredictably-named directory instead
+        // of the shared world-writable temp base (predictable-name/symlink race).
+        // .keep() hands back the PathBuf; the directory lives for the test binary.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_bad_cfg_{}.yaml", uuid::Uuid::new_v4()))
             .to_str()

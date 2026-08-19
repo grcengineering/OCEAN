@@ -630,11 +630,9 @@ mod tests {
     #[serial_test::serial]
     fn write_fleet_audit_log_appends_entry() {
         let tmp = tempfile::tempdir().unwrap();
-        // Redirect HOME so audit.log lands in our temp dir
+        // Serialize with the other HOME-sensitive tests in this module; HOME
+        // itself is redirected only around the call under test, below.
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe {
-            std::env::set_var("HOME", tmp.path());
-        }
 
         let result = FleetResult {
             fleet_name: "audit-test-fleet".to_string(),
@@ -669,7 +667,11 @@ mod tests {
             ],
         };
 
-        write_fleet_audit_log(&result);
+        // Redirect HOME for exactly the duration of the call under test;
+        // restored on return *and* on panic.
+        temp_env::with_var("HOME", Some(tmp.path()), || {
+            write_fleet_audit_log(&result);
+        });
 
         let log_path = tmp.path().join(".ocean").join("audit.log");
         assert!(log_path.exists(), "audit.log should be created");
@@ -709,11 +711,8 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn write_fleet_audit_log_home_unset_fallback() {
+        // Serialize with the other HOME-sensitive tests in this module.
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        let original_home = std::env::var("HOME").ok();
-        unsafe {
-            std::env::remove_var("HOME");
-        }
 
         let result = FleetResult {
             fleet_name: "fallback-fleet".to_string(),
@@ -727,15 +726,13 @@ mod tests {
             targets: vec![],
         };
 
-        // Should not panic even when HOME is unset (best-effort write)
-        write_fleet_audit_log(&result);
-
-        // Restore HOME
-        if let Some(home) = original_home {
-            unsafe {
-                std::env::set_var("HOME", home);
-            }
-        }
+        // Should not panic even when HOME is unset (best-effort write).
+        // `with_var_unset` restores the previous HOME when the closure returns
+        // *or* panics, so a failing assertion here cannot leak an unset HOME
+        // into the rest of the test binary.
+        temp_env::with_var_unset("HOME", || {
+            write_fleet_audit_log(&result);
+        });
     }
 
     // UT-038: create_output_dir returns error for unwritable path
@@ -1192,10 +1189,9 @@ remediation:
     #[serial_test::serial]
     fn write_fleet_audit_log_all_succeeded() {
         let tmp = tempfile::tempdir().unwrap();
+        // Serialize with the other HOME-sensitive tests in this module; HOME
+        // itself is redirected only around the call under test, below.
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe {
-            std::env::set_var("HOME", tmp.path());
-        }
 
         let result = FleetResult {
             fleet_name: "all-pass-fleet".to_string(),
@@ -1230,7 +1226,11 @@ remediation:
             ],
         };
 
-        write_fleet_audit_log(&result);
+        // Redirect HOME for exactly the duration of the call under test;
+        // restored on return *and* on panic.
+        temp_env::with_var("HOME", Some(tmp.path()), || {
+            write_fleet_audit_log(&result);
+        });
 
         let log_path = tmp.path().join(".ocean").join("audit.log");
         let content = std::fs::read_to_string(&log_path).unwrap();
@@ -1247,10 +1247,9 @@ remediation:
     #[serial_test::serial]
     fn write_fleet_audit_log_multiple_failures() {
         let tmp = tempfile::tempdir().unwrap();
+        // Serialize with the other HOME-sensitive tests in this module; HOME
+        // itself is redirected only around the call under test, below.
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe {
-            std::env::set_var("HOME", tmp.path());
-        }
 
         let result = FleetResult {
             fleet_name: "fail-fleet".to_string(),
@@ -1295,7 +1294,11 @@ remediation:
             ],
         };
 
-        write_fleet_audit_log(&result);
+        // Redirect HOME for exactly the duration of the call under test;
+        // restored on return *and* on panic.
+        temp_env::with_var("HOME", Some(tmp.path()), || {
+            write_fleet_audit_log(&result);
+        });
 
         let log_path = tmp.path().join(".ocean").join("audit.log");
         let content = std::fs::read_to_string(&log_path).unwrap();
@@ -1575,10 +1578,9 @@ remediation:
     #[serial_test::serial]
     fn write_fleet_audit_log_appends_multiple() {
         let tmp = tempfile::tempdir().unwrap();
+        // Serialize with the other HOME-sensitive tests in this module; HOME
+        // itself is redirected only around the call under test, below.
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe {
-            std::env::set_var("HOME", tmp.path());
-        }
 
         let make_result = |name: &str| FleetResult {
             fleet_name: name.to_string(),
@@ -1592,8 +1594,12 @@ remediation:
             targets: vec![],
         };
 
-        write_fleet_audit_log(&make_result("fleet-a"));
-        write_fleet_audit_log(&make_result("fleet-b"));
+        // Redirect HOME for exactly the duration of the calls under test;
+        // restored on return *and* on panic.
+        temp_env::with_var("HOME", Some(tmp.path()), || {
+            write_fleet_audit_log(&make_result("fleet-a"));
+            write_fleet_audit_log(&make_result("fleet-b"));
+        });
 
         let log_path = tmp.path().join(".ocean").join("audit.log");
         let content = std::fs::read_to_string(&log_path).unwrap();

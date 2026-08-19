@@ -77,6 +77,10 @@ handlebars = "6"
 
 [dev-dependencies]
 serial_test = "3"
+# Scoped, panic-safe environment-variable overrides for tests. Restores the
+# prior value on return *and* on unwind, and needs no `unsafe` at call sites
+# (std::env::set_var is `unsafe` from edition 2024 on).
+temp-env = "0.3.6"
 tempfile = "3"
 tower = { version = "0.4", features = ["util"] }
 jsonschema = "0.28"

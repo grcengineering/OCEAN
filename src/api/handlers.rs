@@ -757,7 +757,10 @@ mod tests {
     fn make_state_with_corrupted_evidence() -> AppState {
         // Open a dedicated db, store via Store API, then re-open the file
         // directly via rusqlite::Connection to insert a corrupted row.
-        let dir = std::env::temp_dir();
+        // tempfile::TempDir gives a 0700, unpredictably-named directory instead
+        // of the shared world-writable temp base (predictable-name/symlink race).
+        // .keep() hands back the PathBuf; the directory lives for the test binary.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_api_corrupt_{}.db", Uuid::new_v4()))
             .to_str()
@@ -798,7 +801,10 @@ mod tests {
     }
 
     fn make_state_with_corrupted_history() -> AppState {
-        let dir = std::env::temp_dir();
+        // tempfile::TempDir gives a 0700, unpredictably-named directory instead
+        // of the shared world-writable temp base (predictable-name/symlink race).
+        // .keep() hands back the PathBuf; the directory lives for the test binary.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_api_hist_{}.db", Uuid::new_v4()))
             .to_str()
@@ -835,7 +841,10 @@ mod tests {
     }
 
     fn make_state_with_corrupted_schedule() -> AppState {
-        let dir = std::env::temp_dir();
+        // tempfile::TempDir gives a 0700, unpredictably-named directory instead
+        // of the shared world-writable temp base (predictable-name/symlink race).
+        // .keep() hands back the PathBuf; the directory lives for the test binary.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_api_sched_{}.db", Uuid::new_v4()))
             .to_str()

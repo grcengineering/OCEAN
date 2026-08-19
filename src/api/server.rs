@@ -52,7 +52,10 @@ mod tests {
     use crate::modules::{register_all_observers, register_all_testers};
 
     fn make_test_state(auth_token: Option<String>) -> AppState {
-        let db_path = std::env::temp_dir()
+        // See handlers.rs test helpers: private unpredictable dir over shared /tmp.
+        let db_path = tempfile::TempDir::new()
+            .unwrap()
+            .keep()
             .join(format!("ocean_srv_test_{}.db", Uuid::new_v4()))
             .to_str()
             .unwrap()

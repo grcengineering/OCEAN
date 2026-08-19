@@ -610,6 +610,11 @@ criteria = "safe-to-deploy"
 version = "1.0.2"
 criteria = "safe-to-deploy"
 
+[[exemptions.temp-env]]
+version = "0.3.6"
+criteria = "safe-to-run"
+notes = "Dev-only (test) dependency; safe-to-run matches its role. No cargo-vet import (actix, ariel-os, bytecode-alliance, embark-studios, fermyon, google, isrg, mozilla, zcash) audits temp-env, and none carries a trusted entry for publisher vmx (Volker Mische), so neither an import nor a trusted-publisher entry was available -- exemption is the tail mechanism. Reviewed 0.3.6 before adding: single 601-line src/lib.rs, no build script, no proc macros, zero 'unsafe', and no process/network/filesystem access; it only mutates std::env behind a parking_lot ReentrantMutex with RAII restore on return and on unwind. Sole dependency parking_lot 0.12 was already in the graph. The optional async_closure feature (futures) is not enabled."
+
 [[exemptions.tempfile]]
 version = "3.26.0"
 criteria = "safe-to-run"

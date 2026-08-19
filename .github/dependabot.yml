@@ -6,6 +6,13 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain: hold newly published versions before proposing them, so a
+    # compromised or yanked release has time to be detected upstream (CWE-829).
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 7
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
@@ -21,6 +28,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain: hold newly published action versions before proposing them.
+    # github-actions supports default-days only (no SemVer-bump days).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
