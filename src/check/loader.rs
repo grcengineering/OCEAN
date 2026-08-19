@@ -4,12 +4,20 @@
 //   1. Bundled:  checks/ directory shipped with OCEAN
 //   2. User:     ~/.ocean/checks/
 //   3. Custom:   paths provided via --checks-dir
+//
+// Every path this module opens is resolved first. A checks directory is a
+// drop-in tree — bundled files, `~/.ocean/checks/`, and whatever `--checks-dir`
+// names — so the loader treats the tree as its boundary: an entry that resolves
+// outside the tree it was found in is skipped rather than read, and a link that
+// resolves back into a directory already walked is skipped rather than followed
+// forever.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use tracing::{debug, warn};
 
 use crate::module::Registry;
@@ -47,13 +55,42 @@ pub fn load_checks_from_dir(registry: &Registry, dir: &Path) -> Result<usize> {
 }
 
 /// Walk a directory tree and collect all `.check.yaml` file paths.
+///
+/// Returns resolved paths that are guaranteed to live inside `dir`. An entry
+/// that cannot be resolved, or that resolves elsewhere on the box, is skipped
+/// with a warning: a symlink dropped into a checks tree must not be able to
+/// hand the loader `~/.ssh/id_ed25519` or `/etc/shadow`, whose contents would
+/// then surface verbatim in a YAML parse warning.
 fn walk_check_files(dir: &Path) -> Vec<PathBuf> {
+    let root = match fs::canonicalize(dir) {
+        Ok(root) => root,
+        Err(e) => {
+            warn!("cannot resolve checks directory {}: {}", dir.display(), e);
+            return Vec::new();
+        }
+    };
+
     let mut paths = Vec::new();
-    collect_check_files(dir, &mut paths);
+    let mut walked = HashSet::new();
+    collect_check_files(&root, &root, &mut paths, &mut walked);
     paths
 }
 
-fn collect_check_files(dir: &Path, paths: &mut Vec<PathBuf>) {
+/// Recurse `dir`, collecting check files that stay inside `root`.
+///
+/// `walked` holds the resolved directories already visited, so a link pointing
+/// at an ancestor ends the branch instead of recursing until the stack blows.
+fn collect_check_files(
+    root: &Path,
+    dir: &Path,
+    paths: &mut Vec<PathBuf>,
+    walked: &mut HashSet<PathBuf>,
+) {
+    if !walked.insert(dir.to_path_buf()) {
+        debug!("already walked, not descending again: {}", dir.display());
+        return;
+    }
+
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) => {
@@ -64,10 +101,37 @@ fn collect_check_files(dir: &Path, paths: &mut Vec<PathBuf>) {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
-            collect_check_files(&path, paths);
-        } else if is_check_file(&path) {
-            paths.push(path);
+        let Some(resolved) = resolve_within(root, &path) else {
+            continue;
+        };
+
+        if resolved.is_dir() {
+            collect_check_files(root, &resolved, paths, walked);
+        } else if resolved.is_file() && is_check_file(&path) {
+            paths.push(resolved);
+        }
+    }
+}
+
+/// Resolve `path` and return it only if it stays inside `root`.
+///
+/// `None` — logged, then skipped — covers both an entry that cannot be resolved
+/// (dangling link, unreadable) and one that escapes the tree.
+fn resolve_within(root: &Path, path: &Path) -> Option<PathBuf> {
+    match fs::canonicalize(path) {
+        Ok(resolved) if resolved.starts_with(root) => Some(resolved),
+        Ok(resolved) => {
+            warn!(
+                "skipping {}: resolves to {}, outside checks directory {}",
+                path.display(),
+                resolved.display(),
+                root.display()
+            );
+            None
+        }
+        Err(e) => {
+            warn!("skipping {}: cannot resolve path: {}", path.display(), e);
+            None
         }
     }
 }
@@ -79,12 +143,32 @@ fn is_check_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Refuse anything that is not a regular file: a directory, a device, a FIFO.
+///
+/// Split out so both the caller's error text and the reason stay specific.
+fn require_regular_file(resolved: &Path) -> Result<()> {
+    let meta = fs::metadata(resolved).with_context(|| format!("reading {}", resolved.display()))?;
+    if !meta.is_file() {
+        bail!("reading {}: not a regular file", resolved.display());
+    }
+    Ok(())
+}
+
 /// Parse a single `.check.yaml` file into a CheckDefinition.
+///
+/// Fails closed with the reason rather than handing the path to the
+/// filesystem: the path is resolved first, so a missing path, a dangling
+/// link, a symlink loop, or an unreadable parent is reported, and anything
+/// that is not a regular file is refused. Reading the *resolved* path — the
+/// one that was verified — also closes the check-then-use gap.
 pub fn load_check_file(path: &Path) -> Result<CheckDefinition> {
+    let resolved = fs::canonicalize(path).with_context(|| format!("reading {}", path.display()))?;
+    require_regular_file(&resolved)?;
+
     let content =
-        fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    let def: CheckDefinition =
-        serde_yaml::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
+        fs::read_to_string(&resolved).with_context(|| format!("reading {}", resolved.display()))?;
+    let def: CheckDefinition = serde_yaml::from_str(&content)
+        .with_context(|| format!("parsing {}", resolved.display()))?;
     Ok(def)
 }
 
@@ -661,5 +745,118 @@ assertions: []
         assert!(def.inputs.is_empty());
         assert!(def.pre_flight.is_empty());
         assert!(def.remediation.is_none());
+    }
+
+    // ── Path resolution & tree containment ──────────────────────────────────
+
+    #[test]
+    fn load_check_file_rejects_directory() {
+        let dir = TempDir::new().unwrap();
+        let err = load_check_file(dir.path()).expect_err("a directory is not a check file");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not a regular file"),
+            "error should name the reason: {msg}"
+        );
+    }
+
+    #[test]
+    fn walk_returns_resolved_paths_inside_the_tree() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "tst.check.yaml", PASSIVE_YAML);
+
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let found = walk_check_files(dir.path());
+        assert_eq!(found.len(), 1);
+        assert!(
+            found[0].starts_with(&root),
+            "{} escaped {}",
+            found[0].display(),
+            root.display()
+        );
+        assert_eq!(
+            found[0],
+            fs::canonicalize(dir.path().join("tst.check.yaml")).unwrap()
+        );
+    }
+
+    #[test]
+    fn walk_unresolvable_dir_returns_empty() {
+        assert!(walk_check_files(Path::new("/nonexistent/checks")).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_escaping_the_checks_tree_is_skipped() {
+        // A file planted outside the tree, reachable only through a link
+        // dropped inside it — the shape a path-traversal attempt takes here.
+        let outside = TempDir::new().unwrap();
+        let planted = outside.path().join("planted.check.yaml");
+        fs::write(
+            &planted,
+            "id: TST-OUTSIDE\nname: Planted\nsource: github\nsteps: []\nassertions: []\n",
+        )
+        .unwrap();
+
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "real.check.yaml", PASSIVE_YAML);
+        std::os::unix::fs::symlink(&planted, dir.path().join("escape.check.yaml")).unwrap();
+
+        let registry = Registry::new();
+        let count = load_checks_from_dir(&registry, dir.path()).unwrap();
+        assert_eq!(count, 1, "only the in-tree check should load");
+        assert!(registry.get_observer("TST-PASSIVE").is_ok());
+        assert!(
+            registry.get_observer("TST-OUTSIDE").is_err(),
+            "a link out of the checks tree must not be read"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_dir_inside_the_tree_is_not_walked_twice() {
+        let dir = TempDir::new().unwrap();
+        let real = dir.path().join("real");
+        fs::create_dir(&real).unwrap();
+        write_check(&real, "tst.check.yaml", PASSIVE_YAML);
+        std::os::unix::fs::symlink(&real, dir.path().join("alias")).unwrap();
+
+        // `alias` resolves onto `real`; whichever is seen first claims it, so
+        // the check is collected exactly once instead of twice.
+        let defs = load_definitions_from_dir(dir.path());
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].id, "TST-PASSIVE");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_loop_terminates() {
+        let dir = TempDir::new().unwrap();
+        let nested = dir.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        write_check(&nested, "tst.check.yaml", PASSIVE_YAML);
+        // `nested/loop` points back at its own parent: followed naively this
+        // recurses until the stack is gone.
+        std::os::unix::fs::symlink(&nested, nested.join("loop")).unwrap();
+
+        let registry = Registry::new();
+        let count = load_checks_from_dir(&registry, dir.path()).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dangling_symlink_is_skipped_not_fatal() {
+        let dir = TempDir::new().unwrap();
+        write_check(dir.path(), "real.check.yaml", PASSIVE_YAML);
+        std::os::unix::fs::symlink(
+            dir.path().join("gone.check.yaml"),
+            dir.path().join("dangling.check.yaml"),
+        )
+        .unwrap();
+
+        let registry = Registry::new();
+        let count = load_checks_from_dir(&registry, dir.path()).unwrap();
+        assert_eq!(count, 1);
     }
 }
