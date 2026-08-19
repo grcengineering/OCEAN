@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo as EvidenceModuleInfo, Observable,
-    SourceInfo, StatusId, EVIDENCE_SCHEMA_VERSION,
+    SourceInfo, StatusId,
 };
 use crate::module::{
     observer::Observer, CredentialReq, EnvironmentScope, Module, SafetyClassification, Tester,
@@ -537,10 +537,6 @@ fn evaluate_all_assertions(
             .unwrap_or_default();
 
         let ev = Evidence {
-            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-            connected_account: None,
-            population: None,
-            evaluation: None,
             id: Uuid::new_v4(),
             control_id: def.id.clone(),
             class_uid: 0,

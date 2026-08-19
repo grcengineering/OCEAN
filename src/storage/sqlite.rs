@@ -9,7 +9,6 @@ use uuid::Uuid;
 use crate::control::ControlStatus;
 use crate::evidence::{
     ConfidenceLevel, Enrichment, Evidence, Finding, Metadata, Observable, StatusId,
-    PRE_CUSTODY_SCHEMA,
 };
 use crate::scheduler::{ModuleRunResult, Schedule, ScheduleRun};
 use crate::storage::{EvidenceQuery, Store};
@@ -490,10 +489,6 @@ fn scan_evidence(row: &rusqlite::Row<'_>) -> rusqlite::Result<Evidence> {
         .unwrap_or_default();
 
     Ok(Evidence {
-        schema_version: PRE_CUSTODY_SCHEMA.to_string(),
-        connected_account: None,
-        population: None,
-        evaluation: None,
         id,
         control_id: row.get(1)?,
         class_uid: row.get(2)?,

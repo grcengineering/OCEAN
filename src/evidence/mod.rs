@@ -10,7 +10,6 @@ pub mod transcript;
 pub mod validator;
 
 // Re-export all evidence types from shared crate
-pub use grc_controls_models::evidence::{EVIDENCE_SCHEMA_VERSION, PRE_CUSTODY_SCHEMA};
 pub use grc_controls_models::{
     ConfidenceLevel, Enrichment, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo,
     StatusId,

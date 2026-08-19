@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    TranscriptRecorder, EVIDENCE_SCHEMA_VERSION,
+    TranscriptRecorder,
 };
 use crate::module::{
     tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
@@ -300,10 +300,6 @@ impl Tester for BranchBypassTester {
         });
 
         Ok(vec![Evidence {
-            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-            connected_account: None,
-            population: None,
-            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "scm.branch_protection".to_string(),
             class_uid: 1003,

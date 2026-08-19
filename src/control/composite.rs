@@ -210,7 +210,6 @@ mod tests {
     };
     use crate::evidence::{
         ConfidenceLevel, Evidence, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-        EVIDENCE_SCHEMA_VERSION,
     };
     use chrono::Utc;
 
@@ -240,10 +239,6 @@ mod tests {
         observables: Vec<Observable>,
     ) -> Evidence {
         Evidence {
-            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-            connected_account: None,
-            population: None,
-            evaluation: None,
             id: uuid::Uuid::new_v4(),
             control_id: "test.ctrl".to_string(),
             class_uid,

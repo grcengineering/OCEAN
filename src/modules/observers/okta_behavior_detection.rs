@@ -7,7 +7,6 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -202,10 +201,6 @@ impl Observer for BehaviorDetectionObserver {
         });
 
         Ok(vec![Evidence {
-            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-            connected_account: None,
-            population: None,
-            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "OKTA-5.4".to_string(),
             class_uid: 1001,

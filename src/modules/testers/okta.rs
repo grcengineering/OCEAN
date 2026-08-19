@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    TranscriptRecorder, EVIDENCE_SCHEMA_VERSION,
+    TranscriptRecorder,
 };
 use crate::module::{
     tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
@@ -104,10 +104,6 @@ impl Tester for MfaBypassTester {
         if !config.contains_key("OKTA_TEST_USER") || !config.contains_key("OKTA_TEST_PASSWORD") {
             let now = Utc::now();
             return Ok(vec![Evidence {
-                schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-                connected_account: None,
-                population: None,
-                evaluation: None,
                 id: Uuid::new_v4(),
                 control_id: "mfa.enforcement".to_string(),
                 class_uid: 1001,
@@ -286,10 +282,6 @@ impl Tester for MfaBypassTester {
         });
 
         Ok(vec![Evidence {
-            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-            connected_account: None,
-            population: None,
-            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "mfa.enforcement".to_string(),
             class_uid: 1001,

@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo as EvidenceModuleInfo, Observable,
-    SourceInfo, StatusId, EVIDENCE_SCHEMA_VERSION,
+    SourceInfo, StatusId,
 };
 use crate::module::{
     AuthorizationLevel, Authorizer, CredentialReq, EnvironmentScope, Module, Observer,
@@ -25,10 +25,6 @@ use crate::module::{
 /// Returns a minimal valid Evidence record populated with test data.
 pub fn make_evidence() -> Evidence {
     Evidence {
-        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-        connected_account: None,
-        population: None,
-        evaluation: None,
         id: Uuid::new_v4(),
         control_id: "test.control".to_string(),
         class_uid: 1001,

@@ -9,7 +9,6 @@ use uuid::Uuid;
 
 use ocean::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    EVIDENCE_SCHEMA_VERSION,
 };
 use ocean::module::{CredentialReq, Executor, Module, Observer, Registry};
 use ocean::scheduler::runner::execute_schedule;
@@ -23,10 +22,6 @@ use ocean::storage::{EvidenceQuery, SqliteStore, Store};
 
 fn make_evidence(control_id: &str, source: &str) -> Evidence {
     Evidence {
-        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-        connected_account: None,
-        population: None,
-        evaluation: None,
         id: Uuid::new_v4(),
         control_id: control_id.to_string(),
         class_uid: 1001,

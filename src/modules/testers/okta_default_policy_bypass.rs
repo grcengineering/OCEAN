@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    TranscriptRecorder, EVIDENCE_SCHEMA_VERSION,
+    TranscriptRecorder,
 };
 use crate::module::{
     tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
@@ -187,10 +187,6 @@ impl Tester for DefaultPolicyBypassTester {
             // No policies at all — cannot assess; treat as inconclusive effective.
             let transcript = recorder.finalize();
             return Ok(vec![Evidence {
-                schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-                connected_account: None,
-                population: None,
-                evaluation: None,
                 id: Uuid::new_v4(),
                 control_id: "OKTA-1.9".to_string(),
                 class_uid: 1001,
@@ -338,10 +334,6 @@ impl Tester for DefaultPolicyBypassTester {
         });
 
         Ok(vec![Evidence {
-            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-            connected_account: None,
-            population: None,
-            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "OKTA-1.9".to_string(),
             class_uid: 1001,

@@ -6,17 +6,12 @@ use ocean::control::EvaluationLogic;
 use ocean::eval::CelEngine;
 use ocean::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    EVIDENCE_SCHEMA_VERSION,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn make_evidence(control_id: &str, source: &str, status: StatusId) -> Evidence {
     Evidence {
-        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
-        connected_account: None,
-        population: None,
-        evaluation: None,
         id: Uuid::new_v4(),
         control_id: control_id.to_string(),
         class_uid: 1001,
