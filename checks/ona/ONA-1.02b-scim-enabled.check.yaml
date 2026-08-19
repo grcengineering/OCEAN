@@ -100,9 +100,10 @@ steps:
       # written against them, walking down from the root, so no clause is ever
       # reached with an unnavigable receiver.
       #
-      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
-      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
-      # error, which is indistinguishable from a well-formed object that simply
+      # `$is_object` rather than `!$is_array` because `has()` cannot itself
+      # discriminate shape: on a non-object receiver cel 0.14 RAISES ("No such
+      # overload"), which the fail-closed default turns into an accusation,
+      # while it answers FALSE for a well-formed object that simply
       # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
       # repeated fields, so an object missing the key is a readable EMPTY result
       # and a real finding, while a scalar body was never a response at all and

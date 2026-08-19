@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use cel_interpreter::{Context as CelContext, Program, Value as CelValue};
+use cel::{Context as CelContext, Program, Value as CelValue};
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
@@ -99,12 +99,11 @@ fn jsonpath_extract(path: &str, body: &JsonValue) -> Option<JsonValue> {
     // Object-shape discriminator, and the counterpart `$is_array` could not
     // substitute for.
     //
-    // `has(x.field)` does NOT raise when `x` is a scalar — cel-interpreter 0.10.0
-    // returns `false` (verified against string, number, bool and array receivers).
-    // That makes `has()` safe from the "Undeclared reference" class, but it also
-    // makes it BLIND: on a response whose body is a JSON scalar,
-    // `has(body_root.items)` returns false — exactly what it returns for a
-    // well-formed object that simply has no `items` key. Those two cases need
+    // `has(x.field)` cannot itself tell those two cases apart. Under `cel` 0.14
+    // a non-object receiver RAISES ("No such overload"; verified against string,
+    // number, bool, null and array receivers), and the fail-closed default turns
+    // that raise into an accusation. A well-formed object that simply has no
+    // `items` key answers `false`. Those two cases need
     // opposite verdicts. An object without the key is a real, readable EMPTY
     // result (Protobuf-JSON omits empty repeated fields, so it is the normal
     // shape for "none configured") and must FAIL the control. A scalar body was

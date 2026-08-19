@@ -41,7 +41,7 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use cel_interpreter::Program;
+use cel::Program;
 
 use ocean::check::{load_check_file, register_check, CheckDefinition, CheckType};
 use ocean::control::Control;
