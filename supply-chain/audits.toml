@@ -197,7 +197,7 @@ end = "2027-03-29"
 
 [[trusted.tiny-keccak]]
 criteria = "safe-to-deploy"
-user-id = 2998 # Marek Kotewicz (debris)
+user-id = 2998
 start = "2019-06-11"
 end = "2027-03-29"
 
