@@ -58,6 +58,53 @@ struct MockHTTPServer {
     base_url: String,
 }
 
+/// Read the ENTIRE request — headers and, when `Content-Length` says so, the
+/// body — before the handler replies.
+///
+/// This is not tidiness. Every Ona step is a Connect RPC `POST` carrying a JSON
+/// body, so a single `read()` frequently returns only the header segment and
+/// leaves the body sitting in the socket's receive buffer. Closing a TCP socket
+/// with unread inbound data makes the kernel send RST rather than FIN, and an
+/// RST tells the peer to DISCARD data it has already buffered — including the
+/// response we just wrote. The client then sees a truncated body,
+/// `into_json::<JsonValue>()` fails, `execute_step` falls back to
+/// `JsonValue::Null`, and the check reports `body_root == null` on an HTTP 200.
+///
+/// That surfaced here as an intermittent, migrating failure: a readability
+/// assertion reporting "returned no policies object … (HTTP 200)" for a check
+/// whose fixture plainly contained one, on a different check each run. Draining
+/// first makes the close a clean FIN and the harness deterministic.
+fn drain_request(stream: &mut std::net::TcpStream) {
+    let mut raw: Vec<u8> = Vec::with_capacity(8192);
+    let mut buf = [0u8; 4096];
+
+    // Phase 1: read until the header terminator is present.
+    let header_end = loop {
+        if let Some(pos) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+            break pos + 4;
+        }
+        match stream.read(&mut buf) {
+            Ok(0) | Err(_) => return, // peer closed or errored; nothing more to drain
+            Ok(n) => raw.extend_from_slice(&buf[..n]),
+        }
+    };
+
+    // Phase 2: read exactly `Content-Length` more bytes, when declared.
+    let headers = String::from_utf8_lossy(&raw[..header_end]).to_lowercase();
+    let content_length = headers
+        .lines()
+        .find_map(|line| line.strip_prefix("content-length:"))
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .unwrap_or(0);
+
+    while raw.len() < header_end + content_length {
+        match stream.read(&mut buf) {
+            Ok(0) | Err(_) => return,
+            Ok(n) => raw.extend_from_slice(&buf[..n]),
+        }
+    }
+}
+
 impl MockHTTPServer {
     fn new(responses: Vec<(u16, String)>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock HTTP server");
@@ -73,8 +120,7 @@ impl MockHTTPServer {
                 q.remove(0)
             };
             if let Ok((mut stream, _)) = listener.accept() {
-                let mut buf = [0u8; 8192];
-                let _ = stream.read(&mut buf);
+                drain_request(&mut stream);
                 let (status, body) = resp;
                 let raw = format!(
                     "HTTP/1.1 {status} OK\r\nContent-Length: {len}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}",
