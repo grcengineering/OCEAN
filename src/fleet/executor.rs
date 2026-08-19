@@ -12,9 +12,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use tokio::sync::Semaphore;
 
-use crate::harden::{
-    execute_plans, plan_harden, CredentialMask, RemediationMode,
-};
+use crate::harden::{execute_plans, plan_harden, CredentialMask, RemediationMode};
 
 use super::manifest::FleetManifest;
 
@@ -108,16 +106,16 @@ pub async fn execute_fleet(
         let handle = tokio::task::spawn_blocking(move || {
             // F25: target_config is owned by this closure. It will be dropped
             // when this task completes — no credential caching or pooling.
-            let result = execute_single_target(
-                &target_id,
-                &target_source,
-                &target_config,
-                &checks_dir,
-                &mode,
+            let result = execute_single_target(SingleTargetParams {
+                target_id: &target_id,
+                target_source: &target_source,
+                config: &target_config,
+                checks_dir: &checks_dir,
+                mode: &mode,
                 apply,
-                &terraform_dir,
-                &output_dir,
-            );
+                terraform_dir: &terraform_dir,
+                output_dir: &output_dir,
+            });
             drop(permit); // Release semaphore permit
             result
         });
@@ -180,33 +178,43 @@ pub async fn execute_fleet(
     Ok(fleet_result)
 }
 
+/// Bundled parameters for [`execute_single_target`] (keeps the function's
+/// argument count within clippy's `too_many_arguments` threshold).
+struct SingleTargetParams<'a> {
+    target_id: &'a str,
+    target_source: &'a str,
+    config: &'a HashMap<String, String>,
+    checks_dir: &'a str,
+    mode: &'a RemediationMode,
+    apply: bool,
+    terraform_dir: &'a str,
+    output_dir: &'a Path,
+}
+
 /// Execute a single fleet target (runs in a blocking tokio task).
 ///
 /// F22: Does NOT call std::env::set_var(). Uses the config HashMap directly.
 /// F27: Creates its own ureq::Agent (via harden's execute_api_call which
 ///      creates a fresh request per call).
-fn execute_single_target(
-    target_id: &str,
-    target_source: &str,
-    config: &HashMap<String, String>,
-    checks_dir: &str,
-    mode: &RemediationMode,
-    apply: bool,
-    terraform_dir: &str,
-    output_dir: &Path,
-) -> TargetResult {
+fn execute_single_target(params: SingleTargetParams) -> TargetResult {
+    let SingleTargetParams {
+        target_id,
+        target_source,
+        config,
+        checks_dir,
+        mode,
+        apply,
+        terraform_dir,
+        output_dir,
+    } = params;
+
     // F26: Create credential mask for scrubbing errors
     let mask = CredentialMask::from_config(config);
 
     let result_file = output_dir.join(format!("{}.json", target_id));
 
     // Plan remediation using the target's own credential context
-    let plans = match plan_harden(
-        Path::new(checks_dir),
-        mode,
-        config,
-        Some(target_source),
-    ) {
+    let plans = match plan_harden(Path::new(checks_dir), mode, config, Some(target_source)) {
         Ok(plans) => plans,
         Err(e) => {
             let error_msg = mask.scrub(&format!("{e:#}"));
@@ -244,11 +252,7 @@ fn execute_single_target(
     }
 
     // Execute remediation plans with the target's own config
-    let results = execute_plans(
-        &plans,
-        config,
-        Some(Path::new(terraform_dir)),
-    );
+    let results = execute_plans(&plans, config, Some(Path::new(terraform_dir)));
 
     let changes_applied = results.iter().filter(|r| r.success).count();
     let errors: Vec<String> = results
@@ -306,8 +310,7 @@ fn create_output_dir(path: &Path) -> Result<()> {
 
 /// Write a per-target result file with 0600 permissions. [F28]
 fn write_target_result(result: &TargetResult, path: &Path) -> Result<()> {
-    let json = serde_json::to_string_pretty(result)
-        .context("failed to serialize target result")?;
+    let json = serde_json::to_string_pretty(result).context("failed to serialize target result")?;
     std::fs::write(path, json)
         .with_context(|| format!("cannot write result file: {}", path.display()))?;
 
@@ -324,8 +327,7 @@ fn write_target_result(result: &TargetResult, path: &Path) -> Result<()> {
 /// Write the aggregated fleet summary JSON. [F19]
 fn write_fleet_summary(result: &FleetResult, output_dir: &Path) -> Result<()> {
     let path = output_dir.join("fleet-summary.json");
-    let json = serde_json::to_string_pretty(result)
-        .context("failed to serialize fleet summary")?;
+    let json = serde_json::to_string_pretty(result).context("failed to serialize fleet summary")?;
     std::fs::write(&path, json)
         .with_context(|| format!("cannot write fleet summary: {}", path.display()))?;
 
@@ -546,7 +548,11 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::metadata(&path).unwrap().permissions();
-            assert_eq!(perms.mode() & 0o777, 0o600, "result file must have 0o600 permissions");
+            assert_eq!(
+                perms.mode() & 0o777,
+                0o600,
+                "result file must have 0o600 permissions"
+            );
         }
     }
 
@@ -593,7 +599,10 @@ mod tests {
         write_fleet_summary(&result, &output_dir).unwrap();
 
         let summary_path = output_dir.join("fleet-summary.json");
-        assert!(summary_path.exists(), "fleet-summary.json should be created");
+        assert!(
+            summary_path.exists(),
+            "fleet-summary.json should be created"
+        );
 
         let content = std::fs::read_to_string(&summary_path).unwrap();
         let v: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -608,7 +617,11 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::metadata(&summary_path).unwrap().permissions();
-            assert_eq!(perms.mode() & 0o777, 0o600, "fleet-summary.json must have 0o600 permissions");
+            assert_eq!(
+                perms.mode() & 0o777,
+                0o600,
+                "fleet-summary.json must have 0o600 permissions"
+            );
         }
     }
 
@@ -619,7 +632,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         // Redirect HOME so audit.log lands in our temp dir
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe { std::env::set_var("HOME", tmp.path()); }
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+        }
 
         let result = FleetResult {
             fleet_name: "audit-test-fleet".to_string(),
@@ -660,13 +675,34 @@ mod tests {
         assert!(log_path.exists(), "audit.log should be created");
 
         let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("FLEET"), "log entry should contain FLEET marker");
-        assert!(content.contains("audit-test-fleet"), "log entry should contain fleet name");
-        assert!(content.contains("targets=3"), "log entry should contain target count");
-        assert!(content.contains("succeeded=2"), "log entry should contain succeeded count");
-        assert!(content.contains("failed=1"), "log entry should contain failed count");
-        assert!(content.contains("gh-prod"), "log entry should contain target IDs");
-        assert!(content.contains("aws-prod"), "log entry should list failed target IDs");
+        assert!(
+            content.contains("FLEET"),
+            "log entry should contain FLEET marker"
+        );
+        assert!(
+            content.contains("audit-test-fleet"),
+            "log entry should contain fleet name"
+        );
+        assert!(
+            content.contains("targets=3"),
+            "log entry should contain target count"
+        );
+        assert!(
+            content.contains("succeeded=2"),
+            "log entry should contain succeeded count"
+        );
+        assert!(
+            content.contains("failed=1"),
+            "log entry should contain failed count"
+        );
+        assert!(
+            content.contains("gh-prod"),
+            "log entry should contain target IDs"
+        );
+        assert!(
+            content.contains("aws-prod"),
+            "log entry should list failed target IDs"
+        );
     }
 
     // UT-037: write_fleet_audit_log falls back to .ocean/ when HOME is unset
@@ -675,7 +711,9 @@ mod tests {
     fn write_fleet_audit_log_home_unset_fallback() {
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let original_home = std::env::var("HOME").ok();
-        unsafe { std::env::remove_var("HOME"); }
+        unsafe {
+            std::env::remove_var("HOME");
+        }
 
         let result = FleetResult {
             fleet_name: "fallback-fleet".to_string(),
@@ -694,7 +732,9 @@ mod tests {
 
         // Restore HOME
         if let Some(home) = original_home {
-            unsafe { std::env::set_var("HOME", home); }
+            unsafe {
+                std::env::set_var("HOME", home);
+            }
         }
     }
 
@@ -707,14 +747,15 @@ mod tests {
         let readonly_parent = tmp.path().join("readonly");
         std::fs::create_dir_all(&readonly_parent).unwrap();
         // Make the parent unwritable
-        std::fs::set_permissions(&readonly_parent, std::fs::Permissions::from_mode(0o500))
-            .unwrap();
+        std::fs::set_permissions(&readonly_parent, std::fs::Permissions::from_mode(0o500)).unwrap();
         let nested = readonly_parent.join("subdir");
         let result = create_output_dir(&nested);
         // Restore permissions so tempdir can clean up
-        std::fs::set_permissions(&readonly_parent, std::fs::Permissions::from_mode(0o700))
-            .unwrap();
-        assert!(result.is_err(), "should fail on unwritable parent directory");
+        std::fs::set_permissions(&readonly_parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(
+            result.is_err(),
+            "should fail on unwritable parent directory"
+        );
     }
 
     // UT-039: execute_single_target with empty checks dir returns Completed, 0 checks
@@ -727,29 +768,37 @@ mod tests {
         std::fs::create_dir_all(&checks_dir).unwrap();
 
         let config = std::collections::HashMap::new();
-        let result = execute_single_target(
-            "github-test",
-            "github",
-            &config,
-            checks_dir.to_str().unwrap(),
-            &crate::harden::RemediationMode::Api,
-            false, // apply = false (dry run)
-            "",
-            &output_dir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "github-test",
+            target_source: "github",
+            config: &config,
+            checks_dir: checks_dir.to_str().unwrap(),
+            mode: &crate::harden::RemediationMode::Api,
+            apply: false,
+            // apply = false (dry run)
+            terraform_dir: "",
+            output_dir: &output_dir,
+        });
 
         assert!(
             matches!(result.status, TargetStatus::Completed),
-            "empty checks dir should complete successfully, got: {:?}", result.status
+            "empty checks dir should complete successfully, got: {:?}",
+            result.status
         );
         assert_eq!(result.id, "github-test");
         assert_eq!(result.source, "github");
-        assert_eq!(result.checks_run, 0, "no checks should run against empty dir");
+        assert_eq!(
+            result.checks_run, 0,
+            "no checks should run against empty dir"
+        );
         assert_eq!(result.findings, 0);
         assert_eq!(result.changes_applied, 0);
         assert!(result.error.is_none());
         // Result file should have been written
-        assert!(result.results_file.exists(), "result file should be written to disk");
+        assert!(
+            result.results_file.exists(),
+            "result file should be written to disk"
+        );
     }
 
     // UT-040: execute_single_target with apply=true and empty checks dir still returns Completed
@@ -762,16 +811,17 @@ mod tests {
         std::fs::create_dir_all(&checks_dir).unwrap();
 
         let config = std::collections::HashMap::new();
-        let result = execute_single_target(
-            "okta-staging",
-            "okta",
-            &config,
-            checks_dir.to_str().unwrap(),
-            &crate::harden::RemediationMode::Api,
-            true, // apply = true
-            "",
-            &output_dir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "okta-staging",
+            target_source: "okta",
+            config: &config,
+            checks_dir: checks_dir.to_str().unwrap(),
+            mode: &crate::harden::RemediationMode::Api,
+            apply: true,
+            // apply = true
+            terraform_dir: "",
+            output_dir: &output_dir,
+        });
 
         // With no plans (empty checks dir), apply branch short-circuits to Completed
         assert!(
@@ -789,16 +839,16 @@ mod tests {
         std::fs::create_dir_all(&output_dir).unwrap();
 
         let config = std::collections::HashMap::new();
-        let result = execute_single_target(
-            "aws-prod",
-            "aws",
-            &config,
-            "/nonexistent/checks/dir/that/does/not/exist",
-            &crate::harden::RemediationMode::Api,
-            false,
-            "",
-            &output_dir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "aws-prod",
+            target_source: "aws",
+            config: &config,
+            checks_dir: "/nonexistent/checks/dir/that/does/not/exist",
+            mode: &crate::harden::RemediationMode::Api,
+            apply: false,
+            terraform_dir: "",
+            output_dir: &output_dir,
+        });
 
         // plan_harden on a nonexistent dir returns Ok(vec![]) because load_all_definitions
         // silently returns empty for missing dirs; so this path also completes cleanly
@@ -848,7 +898,10 @@ mod tests {
 
         // fleet-summary.json should exist
         let summary_path = output_dir.join("fleet-summary.json");
-        assert!(summary_path.exists(), "fleet-summary.json should be written");
+        assert!(
+            summary_path.exists(),
+            "fleet-summary.json should be written"
+        );
     }
 
     // UT-043: execute_fleet with multiple targets all completing
@@ -897,7 +950,11 @@ mod tests {
 
         // Each target should have a result file
         for target in &fleet_result.targets {
-            assert!(target.results_file.exists(), "per-target result file should exist for {}", target.id);
+            assert!(
+                target.results_file.exists(),
+                "per-target result file should exist for {}",
+                target.id
+            );
         }
     }
 
@@ -1037,16 +1094,16 @@ assertions: []
         std::fs::write(checks_dir.join("noremed.check.yaml"), check).unwrap();
 
         let config = std::collections::HashMap::new();
-        let result = execute_single_target(
-            "github-noremed",
-            "github",
-            &config,
-            checks_dir.to_str().unwrap(),
-            &crate::harden::RemediationMode::Api,
-            false,
-            "",
-            &output_dir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "github-noremed",
+            target_source: "github",
+            config: &config,
+            checks_dir: checks_dir.to_str().unwrap(),
+            mode: &crate::harden::RemediationMode::Api,
+            apply: false,
+            terraform_dir: "",
+            output_dir: &output_dir,
+        });
 
         assert!(
             matches!(result.status, TargetStatus::Completed),
@@ -1079,16 +1136,16 @@ remediation:
         std::fs::write(checks_dir.join("pass.check.yaml"), check).unwrap();
 
         let config = std::collections::HashMap::new();
-        let result = execute_single_target(
-            "github-pass",
-            "github",
-            &config,
-            checks_dir.to_str().unwrap(),
-            &crate::harden::RemediationMode::All,
-            false,
-            "",
-            &output_dir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "github-pass",
+            target_source: "github",
+            config: &config,
+            checks_dir: checks_dir.to_str().unwrap(),
+            mode: &crate::harden::RemediationMode::All,
+            apply: false,
+            terraform_dir: "",
+            output_dir: &output_dir,
+        });
 
         assert!(matches!(result.status, TargetStatus::Completed));
         assert!(result.error.is_none());
@@ -1105,23 +1162,28 @@ remediation:
         std::fs::create_dir_all(&checks_dir).unwrap();
 
         let mut config = std::collections::HashMap::new();
-        config.insert("GITHUB_TOKEN".to_string(), "ghp_test_secret_token".to_string());
-
-        let result = execute_single_target(
-            "github-creds",
-            "github",
-            &config,
-            checks_dir.to_str().unwrap(),
-            &crate::harden::RemediationMode::Api,
-            false,
-            "",
-            &output_dir,
+        config.insert(
+            "GITHUB_TOKEN".to_string(),
+            "ghp_test_secret_token".to_string(),
         );
+
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "github-creds",
+            target_source: "github",
+            config: &config,
+            checks_dir: checks_dir.to_str().unwrap(),
+            mode: &crate::harden::RemediationMode::Api,
+            apply: false,
+            terraform_dir: "",
+            output_dir: &output_dir,
+        });
 
         // Even if there's an error, credentials should be scrubbed.
         if let Some(err) = &result.error {
-            assert!(!err.contains("ghp_test_secret_token"),
-                "credentials should be scrubbed from error messages");
+            assert!(
+                !err.contains("ghp_test_secret_token"),
+                "credentials should be scrubbed from error messages"
+            );
         }
     }
 
@@ -1131,7 +1193,9 @@ remediation:
     fn write_fleet_audit_log_all_succeeded() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe { std::env::set_var("HOME", tmp.path()); }
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+        }
 
         let result = FleetResult {
             fleet_name: "all-pass-fleet".to_string(),
@@ -1172,7 +1236,10 @@ remediation:
         let content = std::fs::read_to_string(&log_path).unwrap();
         assert!(content.contains("failed=0"), "should show failed=0");
         assert!(content.contains("succeeded=2"), "should show succeeded=2");
-        assert!(content.contains("failed_ids=[]"), "failed_ids should be empty list");
+        assert!(
+            content.contains("failed_ids=[]"),
+            "failed_ids should be empty list"
+        );
     }
 
     // UT-051: write_fleet_audit_log with multiple failed targets
@@ -1181,7 +1248,9 @@ remediation:
     fn write_fleet_audit_log_multiple_failures() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe { std::env::set_var("HOME", tmp.path()); }
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+        }
 
         let result = FleetResult {
             fleet_name: "fail-fleet".to_string(),
@@ -1230,8 +1299,14 @@ remediation:
 
         let log_path = tmp.path().join(".ocean").join("audit.log");
         let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("fail-1"), "should list first failed target");
-        assert!(content.contains("fail-2"), "should list second failed target");
+        assert!(
+            content.contains("fail-1"),
+            "should list first failed target"
+        );
+        assert!(
+            content.contains("fail-2"),
+            "should list second failed target"
+        );
         assert!(content.contains("failed=2"), "should show failed=2");
     }
 
@@ -1450,16 +1525,17 @@ remediation:
         std::fs::write(checks_dir.join("rem.check.yaml"), check).unwrap();
 
         let config = std::collections::HashMap::new();
-        let result = execute_single_target(
-            "github-apply",
-            "github",
-            &config,
-            checks_dir.to_str().unwrap(),
-            &crate::harden::RemediationMode::Api,
-            true, // apply mode
-            "",
-            &output_dir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "github-apply",
+            target_source: "github",
+            config: &config,
+            checks_dir: checks_dir.to_str().unwrap(),
+            mode: &crate::harden::RemediationMode::Api,
+            apply: true,
+            // apply mode
+            terraform_dir: "",
+            output_dir: &output_dir,
+        });
 
         // With no failing checks, the !apply || plans.is_empty() branch is taken.
         assert!(matches!(result.status, TargetStatus::Completed));
@@ -1484,8 +1560,14 @@ remediation:
         };
         let json = serde_json::to_string_pretty(&result).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert!(v["started_at"].is_string(), "started_at should be serialized as string");
-        assert!(v["completed_at"].is_string(), "completed_at should be serialized as string");
+        assert!(
+            v["started_at"].is_string(),
+            "started_at should be serialized as string"
+        );
+        assert!(
+            v["completed_at"].is_string(),
+            "completed_at should be serialized as string"
+        );
     }
 
     // UT-060: write_fleet_audit_log appends multiple entries
@@ -1494,7 +1576,9 @@ remediation:
     fn write_fleet_audit_log_appends_multiple() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-        unsafe { std::env::set_var("HOME", tmp.path()); }
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+        }
 
         let make_result = |name: &str| FleetResult {
             fleet_name: name.to_string(),
@@ -1513,9 +1597,14 @@ remediation:
 
         let log_path = tmp.path().join(".ocean").join("audit.log");
         let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("fleet-a") && content.contains("fleet-b"),
-            "both entries should be in the log");
-        assert!(content.lines().count() >= 2, "should have at least two log lines");
+        assert!(
+            content.contains("fleet-a") && content.contains("fleet-b"),
+            "both entries should be in the log"
+        );
+        assert!(
+            content.lines().count() >= 2,
+            "should have at least two log lines"
+        );
     }
 
     // ─── execute_single_target full-coverage tests ──────────────────────────
@@ -1574,16 +1663,17 @@ remediation:
         let outdir = tmp.path().join("out");
         std::fs::create_dir_all(&outdir).unwrap();
         let config = HashMap::new();
-        let result = execute_single_target(
-            "t1",
-            "aws",
-            &config,
-            checks.to_str().unwrap(),
-            &RemediationMode::Api,
-            false, // apply=false
-            tmp.path().to_str().unwrap(),
-            &outdir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "t1",
+            target_source: "aws",
+            config: &config,
+            checks_dir: checks.to_str().unwrap(),
+            mode: &RemediationMode::Api,
+            apply: false,
+            // apply=false
+            terraform_dir: tmp.path().to_str().unwrap(),
+            output_dir: &outdir,
+        });
         assert_eq!(result.id, "t1");
         assert_eq!(result.source, "aws");
         assert!(matches!(result.status, TargetStatus::Completed));
@@ -1601,19 +1691,23 @@ remediation:
         let outdir = tmp.path().join("out");
         std::fs::create_dir_all(&outdir).unwrap();
         let config = HashMap::new();
-        let result = execute_single_target(
-            "t2",
-            "aws",
-            &config,
-            checks.to_str().unwrap(),
-            &RemediationMode::Api,
-            true, // apply=true
-            tmp.path().to_str().unwrap(),
-            &outdir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "t2",
+            target_source: "aws",
+            config: &config,
+            checks_dir: checks.to_str().unwrap(),
+            mode: &RemediationMode::Api,
+            apply: true,
+            // apply=true
+            terraform_dir: tmp.path().to_str().unwrap(),
+            output_dir: &outdir,
+        });
         // Apply will try to hit github.com without credentials — should fail.
         assert!(
-            matches!(result.status, TargetStatus::Failed | TargetStatus::Completed),
+            matches!(
+                result.status,
+                TargetStatus::Failed | TargetStatus::Completed
+            ),
             "got status: {:?}",
             result.status
         );
@@ -1628,16 +1722,16 @@ remediation:
         std::fs::create_dir_all(&checks).unwrap();
         let outdir = tmp.path().join("out");
         std::fs::create_dir_all(&outdir).unwrap();
-        let result = execute_single_target(
-            "t3",
-            "aws",
-            &HashMap::new(),
-            checks.to_str().unwrap(),
-            &RemediationMode::Api,
-            true,
-            tmp.path().to_str().unwrap(),
-            &outdir,
-        );
+        let result = execute_single_target(SingleTargetParams {
+            target_id: "t3",
+            target_source: "aws",
+            config: &HashMap::new(),
+            checks_dir: checks.to_str().unwrap(),
+            mode: &RemediationMode::Api,
+            apply: true,
+            terraform_dir: tmp.path().to_str().unwrap(),
+            output_dir: &outdir,
+        });
         assert!(matches!(result.status, TargetStatus::Completed));
         assert_eq!(result.findings, 0);
         assert_eq!(result.changes_applied, 0);

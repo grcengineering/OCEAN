@@ -1,0 +1,76 @@
+id: OKTA-1.90
+name: Audit Default Authentication Policy Reliance
+description: |
+  Verifies that the Okta organization has moved beyond sole reliance on the
+  immutable Default Authentication Policy by confirming custom access
+  policies exist. Okta's built-in Default Policy permits password-only
+  login with no MFA requirement and cannot be modified or deleted; any
+  application that falls through to it bypasses MFA enforcement entirely.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L1
+tags: [authentication-policy, default-policy, mfa-bypass, policy-audit]
+
+references:
+  nist: ["AC-3", "IA-2"]
+  hth: "okta:1.9"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.policies.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/policies?type=ACCESS_POLICY"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      policies: "$[*]"
+
+assertions:
+  - id: custom_access_policies_exist
+    expr: "size(policies.filter(p, p.system == false)) > 0"
+    severity: critical
+    title: Custom Access Policies Exist Beyond the Default Policy
+    pass_message: "Custom access policies are configured — applications can be assigned away from the immutable Default Policy"
+    fail_message: "No custom access policies exist — applications may be falling through to the password-only Default Policy"
+    finding:
+      description: |
+        No custom (non-system) Access Policies were found. Okta's built-in
+        Default Policy is immutable, cannot enforce MFA changes, and
+        permits password-only login. Without at least one custom
+        MFA-enforcing policy to assign applications to, new and existing
+        applications remain on the Default Policy's password-only fallback.
+        Create a custom Access Policy that requires MFA and reassign every
+        application to it. A full audit additionally requires enumerating
+        `GET /api/v1/policies/{policyId}/app` for the Default Policy to
+        confirm zero applications remain assigned to it.
+
+remediation:
+  description: |
+    Create a custom, MFA-enforcing Access Policy and reassign all
+    applications away from the immutable Default Policy.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authentication Policies"
+    - "Create a new policy named 'MFA Required - All Applications'"
+    - "Add a catch-all rule requiring 2FA for all users and network conditions"
+    - "Reassign every application from the Default Policy to the new custom policy"
+    - "Confirm the Default Policy shows zero assigned applications"
+  manual:
+    - "Periodically re-run the audit — new applications default to the Default Policy unless explicitly assigned"
+  api:
+    method: PUT
+    url: "https://{{okta_domain}}/api/v1/apps/{{app_id}}/policies/{{target_policy_id}}"
+    body: {}

@@ -1,0 +1,86 @@
+id: OL-3.03
+name: Inventory Privileged Roles and Their Administrators
+description: |
+  Mints an OAuth client-credentials token, then enumerates every OneLogin
+  role with its admin and user counts via the Roles v2 API as an
+  informational audit for privileged-account review. This is an audit of
+  what exists, not a bright-line pass/fail — the reviewer determines
+  whether each role's admin population matches its documented business
+  need.
+author: grc-engineering
+version: "1.0"
+source: onelogin
+profile: L1
+tags: [rbac, admin, audit]
+
+references:
+  cis: "5.4"
+  nist: AC-6
+  hth: "onelogin:3.3"
+
+credentials:
+  ONELOGIN_CLIENT_ID:
+    type: api_token
+    required: true
+  ONELOGIN_CLIENT_SECRET:
+    type: api_token
+    required: true
+
+inputs:
+  onelogin_subdomain:
+    description: OneLogin account subdomain (e.g. mycompany for mycompany.onelogin.com)
+    env: ONELOGIN_SUBDOMAIN
+    required: true
+
+steps:
+  - id: mint_token
+    action: api_call
+    request:
+      method: POST
+      url: "https://{{onelogin_subdomain}}.onelogin.com/auth/oauth2/v2/token"
+      headers:
+        Content-Type: application/x-www-form-urlencoded
+      body_form:
+        grant_type: client_credentials
+        client_id: "{{ONELOGIN_CLIENT_ID}}"
+        client_secret: "{{ONELOGIN_CLIENT_SECRET}}"
+    extract:
+      access_token: "$.access_token"
+
+  - id: get_roles
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{onelogin_subdomain}}.onelogin.com/api/2/roles?fields=admins,users"
+      headers:
+        Authorization: "bearer {{access_token}}"
+    extract:
+      roles: "$[*]"
+      role_count: "$length"
+
+assertions:
+  - id: privileged_role_audit
+    expr: "get_roles_status_code == 200"
+    severity: medium
+    title: Privileged Role and Administrator Inventory
+    pass_message: "{{role_count}} role(s) retrieved — review each role's admin list for business justification"
+    fail_message: "The Roles API call did not return 200 — the role inventory for privileged-account review could not be retrieved"
+    finding:
+      description: |
+        This is an informational audit of every OneLogin role and its admin
+        and user counts. Cross-reference each role's admins array against
+        the organization's documented privileged-account register. Super
+        user and other broadly-scoped roles should be held by the smallest
+        possible set of accounts, and every admin assignment should have a
+        recorded business justification.
+
+remediation:
+  description: |
+    Review the admin list for every role and remove assignments that lack
+    documented business justification.
+  steps:
+    - "Navigate to Users -> Roles"
+    - "For each role, review its admins list and confirm every admin has a documented business need"
+    - "Limit Super user to 2-3 accounts and move remaining administrators to scoped custom roles"
+  manual:
+    - "Maintain a privileged-account register and reconcile it against this inventory quarterly"

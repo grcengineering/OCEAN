@@ -1,0 +1,68 @@
+id: OKTA-1.80
+name: Verify FIPS-Compliant Authenticator Enforcement
+description: |
+  Verifies that the Okta Verify authenticator is restricted to
+  FIPS-compliant devices only. This ensures authentication relies on FIPS
+  140-2 validated cryptographic modules, a requirement in federal and
+  regulated environments.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L3
+tags: [fips, compliance, authenticator, federal]
+
+references:
+  nist: "SC-13"
+  disa_stig: "V-273205"
+  hth: "okta:1.8"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.authenticators.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_authenticators
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/authenticators"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      authenticators: "$[*]"
+
+assertions:
+  - id: okta_verify_fips_only
+    expr: "size(authenticators.filter(a, a.key == 'okta_verify' && a.settings.compliance == 'FIPS_ONLY')) > 0"
+    severity: medium
+    title: Okta Verify Restricted to FIPS-Compliant Devices
+    pass_message: "Okta Verify is restricted to FIPS-compliant devices only"
+    fail_message: "Okta Verify is not restricted to FIPS-compliant devices"
+    finding:
+      description: |
+        The Okta Verify authenticator is not restricted to FIPS-compliant
+        devices. This control is required only for federal and regulated
+        environments (Profile Level L3). Where required, restrict Okta
+        Verify to devices operating in FIPS 140-2 mode to ensure
+        authentication relies exclusively on validated cryptographic
+        modules.
+
+remediation:
+  description: |
+    Restrict the Okta Verify authenticator to FIPS-compliant devices only.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authenticators"
+    - "In the Setup tab, click Edit next to Okta Verify"
+    - "Set FIPS Compliance to 'FIPS-compliant devices only'"
+    - "Click Save"
+  manual:
+    - "Confirm end-user devices support FIPS 140-2 mode before enabling — this will block enrollment on non-compliant devices"
+    - "Confirm this control applies to your environment before implementing — it is federal/L3-scoped"

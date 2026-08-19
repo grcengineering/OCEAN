@@ -1,0 +1,95 @@
+id: OKTA-3.03
+name: Audit OAuth Application Allowlisting
+description: |
+  Enumerates active OAuth/OIDC applications and registered clients on the
+  default authorization server as an informational audit for OAuth
+  application allowlisting. OAuth consent phishing is a growing attack
+  vector where malicious applications request broad scopes to access
+  organizational data through user consent flows.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [oauth, allowlisting, consent-phishing, integration-security]
+
+references:
+  nist: ["CM-7", "AC-6"]
+  hth: "okta:3.3"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.apps.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_active_oauth_apps
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/apps?filter=status+eq+%22ACTIVE%22"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+      paginate: true
+    extract:
+      oauth_app_count: "$length"
+      apps: "$[*]"
+
+  - id: get_default_auth_server_clients
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/authorizationServers/default/clients"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      auth_server_client_count: "$length"
+
+assertions:
+  - id: oauth_app_audit
+    expr: "oauth_app_count >= 0"
+    severity: medium
+    title: Active OAuth/OIDC Application Audit
+    pass_message: "{{oauth_app_count}} active application(s) found — review for over-permissioned OAuth/OIDC apps and enforce admin approval for new integrations"
+    fail_message: "Unable to retrieve active applications for OAuth allowlisting audit"
+    finding:
+      description: |
+        This is an informational audit of active applications for OAuth
+        allowlisting review. Filter for signOnMode OPENID_CONNECT or
+        OAUTH_2_0 and check each app's `/api/v1/apps/{id}/grants` for
+        scopes matching "manage" or "write" — broad scopes on
+        externally-authored apps are the primary indicator of consent
+        phishing risk.
+
+  - id: default_auth_server_clients_audit
+    expr: "auth_server_client_count >= 0"
+    severity: medium
+    title: Default Authorization Server Client Audit
+    pass_message: "{{auth_server_client_count}} client(s) registered on the default authorization server — review for unexpected entries"
+    fail_message: "Unable to retrieve default authorization server clients"
+    finding:
+      description: |
+        This is an informational audit of OAuth clients registered on the
+        default authorization server. Unrecognized or unexpected clients
+        here can indicate unauthorized OAuth application registration.
+
+remediation:
+  description: |
+    Enforce admin approval for new OAuth app integrations and audit
+    existing grants for over-permissioned applications.
+  steps:
+    - "Navigate to Okta Admin Console → Applications → Applications → Third-party app consent"
+    - "Set third-party app consent to require admin approval"
+    - "Review OAuth consent grants across all users monthly"
+    - "Alert on new OAuth consent events (app.oauth2.consent.grant, app.oauth2.as.consent.grant)"
+  manual:
+    - "Maintain a documented allowlist of approved third-party OAuth applications"
+  api:
+    method: DELETE
+    url: "https://{{okta_domain}}/api/v1/users/{{user_id}}/grants/{{grant_id}}"

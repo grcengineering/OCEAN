@@ -1,0 +1,52 @@
+{
+  "aiNativeDependencies": {
+    "agentConfigs": {
+      "pinningRequired": true,
+      "rule": "review-before-install",
+      "sourceAllowlist": [
+        "explicit-user-approval"
+      ]
+    },
+    "instructionPacks": {
+      "pinningRequired": true,
+      "rule": "review-before-install",
+      "sourceAllowlist": [
+        "explicit-user-approval"
+      ]
+    },
+    "mcpServers": {
+      "pinningRequired": true,
+      "rule": "review-before-install",
+      "sourceAllowlist": [
+        "explicit-user-approval"
+      ]
+    },
+    "plugins": {
+      "pinningRequired": true,
+      "rule": "review-before-install",
+      "sourceAllowlist": [
+        "explicit-user-approval"
+      ]
+    },
+    "skills": {
+      "pinningRequired": true,
+      "rule": "review-before-install",
+      "sourceAllowlist": [
+        "explicit-user-approval"
+      ]
+    }
+  },
+  "installReview": "required",
+  "minAgeDays": 14,
+  "registries": {
+    "allowlist": [
+      "registry.npmjs.org",
+      "pypi.org",
+      "crates.io",
+      "proxy.golang.org"
+    ]
+  },
+  "requireLockfiles": true,
+  "schemaVersion": 1,
+  "typosquattingPolicy": "verify exact package name against its repository before install"
+}

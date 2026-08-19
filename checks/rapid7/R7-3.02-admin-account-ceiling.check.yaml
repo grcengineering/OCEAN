@@ -1,0 +1,71 @@
+id: R7-3.02
+name: Enforce Global Administrator Account Ceiling
+description: |
+  Verifies that the number of enabled Global Administrator (superuser)
+  accounts on the InsightVM Security Console does not exceed the
+  organization's documented ceiling. HTH recommends limiting Global
+  Administrator to 2-3 accounts; this check applies a ceiling of 3.
+author: grc-engineering
+version: "1.0"
+source: rapid7
+profile: L1
+tags: [rbac, admin, least-privilege]
+
+references:
+  cis: "5.4"
+  nist: "AC-6(1)"
+  hth: "rapid7:3.2"
+
+credentials:
+  RAPID7_BASIC_AUTH:
+    type: api_token
+    required: true
+
+inputs:
+  console_url:
+    description: InsightVM Security Console base URL (e.g. https://console.example.com:3780)
+    env: CONSOLE_URL
+    required: true
+
+steps:
+  - id: get_users
+    action: api_call
+    request:
+      method: GET
+      url: "{{console_url}}/api/3/users?page=0&size=500"
+      headers:
+        Authorization: "Basic {{RAPID7_BASIC_AUTH}}"
+        Accept: application/json
+      paginate: true
+    extract:
+      users: "$.resources"
+
+assertions:
+  - id: admin_account_ceiling
+    expr: "size(users.filter(u, u.role.superuser == true && u.enabled == true)) <= 3"
+    severity: high
+    title: Global Administrator Accounts Within Ceiling
+    pass_message: "Enabled Global Administrator account count is within the 3-account ceiling"
+    fail_message: "Enabled Global Administrator account count exceeds the 3-account ceiling"
+    finding:
+      description: |
+        More than 3 enabled console accounts hold the Global Administrator
+        (superuser) role. Global Administrator accounts can modify every
+        console configuration and read the full vulnerability inventory,
+        so each additional account is another path to a total platform
+        compromise. Reduce the count to the smallest set that operationally
+        requires full administrative access, and move remaining
+        administrative work to narrowly-scoped custom roles (see
+        rapid7:3.1).
+
+remediation:
+  description: |
+    Reduce Global Administrator membership to 2-3 accounts and move
+    remaining users to least-privilege custom roles.
+  steps:
+    - "Navigate to Administration -> User Management"
+    - "Filter by Global Administrator role"
+    - "For every account beyond the documented 2-3 administrators, reassign to a narrowly-scoped custom role or disable the account"
+    - "Create separate accounts for admin vs. daily tasks so admins are not using their privileged account for routine work"
+  manual:
+    - "Review the Global Administrator list quarterly and document business justification for each remaining account"

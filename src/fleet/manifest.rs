@@ -22,16 +22,8 @@ const MAX_TARGETS: usize = 256;
 /// Returns the set of allowed credential env var names for a given source.
 fn allowed_credentials(source: &str) -> Option<&'static [&'static str]> {
     match source {
-        "github" => Some(&[
-            "GITHUB_TOKEN",
-            "GITHUB_ORG",
-            "GITHUB_API_URL",
-        ]),
-        "okta" => Some(&[
-            "OKTA_API_TOKEN",
-            "OKTA_DOMAIN",
-            "OKTA_ORG_URL",
-        ]),
+        "github" => Some(&["GITHUB_TOKEN", "GITHUB_ORG", "GITHUB_API_URL"]),
+        "okta" => Some(&["OKTA_API_TOKEN", "OKTA_DOMAIN", "OKTA_ORG_URL"]),
         "aws" => Some(&[
             "AWS_ACCESS_KEY_ID",
             "AWS_SECRET_ACCESS_KEY",
@@ -45,6 +37,59 @@ fn allowed_credentials(source: &str) -> Option<&'static [&'static str]> {
             "AZURE_TENANT_ID",
             "AZURE_SUBSCRIPTION_ID",
         ]),
+        // Buildkite exposes REST and GraphQL behind a single API access token,
+        // named BUILDKITE_API_TOKEN after Buildkite's own docs. The former
+        // BUILDKITE_API_KEY alias was removed: no check declared it, so a target
+        // authored with that spelling passed validation and then ran every check
+        // unauthenticated. A validation error naming the right variable is a
+        // better failure than a silent one. (It stays on
+        // `harden::CREDENTIAL_ENV_VARS` so that if an operator happens to export
+        // it, the value is still scrubbed from output.)
+        //
+        // Every entry below is consumed by something. A fleet target can only ever
+        // supply what this list blesses (`fleet::executor` passes `target.credentials`
+        // as the module config verbatim), so an input a check declares but this list
+        // omits is unsettable in fleet mode, and an entry no check reads is dead
+        // surface on a security allowlist. Consumers:
+        //   _API_TOKEN             — `credentials:` on all 12 BK-* checks
+        //   _ORG_SLUG              — input `org` on all 12
+        //   _CLUSTER_ID            — input `cluster` on BK-3.01a/3.01b/3.05/3.07
+        //   _GRAPHQL_ID            — organization GraphQL node id, substituted into
+        //                            the BK-1.02 / BK-2.05b remediation bodies
+        //   _MAX_*                 — threshold inputs on BK-2.03/2.07/3.07
+        // BUILDKITE_GRAPHQL_URL was removed: it had zero consumers, and its stated
+        // rationale ("self-hosted GraphQL endpoints") does not exist — Buildkite's
+        // control plane is SaaS-only at the fixed host graphql.buildkite.com.
+        "buildkite" => Some(&[
+            "BUILDKITE_API_TOKEN",
+            "BUILDKITE_ORG_SLUG",
+            "BUILDKITE_GRAPHQL_ID",
+            "BUILDKITE_CLUSTER_ID",
+            "BUILDKITE_MAX_ADMINS",
+            "BUILDKITE_MAX_RULES",
+            "BUILDKITE_MAX_MAINTAINERS",
+        ]),
+        // Ona (formerly Gitpod) authenticates every Connect RPC method with a single
+        // bearer token — a personal access token or a service account token — named
+        // ONA_TOKEN after the vendor's own docs and its `ona` CLI. The whole ONA-*
+        // check set is read-only, so a read-only PAT satisfies all 18; the write-side
+        // remediations documented on those checks need a read-write token, which is
+        // the same variable holding a differently-scoped value.
+        //
+        // Every entry below is consumed by something. A fleet target can only supply
+        // what this list blesses (`fleet::executor` passes `target.credentials` as the
+        // module config verbatim), so an input a check declares but this list omits is
+        // unsettable in fleet mode, and an entry no check reads is dead surface on a
+        // security allowlist. Consumers:
+        //   ONA_TOKEN           — `credentials:` on all 18 ONA-* checks
+        //   ONA_ORGANIZATION_ID — input `org` on all 18; obtainable from
+        //                         `IdentityService/GetAuthenticatedIdentity`
+        // Deliberately NOT listed: ONA_HOST. Ona is SaaS at a fixed host, and the
+        // checks pin app.gitpod.io because the documented app.ona.com base
+        // 308-redirects and clients drop the bearer on the hop. An organization on a
+        // custom management-plane domain must edit the check URLs, which is a visible
+        // change rather than a silently-unset variable.
+        "ona" => Some(&["ONA_TOKEN", "ONA_ORGANIZATION_ID"]),
         _ => None,
     }
 }
@@ -76,9 +121,7 @@ pub fn resolve_env_ref(value: &str) -> Result<String> {
     if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
         // F1: Validate env var name format
         if !is_valid_env_var_name(inner) {
-            bail!(
-                "invalid env var name '{inner}': must match [A-Z_][A-Z0-9_]*"
-            );
+            bail!("invalid env var name '{inner}': must match [A-Z_][A-Z0-9_]*");
         }
         std::env::var(inner).with_context(|| format!("env var {inner} not set"))
     } else {
@@ -216,7 +259,7 @@ fn is_valid_target_id(id: &str) -> bool {
 }
 
 /// Known source types.
-const KNOWN_SOURCES: &[&str] = &["github", "okta", "aws", "azure"];
+const KNOWN_SOURCES: &[&str] = &["github", "okta", "aws", "azure", "buildkite", "ona"];
 
 fn validate_target(raw: RawFleetTarget) -> Result<FleetTarget> {
     // F7: Target ID validation
@@ -525,8 +568,8 @@ targets:
 
     #[test]
     fn from_file_nonexistent_returns_error() {
-        let err = FleetManifest::from_file(std::path::Path::new("/nonexistent/fleet.yaml"))
-            .unwrap_err();
+        let err =
+            FleetManifest::from_file(std::path::Path::new("/nonexistent/fleet.yaml")).unwrap_err();
         assert!(
             err.to_string().contains("cannot read fleet manifest"),
             "unexpected error: {err}"

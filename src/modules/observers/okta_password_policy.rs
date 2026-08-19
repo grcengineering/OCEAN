@@ -193,8 +193,7 @@ impl Observer for PasswordPolicyObserver {
             }
 
             // OKTA-1.5: at least 3 of 4 complexity types enabled
-            let complexity_count =
-                (if min_lower > 0 { 1 } else { 0 })
+            let complexity_count = (if min_lower > 0 { 1 } else { 0 })
                 + (if min_upper > 0 { 1 } else { 0 })
                 + (if min_number > 0 { 1 } else { 0 })
                 + (if min_symbol > 0 { 1 } else { 0 });
@@ -372,7 +371,10 @@ mod tests {
 
     #[test]
     fn api_error_returns_err() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        );
         let result = PasswordPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }
@@ -404,9 +406,7 @@ mod tests {
 
     #[test]
     fn missing_token_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let result = PasswordPolicyObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
@@ -414,9 +414,7 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_API_TOKEN".to_string(), "test".to_string())]);
         let result = PasswordPolicyObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
@@ -486,8 +484,14 @@ mod tests {
         let srv = mock_server(200, body);
         let ev = &PasswordPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        assert!(ev.findings.iter().any(|f| f.title == "Password Minimum Length Too Short"));
-        assert!(ev.findings.iter().any(|f| f.title == "Insufficient Password Complexity"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Password Minimum Length Too Short"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Insufficient Password Complexity"));
     }
 
     #[test]

@@ -1,0 +1,71 @@
+id: CF-1.04
+name: Verify Super Administrator Count Is Within Recommended Limit
+description: |
+  Enumerates account members via the Accounts Members API and flags
+  accounts where more than 3 members hold the Super Administrator role.
+  Super Administrator grants unrestricted control of DNS, WAF, Zero
+  Trust policy, and tunnel configuration for the entire account.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L1
+tags: [rbac, admin, least-privilege]
+
+references:
+  cis: ["5.4"]
+  nist: [AC-6(1)]
+  hth: "cloudflare:1.4"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_members
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/members?per_page=50"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      members: "$.result"
+
+assertions:
+  - id: super_admin_count_within_limit
+    expr: 'size(members.filter(m, m.roles.exists(r, r.name == "Super Administrator"))) <= 3'
+    severity: medium
+    title: Super Administrator Count Is Within Recommended Limit
+    pass_message: "Super Administrator role is held by 3 or fewer account members"
+    fail_message: "More than 3 account members hold the Super Administrator role"
+    finding:
+      description: |
+        More than 3 account members hold the Super Administrator role,
+        which grants unrestricted control of DNS, WAF, Zero Trust
+        policy, and tunnel configuration for the entire account. Each
+        additional Super Administrator is another high-value target for
+        phishing and account takeover, and a single compromised Super
+        Administrator can defeat every other control in the account.
+        Review each Super Administrator and downgrade unjustified
+        members to a scoped custom role.
+
+remediation:
+  description: |
+    Reduce the Super Administrator population to the smallest set of
+    accounts with a documented business need, and move remaining
+    administrators to scoped custom roles.
+  steps:
+    - "Navigate to Manage Account → Members"
+    - "Review every member holding Super Administrator and confirm business justification"
+    - "Downgrade unjustified Super Administrators to a scoped custom role (for example, Administrator Read Only or a role limited to a specific product)"
+    - "Limit Super Administrator to 2-3 accounts used for account-level break-glass access"
+  manual:
+    - "Review the Super Administrator list quarterly as part of access review"

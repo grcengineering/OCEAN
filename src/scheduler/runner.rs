@@ -244,7 +244,11 @@ mod tests {
     use chrono::Utc;
 
     fn make_store() -> SqliteStore {
-        let dir = std::env::temp_dir();
+        // Leaked intentionally: `SqliteStore` doesn't carry the `TempDir` guard,
+        // and this test fixture is (as before) never cleaned up — `.keep()`
+        // just swaps the insecure shared temp-dir base for a securely-created
+        // unique one without changing that lifetime behavior.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_runner_{}.db", Uuid::new_v4()))
             .to_str()
@@ -527,7 +531,10 @@ mod tests {
         fn get_evidence(&self, _: Uuid) -> anyhow::Result<crate::evidence::Evidence> {
             Err(anyhow::anyhow!("not impl"))
         }
-        fn query_evidence(&self, _: &crate::storage::EvidenceQuery) -> anyhow::Result<Vec<crate::evidence::Evidence>> {
+        fn query_evidence(
+            &self,
+            _: &crate::storage::EvidenceQuery,
+        ) -> anyhow::Result<Vec<crate::evidence::Evidence>> {
             Ok(vec![])
         }
         fn store_control_status(&self, _: &crate::control::ControlStatus) -> anyhow::Result<()> {
@@ -536,17 +543,38 @@ mod tests {
         fn get_control_status(&self, _: &str) -> anyhow::Result<crate::control::ControlStatus> {
             Err(anyhow::anyhow!("not impl"))
         }
-        fn query_history(&self, _: &str, _: chrono::DateTime<Utc>, _: chrono::DateTime<Utc>) -> anyhow::Result<Vec<crate::control::ControlStatus>> {
+        fn query_history(
+            &self,
+            _: &str,
+            _: chrono::DateTime<Utc>,
+            _: chrono::DateTime<Utc>,
+        ) -> anyhow::Result<Vec<crate::control::ControlStatus>> {
             Ok(vec![])
         }
-        fn store_schedule(&self, _: &Schedule) -> anyhow::Result<()> { Ok(()) }
-        fn get_schedule(&self, _: &str) -> anyhow::Result<Schedule> { Err(anyhow::anyhow!("not impl")) }
-        fn list_schedules(&self) -> anyhow::Result<Vec<Schedule>> { Ok(vec![]) }
-        fn delete_schedule(&self, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn store_schedule_run(&self, _: &ScheduleRun) -> anyhow::Result<()> { Ok(()) }
-        fn list_schedule_runs(&self, _: &str, _: usize) -> anyhow::Result<Vec<ScheduleRun>> { Ok(vec![]) }
-        fn prune_evidence(&self, _: chrono::DateTime<Utc>) -> anyhow::Result<u64> { Ok(0) }
-        fn close(&self) -> anyhow::Result<()> { Ok(()) }
+        fn store_schedule(&self, _: &Schedule) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn get_schedule(&self, _: &str) -> anyhow::Result<Schedule> {
+            Err(anyhow::anyhow!("not impl"))
+        }
+        fn list_schedules(&self) -> anyhow::Result<Vec<Schedule>> {
+            Ok(vec![])
+        }
+        fn delete_schedule(&self, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn store_schedule_run(&self, _: &ScheduleRun) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn list_schedule_runs(&self, _: &str, _: usize) -> anyhow::Result<Vec<ScheduleRun>> {
+            Ok(vec![])
+        }
+        fn prune_evidence(&self, _: chrono::DateTime<Utc>) -> anyhow::Result<u64> {
+            Ok(0)
+        }
+        fn close(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     #[test]

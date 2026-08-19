@@ -13,6 +13,7 @@ tags: [session, policy, authentication]
 references:
   nist: AC-12
   soc2: CC6.1
+  hth: "okta:4.1"
 
 credentials:
   OKTA_API_TOKEN:

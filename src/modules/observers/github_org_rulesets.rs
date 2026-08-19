@@ -41,8 +41,7 @@ impl Module for OrgRulesetsObserver {
             CredentialReq {
                 name: "GITHUB_TOKEN".to_string(),
                 cred_type: "api_token".to_string(),
-                description: "GitHub PAT with admin:org scope for reading org rulesets"
-                    .to_string(),
+                description: "GitHub PAT with admin:org scope for reading org rulesets".to_string(),
                 required: true,
             },
             CredentialReq {
@@ -70,7 +69,7 @@ impl Observer for OrgRulesetsObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/rulesets", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -155,9 +154,9 @@ impl Observer for OrgRulesetsObserver {
                 && r.get("rules")
                     .and_then(|v| v.as_array())
                     .map(|rules| {
-                        rules
-                            .iter()
-                            .any(|rule| rule.get("type").and_then(|t| t.as_str()) == Some("deletion"))
+                        rules.iter().any(|rule| {
+                            rule.get("type").and_then(|t| t.as_str()) == Some("deletion")
+                        })
                     })
                     .unwrap_or(false)
         });
@@ -364,7 +363,10 @@ mod tests {
     #[test]
     fn org_rulesets_connection_refused_errors() {
         let mut cfg = test_config_with_org("placeholder");
-        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        cfg.insert(
+            "GITHUB_API_URL".to_string(),
+            "http://127.0.0.1:1".to_string(),
+        );
         let result = OrgRulesetsObserver.observe(&cfg);
         assert!(result.is_err());
     }

@@ -225,17 +225,31 @@ mod tests {
     // We need a tester whose evidence has a pre-existing transcript.
     #[test]
     fn execute_tester_appends_cleanup_to_existing_transcript() {
-        use crate::evidence::transcript::{TestTranscript, TranscriptAction, TranscriptCleanup, TranscriptObservation};
+        use crate::evidence::transcript::{
+            TestTranscript, TranscriptAction, TranscriptCleanup, TranscriptObservation,
+        };
 
         struct TesterWithTranscript;
 
         impl crate::module::Module for TesterWithTranscript {
-            fn id(&self) -> &str { "test.with_transcript" }
-            fn name(&self) -> &str { "Tester With Transcript" }
-            fn version(&self) -> &str { "0.1.0" }
-            fn source_system(&self) -> &str { "mock" }
-            fn evidence_types(&self) -> &[i32] { &[1001] }
-            fn credential_requirements(&self) -> Vec<crate::module::CredentialReq> { vec![] }
+            fn id(&self) -> &str {
+                "test.with_transcript"
+            }
+            fn name(&self) -> &str {
+                "Tester With Transcript"
+            }
+            fn version(&self) -> &str {
+                "0.1.0"
+            }
+            fn source_system(&self) -> &str {
+                "mock"
+            }
+            fn evidence_types(&self) -> &[i32] {
+                &[1001]
+            }
+            fn credential_requirements(&self) -> Vec<crate::module::CredentialReq> {
+                vec![]
+            }
         }
 
         impl crate::module::Tester for TesterWithTranscript {
@@ -245,11 +259,16 @@ mod tests {
             fn environment_scope(&self) -> crate::module::EnvironmentScope {
                 crate::module::EnvironmentScope::Production
             }
-            fn pre_flight_checks(&self) -> Vec<String> { vec![] }
+            fn pre_flight_checks(&self) -> Vec<String> {
+                vec![]
+            }
             fn cleanup_procedures(&self) -> Vec<String> {
                 vec!["restore-state".to_string()]
             }
-            fn test(&self, _: &HashMap<String, String>) -> anyhow::Result<Vec<crate::evidence::Evidence>> {
+            fn test(
+                &self,
+                _: &HashMap<String, String>,
+            ) -> anyhow::Result<Vec<crate::evidence::Evidence>> {
                 let mut ev = crate::testutil::make_evidence();
                 // Evidence already has a transcript — exercises line 101
                 ev.test_transcript = Some(TestTranscript {
@@ -287,7 +306,10 @@ mod tests {
     #[test]
     fn test_config_default_safe_has_production_scope() {
         let cfg = TestConfig::default_safe();
-        assert!(matches!(cfg.target_environment, EnvironmentScope::Production));
+        assert!(matches!(
+            cfg.target_environment,
+            EnvironmentScope::Production
+        ));
         assert!(cfg.module_config.is_empty());
     }
 }

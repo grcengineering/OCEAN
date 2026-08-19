@@ -20,8 +20,17 @@ jobs:
           - fuzz_check_loader
           - fuzz_cel_eval
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Checkout grc-controls sibling
+        run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
+        env:
+          GRC_TOKEN: ${{ secrets.GRC_CONTROLS_TOKEN }}
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@5b842231ba77f5c045dba54ac5560fed2db780e2 # nightly

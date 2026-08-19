@@ -33,5 +33,7 @@ COPY --from=builder /build/target/release/ocean /usr/local/bin/ocean
 VOLUME ["/data"]
 EXPOSE 8080
 
+USER 65532
+
 ENTRYPOINT ["/usr/local/bin/ocean"]
 CMD ["serve", "--port", "8080"]

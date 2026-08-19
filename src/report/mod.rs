@@ -102,54 +102,230 @@ pub struct FrameworkControl {
 fn control_catalog() -> Vec<FrameworkControl> {
     vec![
         // SOC2 Trust Services Criteria
-        FrameworkControl { framework: "soc2", control_id: "CC6.1", title: "Logical and Physical Access Controls" },
-        FrameworkControl { framework: "soc2", control_id: "CC6.2", title: "System Access Authentication" },
-        FrameworkControl { framework: "soc2", control_id: "CC6.3", title: "Role-Based Access and Least Privilege" },
-        FrameworkControl { framework: "soc2", control_id: "CC6.6", title: "External Threat Protection" },
-        FrameworkControl { framework: "soc2", control_id: "CC6.7", title: "Data Transmission Protection" },
-        FrameworkControl { framework: "soc2", control_id: "CC6.8", title: "Unauthorized Software Prevention" },
-        FrameworkControl { framework: "soc2", control_id: "CC7.1", title: "Vulnerability Management" },
-        FrameworkControl { framework: "soc2", control_id: "CC7.2", title: "Security Event Monitoring" },
-        FrameworkControl { framework: "soc2", control_id: "CC7.3", title: "Security Incident Response" },
-        FrameworkControl { framework: "soc2", control_id: "CC8.1", title: "Change Management" },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC6.1",
+            title: "Logical and Physical Access Controls",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC6.2",
+            title: "System Access Authentication",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC6.3",
+            title: "Role-Based Access and Least Privilege",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC6.6",
+            title: "External Threat Protection",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC6.7",
+            title: "Data Transmission Protection",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC6.8",
+            title: "Unauthorized Software Prevention",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC7.1",
+            title: "Vulnerability Management",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC7.2",
+            title: "Security Event Monitoring",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC7.3",
+            title: "Security Incident Response",
+        },
+        FrameworkControl {
+            framework: "soc2",
+            control_id: "CC8.1",
+            title: "Change Management",
+        },
         // NIST 800-53
-        FrameworkControl { framework: "nist", control_id: "AC-2", title: "Account Management" },
-        FrameworkControl { framework: "nist", control_id: "AC-6", title: "Least Privilege" },
-        FrameworkControl { framework: "nist", control_id: "AU-2", title: "Event Logging" },
-        FrameworkControl { framework: "nist", control_id: "AU-6", title: "Audit Record Review" },
-        FrameworkControl { framework: "nist", control_id: "CM-2", title: "Baseline Configuration" },
-        FrameworkControl { framework: "nist", control_id: "CM-7", title: "Least Functionality" },
-        FrameworkControl { framework: "nist", control_id: "IA-2", title: "Identification and Authentication" },
-        FrameworkControl { framework: "nist", control_id: "IA-2(1)", title: "Multi-Factor Authentication" },
-        FrameworkControl { framework: "nist", control_id: "RA-5", title: "Vulnerability Monitoring and Scanning" },
-        FrameworkControl { framework: "nist", control_id: "SA-11", title: "Developer Testing and Evaluation" },
-        FrameworkControl { framework: "nist", control_id: "SC-7", title: "Boundary Protection" },
-        FrameworkControl { framework: "nist", control_id: "SC-8", title: "Transmission Confidentiality" },
-        FrameworkControl { framework: "nist", control_id: "SI-2", title: "Flaw Remediation" },
-        FrameworkControl { framework: "nist", control_id: "SI-4", title: "System Monitoring" },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "AC-2",
+            title: "Account Management",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "AC-6",
+            title: "Least Privilege",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "AU-2",
+            title: "Event Logging",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "AU-6",
+            title: "Audit Record Review",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "CM-2",
+            title: "Baseline Configuration",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "CM-7",
+            title: "Least Functionality",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "IA-2",
+            title: "Identification and Authentication",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "IA-2(1)",
+            title: "Multi-Factor Authentication",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "RA-5",
+            title: "Vulnerability Monitoring and Scanning",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "SA-11",
+            title: "Developer Testing and Evaluation",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "SC-7",
+            title: "Boundary Protection",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "SC-8",
+            title: "Transmission Confidentiality",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "SI-2",
+            title: "Flaw Remediation",
+        },
+        FrameworkControl {
+            framework: "nist",
+            control_id: "SI-4",
+            title: "System Monitoring",
+        },
         // ISO 27001 Annex A
-        FrameworkControl { framework: "iso27001", control_id: "A.5.15", title: "Access Control" },
-        FrameworkControl { framework: "iso27001", control_id: "A.5.17", title: "Authentication Information" },
-        FrameworkControl { framework: "iso27001", control_id: "A.8.3", title: "Information Access Restriction" },
-        FrameworkControl { framework: "iso27001", control_id: "A.8.8", title: "Management of Technical Vulnerabilities" },
-        FrameworkControl { framework: "iso27001", control_id: "A.8.9", title: "Configuration Management" },
-        FrameworkControl { framework: "iso27001", control_id: "A.8.15", title: "Logging" },
-        FrameworkControl { framework: "iso27001", control_id: "A.8.16", title: "Monitoring Activities" },
-        FrameworkControl { framework: "iso27001", control_id: "A.8.25", title: "Secure Development Lifecycle" },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.5.15",
+            title: "Access Control",
+        },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.5.17",
+            title: "Authentication Information",
+        },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.8.3",
+            title: "Information Access Restriction",
+        },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.8.8",
+            title: "Management of Technical Vulnerabilities",
+        },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.8.9",
+            title: "Configuration Management",
+        },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.8.15",
+            title: "Logging",
+        },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.8.16",
+            title: "Monitoring Activities",
+        },
+        FrameworkControl {
+            framework: "iso27001",
+            control_id: "A.8.25",
+            title: "Secure Development Lifecycle",
+        },
         // PCI DSS
-        FrameworkControl { framework: "pci_dss", control_id: "2.2", title: "System Configuration Standards" },
-        FrameworkControl { framework: "pci_dss", control_id: "6.2", title: "Bespoke and Custom Software Security" },
-        FrameworkControl { framework: "pci_dss", control_id: "6.3", title: "Security Vulnerabilities Identified and Addressed" },
-        FrameworkControl { framework: "pci_dss", control_id: "7.2", title: "Access to System Components Appropriately Defined" },
-        FrameworkControl { framework: "pci_dss", control_id: "8.3", title: "Strong Authentication Established" },
-        FrameworkControl { framework: "pci_dss", control_id: "10.2", title: "Audit Logs Implemented" },
-        FrameworkControl { framework: "pci_dss", control_id: "11.3", title: "Vulnerabilities Identified and Addressed" },
+        FrameworkControl {
+            framework: "pci_dss",
+            control_id: "2.2",
+            title: "System Configuration Standards",
+        },
+        FrameworkControl {
+            framework: "pci_dss",
+            control_id: "6.2",
+            title: "Bespoke and Custom Software Security",
+        },
+        FrameworkControl {
+            framework: "pci_dss",
+            control_id: "6.3",
+            title: "Security Vulnerabilities Identified and Addressed",
+        },
+        FrameworkControl {
+            framework: "pci_dss",
+            control_id: "7.2",
+            title: "Access to System Components Appropriately Defined",
+        },
+        FrameworkControl {
+            framework: "pci_dss",
+            control_id: "8.3",
+            title: "Strong Authentication Established",
+        },
+        FrameworkControl {
+            framework: "pci_dss",
+            control_id: "10.2",
+            title: "Audit Logs Implemented",
+        },
+        FrameworkControl {
+            framework: "pci_dss",
+            control_id: "11.3",
+            title: "Vulnerabilities Identified and Addressed",
+        },
         // DISA STIG
-        FrameworkControl { framework: "disa_stig", control_id: "V-222400", title: "MFA for Privileged Accounts" },
-        FrameworkControl { framework: "disa_stig", control_id: "V-222401", title: "Account Management" },
-        FrameworkControl { framework: "disa_stig", control_id: "V-222425", title: "Audit Log Configuration" },
-        FrameworkControl { framework: "disa_stig", control_id: "V-222542", title: "Vulnerability Scanning" },
-        FrameworkControl { framework: "disa_stig", control_id: "V-222577", title: "Configuration Management" },
+        FrameworkControl {
+            framework: "disa_stig",
+            control_id: "V-222400",
+            title: "MFA for Privileged Accounts",
+        },
+        FrameworkControl {
+            framework: "disa_stig",
+            control_id: "V-222401",
+            title: "Account Management",
+        },
+        FrameworkControl {
+            framework: "disa_stig",
+            control_id: "V-222425",
+            title: "Audit Log Configuration",
+        },
+        FrameworkControl {
+            framework: "disa_stig",
+            control_id: "V-222542",
+            title: "Vulnerability Scanning",
+        },
+        FrameworkControl {
+            framework: "disa_stig",
+            control_id: "V-222577",
+            title: "Configuration Management",
+        },
     ]
 }
 
@@ -319,10 +495,22 @@ fn compute_control_status(checks: &[CheckResult]) -> ControlStatus {
 
 fn compute_summary(controls: &[ControlReport]) -> ReportSummary {
     let total = controls.len();
-    let passing = controls.iter().filter(|c| c.status == ControlStatus::Pass).count();
-    let failing = controls.iter().filter(|c| c.status == ControlStatus::Fail).count();
-    let partial = controls.iter().filter(|c| c.status == ControlStatus::Partial).count();
-    let no_data = controls.iter().filter(|c| c.status == ControlStatus::NoData).count();
+    let passing = controls
+        .iter()
+        .filter(|c| c.status == ControlStatus::Pass)
+        .count();
+    let failing = controls
+        .iter()
+        .filter(|c| c.status == ControlStatus::Fail)
+        .count();
+    let partial = controls
+        .iter()
+        .filter(|c| c.status == ControlStatus::Partial)
+        .count();
+    let no_data = controls
+        .iter()
+        .filter(|c| c.status == ControlStatus::NoData)
+        .count();
     let assessed = total - no_data;
     let pass_pct = if assessed > 0 {
         (passing as f64 / assessed as f64) * 100.0
@@ -364,12 +552,16 @@ pub fn print_report<W: Write>(out: &mut W, report: &ComplianceReport, format: &s
     match format {
         "json" => print_report_json(out, report),
         "csv" => print_report_csv(out, report),
-        "table" | _ => print_report_table(out, report),
+        _ => print_report_table(out, report),
     }
 }
 
 fn print_report_table<W: Write>(out: &mut W, report: &ComplianceReport) -> Result<()> {
-    writeln!(out, "\n═══ {} Compliance Report ═══", report.framework.to_uppercase())?;
+    writeln!(
+        out,
+        "\n═══ {} Compliance Report ═══",
+        report.framework.to_uppercase()
+    )?;
     writeln!(out, "Generated: {}", report.generated_at)?;
     writeln!(out, "OCEAN version: {}", report.ocean_version)?;
     if let Some(ref src) = report.source_filter {
@@ -381,7 +573,11 @@ fn print_report_table<W: Write>(out: &mut W, report: &ComplianceReport) -> Resul
     writeln!(out)?;
 
     // Header
-    writeln!(out, "  {:<12} {:<40} {:<10} Checks", "Control", "Title", "Status")?;
+    writeln!(
+        out,
+        "  {:<12} {:<40} {:<10} Checks",
+        "Control", "Title", "Status"
+    )?;
     writeln!(out, "  {}", "─".repeat(75))?;
 
     for ctrl in &report.controls {
@@ -409,12 +605,7 @@ fn print_report_table<W: Write>(out: &mut W, report: &ComplianceReport) -> Resul
     writeln!(
         out,
         "  Summary: {}/{} controls passing ({:.1}%), {} failing, {} partial, {} no data",
-        s.passing,
-        s.total_controls,
-        s.pass_percentage,
-        s.failing,
-        s.partial,
-        s.no_data,
+        s.passing, s.total_controls, s.pass_percentage, s.failing, s.partial, s.no_data,
     )?;
     writeln!(out)?;
     Ok(())
@@ -427,7 +618,10 @@ fn print_report_json<W: Write>(out: &mut W, report: &ComplianceReport) -> Result
 }
 
 fn print_report_csv<W: Write>(out: &mut W, report: &ComplianceReport) -> Result<()> {
-    writeln!(out, "framework,control_id,control_title,status,check_id,check_name,passed,severity")?;
+    writeln!(
+        out,
+        "framework,control_id,control_title,status,check_id,check_name,passed,severity"
+    )?;
     for ctrl in &report.controls {
         if ctrl.mapped_checks.is_empty() {
             writeln!(
@@ -465,8 +659,12 @@ fn csv_escape(field: &str) -> String {
     let mut s = field.to_string();
 
     // TH-4a: CSV injection prevention.
-    if s.starts_with('=') || s.starts_with('+') || s.starts_with('-')
-        || s.starts_with('@') || s.starts_with('\t') || s.starts_with('\r')
+    if s.starts_with('=')
+        || s.starts_with('+')
+        || s.starts_with('-')
+        || s.starts_with('@')
+        || s.starts_with('\t')
+        || s.starts_with('\r')
     {
         s = format!("'{s}");
     }
@@ -512,25 +710,63 @@ mod tests {
     #[test]
     fn control_status_all_pass() {
         let checks = vec![
-            CheckResult { check_id: "A".into(), check_name: "A".into(), source: "github".into(), profile: "L1".into(), passed: true, severity: "high".into(), evidence_summary: "Pass".into() },
-            CheckResult { check_id: "B".into(), check_name: "B".into(), source: "github".into(), profile: "L1".into(), passed: true, severity: "high".into(), evidence_summary: "Pass".into() },
+            CheckResult {
+                check_id: "A".into(),
+                check_name: "A".into(),
+                source: "github".into(),
+                profile: "L1".into(),
+                passed: true,
+                severity: "high".into(),
+                evidence_summary: "Pass".into(),
+            },
+            CheckResult {
+                check_id: "B".into(),
+                check_name: "B".into(),
+                source: "github".into(),
+                profile: "L1".into(),
+                passed: true,
+                severity: "high".into(),
+                evidence_summary: "Pass".into(),
+            },
         ];
         assert_eq!(compute_control_status(&checks), ControlStatus::Pass);
     }
 
     #[test]
     fn control_status_all_fail() {
-        let checks = vec![
-            CheckResult { check_id: "A".into(), check_name: "A".into(), source: "github".into(), profile: "L1".into(), passed: false, severity: "high".into(), evidence_summary: "Fail".into() },
-        ];
+        let checks = vec![CheckResult {
+            check_id: "A".into(),
+            check_name: "A".into(),
+            source: "github".into(),
+            profile: "L1".into(),
+            passed: false,
+            severity: "high".into(),
+            evidence_summary: "Fail".into(),
+        }];
         assert_eq!(compute_control_status(&checks), ControlStatus::Fail);
     }
 
     #[test]
     fn control_status_partial() {
         let checks = vec![
-            CheckResult { check_id: "A".into(), check_name: "A".into(), source: "github".into(), profile: "L1".into(), passed: true, severity: "high".into(), evidence_summary: "Pass".into() },
-            CheckResult { check_id: "B".into(), check_name: "B".into(), source: "github".into(), profile: "L1".into(), passed: false, severity: "high".into(), evidence_summary: "Fail".into() },
+            CheckResult {
+                check_id: "A".into(),
+                check_name: "A".into(),
+                source: "github".into(),
+                profile: "L1".into(),
+                passed: true,
+                severity: "high".into(),
+                evidence_summary: "Pass".into(),
+            },
+            CheckResult {
+                check_id: "B".into(),
+                check_name: "B".into(),
+                source: "github".into(),
+                profile: "L1".into(),
+                passed: false,
+                severity: "high".into(),
+                evidence_summary: "Fail".into(),
+            },
         ];
         assert_eq!(compute_control_status(&checks), ControlStatus::Partial);
     }
@@ -543,13 +779,43 @@ mod tests {
     #[test]
     fn summary_computation() {
         let controls = vec![
-            ControlReport { framework: "soc2".into(), control_id: "CC6.1".into(), control_title: "Access".into(), mapped_checks: vec![
-                CheckResult { check_id: "A".into(), check_name: "A".into(), source: "github".into(), profile: "L1".into(), passed: true, severity: "high".into(), evidence_summary: "Pass".into() },
-            ], status: ControlStatus::Pass },
-            ControlReport { framework: "soc2".into(), control_id: "CC6.2".into(), control_title: "Auth".into(), mapped_checks: vec![
-                CheckResult { check_id: "B".into(), check_name: "B".into(), source: "github".into(), profile: "L1".into(), passed: false, severity: "high".into(), evidence_summary: "Fail".into() },
-            ], status: ControlStatus::Fail },
-            ControlReport { framework: "soc2".into(), control_id: "CC6.3".into(), control_title: "RBAC".into(), mapped_checks: vec![], status: ControlStatus::NoData },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "Access".into(),
+                mapped_checks: vec![CheckResult {
+                    check_id: "A".into(),
+                    check_name: "A".into(),
+                    source: "github".into(),
+                    profile: "L1".into(),
+                    passed: true,
+                    severity: "high".into(),
+                    evidence_summary: "Pass".into(),
+                }],
+                status: ControlStatus::Pass,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.2".into(),
+                control_title: "Auth".into(),
+                mapped_checks: vec![CheckResult {
+                    check_id: "B".into(),
+                    check_name: "B".into(),
+                    source: "github".into(),
+                    profile: "L1".into(),
+                    passed: false,
+                    severity: "high".into(),
+                    evidence_summary: "Fail".into(),
+                }],
+                status: ControlStatus::Fail,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.3".into(),
+                control_title: "RBAC".into(),
+                mapped_checks: vec![],
+                status: ControlStatus::NoData,
+            },
         ];
         let s = compute_summary(&controls);
         assert_eq!(s.total_controls, 3);
@@ -671,17 +937,21 @@ mod tests {
             ocean_version: "0.1.0".into(),
             source_filter: Some("github".into()),
             profile_filter: None,
-            controls: vec![
-                ControlReport {
-                    framework: "nist".into(),
-                    control_id: "IA-2".into(),
-                    control_title: "Identification and Authentication".into(),
-                    mapped_checks: vec![
-                        CheckResult { check_id: "GH-1.01".into(), check_name: "MFA".into(), source: "github".into(), profile: "L1".into(), passed: true, severity: "critical".into(), evidence_summary: "Pass".into() },
-                    ],
-                    status: ControlStatus::Pass,
-                },
-            ],
+            controls: vec![ControlReport {
+                framework: "nist".into(),
+                control_id: "IA-2".into(),
+                control_title: "Identification and Authentication".into(),
+                mapped_checks: vec![CheckResult {
+                    check_id: "GH-1.01".into(),
+                    check_name: "MFA".into(),
+                    source: "github".into(),
+                    profile: "L1".into(),
+                    passed: true,
+                    severity: "critical".into(),
+                    evidence_summary: "Pass".into(),
+                }],
+                status: ControlStatus::Pass,
+            }],
             summary: ReportSummary {
                 total_controls: 1,
                 passing: 1,
@@ -725,7 +995,13 @@ references:
 
     // ─── Additional unit tests (from test plan GRC-51) ──────────────────────
 
-    fn make_check_result(id: &str, name: &str, source: &str, profile: &str, passed: bool) -> CheckResult {
+    fn make_check_result(
+        id: &str,
+        name: &str,
+        source: &str,
+        profile: &str,
+        passed: bool,
+    ) -> CheckResult {
         CheckResult {
             check_id: id.into(),
             check_name: name.into(),
@@ -754,14 +1030,45 @@ references:
     fn ut_r004_summary_stats_add_up() {
         // UT-R004: ReportSummary counts must add up to total.
         let controls = vec![
-            ControlReport { framework: "soc2".into(), control_id: "CC6.1".into(), control_title: "A".into(), mapped_checks: vec![make_check_result("A", "A", "github", "L1", true)], status: ControlStatus::Pass },
-            ControlReport { framework: "soc2".into(), control_id: "CC6.2".into(), control_title: "B".into(), mapped_checks: vec![make_check_result("B", "B", "github", "L1", false)], status: ControlStatus::Fail },
-            ControlReport { framework: "soc2".into(), control_id: "CC6.3".into(), control_title: "C".into(), mapped_checks: vec![make_check_result("C", "C", "github", "L1", true), make_check_result("D", "D", "github", "L1", false)], status: ControlStatus::Partial },
-            ControlReport { framework: "soc2".into(), control_id: "CC8.1".into(), control_title: "D".into(), mapped_checks: vec![], status: ControlStatus::NoData },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "A".into(),
+                mapped_checks: vec![make_check_result("A", "A", "github", "L1", true)],
+                status: ControlStatus::Pass,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.2".into(),
+                control_title: "B".into(),
+                mapped_checks: vec![make_check_result("B", "B", "github", "L1", false)],
+                status: ControlStatus::Fail,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.3".into(),
+                control_title: "C".into(),
+                mapped_checks: vec![
+                    make_check_result("C", "C", "github", "L1", true),
+                    make_check_result("D", "D", "github", "L1", false),
+                ],
+                status: ControlStatus::Partial,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC8.1".into(),
+                control_title: "D".into(),
+                mapped_checks: vec![],
+                status: ControlStatus::NoData,
+            },
         ];
         let s = compute_summary(&controls);
         assert_eq!(s.total_controls, 4);
-        assert_eq!(s.passing + s.failing + s.partial + s.no_data, s.total_controls, "Counts must add up to total");
+        assert_eq!(
+            s.passing + s.failing + s.partial + s.no_data,
+            s.total_controls,
+            "Counts must add up to total"
+        );
         assert_eq!(s.passing, 1);
         assert_eq!(s.failing, 1);
         assert_eq!(s.partial, 1);
@@ -773,15 +1080,16 @@ references:
     #[test]
     fn ut_r005_json_round_trip() {
         // UT-R005: JSON output round-trips through serde.
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.1".into(),
                 control_title: "Access Controls".into(),
                 mapped_checks: vec![make_check_result("GH-1.01", "MFA", "github", "L1", true)],
                 status: ControlStatus::Pass,
-            },
-        ]);
+            }],
+        );
         let mut out = Vec::new();
         print_report_json(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
@@ -789,7 +1097,10 @@ references:
         // Verify key fields survive round-trip
         assert_eq!(parsed["framework"], "soc2");
         assert_eq!(parsed["controls"][0]["control_id"], "CC6.1");
-        assert_eq!(parsed["controls"][0]["mapped_checks"][0]["check_id"], "GH-1.01");
+        assert_eq!(
+            parsed["controls"][0]["mapped_checks"][0]["check_id"],
+            "GH-1.01"
+        );
         assert_eq!(parsed["summary"]["passing"], 1);
     }
 
@@ -841,7 +1152,10 @@ references:
         // UT-R013: Invalid framework name produces error listing valid options.
         let err = validate_framework("hipaa").unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("hipaa"), "Error should mention the invalid input");
+        assert!(
+            msg.contains("hipaa"),
+            "Error should mention the invalid input"
+        );
         assert!(msg.contains("soc2"), "Error should list valid frameworks");
         assert!(msg.contains("nist"), "Error should list valid frameworks");
     }
@@ -849,9 +1163,13 @@ references:
     #[test]
     fn ut_r014_empty_report_valid_summary() {
         // UT-R014: Report with no mapped checks produces valid summary with 0/0.
-        let controls = vec![
-            ControlReport { framework: "pci_dss".into(), control_id: "2.2".into(), control_title: "Config".into(), mapped_checks: vec![], status: ControlStatus::NoData },
-        ];
+        let controls = vec![ControlReport {
+            framework: "pci_dss".into(),
+            control_id: "2.2".into(),
+            control_title: "Config".into(),
+            mapped_checks: vec![],
+            status: ControlStatus::NoData,
+        }];
         let s = compute_summary(&controls);
         assert_eq!(s.total_controls, 1);
         assert_eq!(s.no_data, 1);
@@ -873,16 +1191,23 @@ references:
     fn sec_r001_csv_injection_tab_and_cr() {
         // SEC-R001: Tab and CR characters also trigger injection prevention.
         let tab_cell = csv_escape("\tcmd");
-        assert!(tab_cell.starts_with("'\t"), "Tab-prefixed cells must be escaped: {tab_cell}");
+        assert!(
+            tab_cell.starts_with("'\t"),
+            "Tab-prefixed cells must be escaped: {tab_cell}"
+        );
         let cr_cell = csv_escape("\rcmd");
-        assert!(cr_cell.starts_with("'\r"), "CR-prefixed cells must be escaped: {cr_cell}");
+        assert!(
+            cr_cell.starts_with("'\r"),
+            "CR-prefixed cells must be escaped: {cr_cell}"
+        );
     }
 
     #[test]
     fn sec_r003_json_special_chars_escaped() {
         // SEC-R003: JSON output uses serde serialization — no raw string concatenation.
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.1".into(),
                 control_title: "Access \"Control\" & <Tags>".into(),
@@ -896,15 +1221,22 @@ references:
                     evidence_summary: "Pass\nwith newline".into(),
                 }],
                 status: ControlStatus::Pass,
-            },
-        ]);
+            }],
+        );
         let mut out = Vec::new();
         print_report_json(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
         // Must be valid JSON (serde handles escaping)
-        let parsed: serde_json::Value = serde_json::from_str(&s).expect("Special chars must be properly escaped");
-        assert_eq!(parsed["controls"][0]["control_title"], "Access \"Control\" & <Tags>");
-        assert_eq!(parsed["controls"][0]["mapped_checks"][0]["check_name"], "Check with \"quotes\" and \\backslash");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("Special chars must be properly escaped");
+        assert_eq!(
+            parsed["controls"][0]["control_title"],
+            "Access \"Control\" & <Tags>"
+        );
+        assert_eq!(
+            parsed["controls"][0]["mapped_checks"][0]["check_name"],
+            "Check with \"quotes\" and \\backslash"
+        );
     }
 
     #[test]
@@ -914,8 +1246,9 @@ references:
         // verify that check_name, evidence_summary etc. don't leak tokens if they
         // accidentally contain them.
         let token = "ghp_report_test_secret_xyz";
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.1".into(),
                 control_title: "Access".into(),
@@ -929,8 +1262,8 @@ references:
                     evidence_summary: "Pass".into(),
                 }],
                 status: ControlStatus::Pass,
-            },
-        ]);
+            }],
+        );
 
         // Verify JSON output doesn't contain credential values
         let mut out = Vec::new();
@@ -948,7 +1281,10 @@ references:
         let mut out = Vec::new();
         print_report_table(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(!s.contains(token), "Token should not appear in table report");
+        assert!(
+            !s.contains(token),
+            "Token should not appear in table report"
+        );
     }
 
     // ─── Edge case tests ────────────────────────────────────────────────────
@@ -956,8 +1292,9 @@ references:
     #[test]
     fn ec_r002_csv_with_special_chars_in_fields() {
         // EC-R002: CSV output handles special characters in all field types.
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.1".into(),
                 control_title: "Access, Control & \"Security\"".into(),
@@ -971,23 +1308,41 @@ references:
                     evidence_summary: "Pass".into(),
                 }],
                 status: ControlStatus::Pass,
-            },
-        ]);
+            }],
+        );
         let mut out = Vec::new();
         print_report_csv(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
         // Verify CSV is valid (no unescaped commas breaking fields)
         let lines: Vec<&str> = s.lines().collect();
-        assert!(lines.len() >= 2, "Should have header + at least 1 data line");
-        assert!(lines[0].starts_with("framework,"), "Header should be present");
+        assert!(
+            lines.len() >= 2,
+            "Should have header + at least 1 data line"
+        );
+        assert!(
+            lines[0].starts_with("framework,"),
+            "Header should be present"
+        );
     }
 
     #[test]
     fn ec_summary_all_nodata() {
         // Edge case: All controls are NoData → pass_percentage = 0.0
         let controls = vec![
-            ControlReport { framework: "soc2".into(), control_id: "CC6.1".into(), control_title: "A".into(), mapped_checks: vec![], status: ControlStatus::NoData },
-            ControlReport { framework: "soc2".into(), control_id: "CC6.2".into(), control_title: "B".into(), mapped_checks: vec![], status: ControlStatus::NoData },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "A".into(),
+                mapped_checks: vec![],
+                status: ControlStatus::NoData,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.2".into(),
+                control_title: "B".into(),
+                mapped_checks: vec![],
+                status: ControlStatus::NoData,
+            },
         ];
         let s = compute_summary(&controls);
         assert_eq!(s.total_controls, 2);
@@ -999,8 +1354,20 @@ references:
     fn ec_summary_all_passing() {
         // Edge case: All controls pass → 100%
         let controls = vec![
-            ControlReport { framework: "soc2".into(), control_id: "CC6.1".into(), control_title: "A".into(), mapped_checks: vec![make_check_result("A", "A", "github", "L1", true)], status: ControlStatus::Pass },
-            ControlReport { framework: "soc2".into(), control_id: "CC6.2".into(), control_title: "B".into(), mapped_checks: vec![make_check_result("B", "B", "github", "L1", true)], status: ControlStatus::Pass },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.1".into(),
+                control_title: "A".into(),
+                mapped_checks: vec![make_check_result("A", "A", "github", "L1", true)],
+                status: ControlStatus::Pass,
+            },
+            ControlReport {
+                framework: "soc2".into(),
+                control_id: "CC6.2".into(),
+                control_title: "B".into(),
+                mapped_checks: vec![make_check_result("B", "B", "github", "L1", true)],
+                status: ControlStatus::Pass,
+            },
         ];
         let s = compute_summary(&controls);
         assert_eq!(s.pass_percentage, 100.0);
@@ -1016,20 +1383,36 @@ references:
             source_filter: Some("github".into()),
             profile_filter: Some("L1".into()),
             controls: vec![],
-            summary: ReportSummary { total_controls: 0, passing: 0, failing: 0, partial: 0, no_data: 0, pass_percentage: 0.0 },
+            summary: ReportSummary {
+                total_controls: 0,
+                passing: 0,
+                failing: 0,
+                partial: 0,
+                no_data: 0,
+                pass_percentage: 0.0,
+            },
         };
         let mut out = Vec::new();
         print_report_table(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("Source filter: github"), "Source filter should appear");
-        assert!(s.contains("Profile filter: L1"), "Profile filter should appear");
+        assert!(
+            s.contains("Source filter: github"),
+            "Source filter should appear"
+        );
+        assert!(
+            s.contains("Profile filter: L1"),
+            "Profile filter should appear"
+        );
     }
 
     #[test]
     fn csv_escape_preserves_normal_minus() {
         // Edge case: A field starting with '-' (like negative numbers) gets prefixed.
         let result = csv_escape("-5");
-        assert!(result.starts_with("'-"), "Minus-prefixed should be escaped: {result}");
+        assert!(
+            result.starts_with("'-"),
+            "Minus-prefixed should be escaped: {result}"
+        );
     }
 
     // ─── extract_references: iso27001 and disa_stig loop bodies ────────────
@@ -1052,9 +1435,15 @@ references:
         let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
         let refs = extract_references(&def);
         assert_eq!(refs.len(), 3);
-        assert!(refs.iter().any(|(fw, id)| fw == "iso27001" && id == "A.5.15"));
-        assert!(refs.iter().any(|(fw, id)| fw == "iso27001" && id == "A.8.8"));
-        assert!(refs.iter().any(|(fw, id)| fw == "disa_stig" && id == "V-222400"));
+        assert!(refs
+            .iter()
+            .any(|(fw, id)| fw == "iso27001" && id == "A.5.15"));
+        assert!(refs
+            .iter()
+            .any(|(fw, id)| fw == "iso27001" && id == "A.8.8"));
+        assert!(refs
+            .iter()
+            .any(|(fw, id)| fw == "disa_stig" && id == "V-222400"));
     }
 
     // ─── generate_report: empty checks_dir returns NoData controls ──────────
@@ -1066,7 +1455,10 @@ references:
         let report = generate_report(tmp.path(), "soc2", &config, None, None).unwrap();
         assert_eq!(report.framework, "soc2");
         // All controls from catalog should be NoData since no checks ran.
-        assert!(report.controls.iter().all(|c| c.status == ControlStatus::NoData));
+        assert!(report
+            .controls
+            .iter()
+            .all(|c| c.status == ControlStatus::NoData));
         // The SOC2 catalog has 10 controls.
         assert_eq!(report.controls.len(), 10);
     }
@@ -1075,12 +1467,16 @@ references:
     fn generate_report_with_source_and_profile_filter() {
         let tmp = tempfile::tempdir().unwrap();
         let config = HashMap::new();
-        let report = generate_report(tmp.path(), "nist", &config, Some("github"), Some("L1")).unwrap();
+        let report =
+            generate_report(tmp.path(), "nist", &config, Some("github"), Some("L1")).unwrap();
         assert_eq!(report.framework, "nist");
         assert_eq!(report.source_filter.as_deref(), Some("github"));
         assert_eq!(report.profile_filter.as_deref(), Some("L1"));
         // All catalog controls with no checks → NoData.
-        assert!(report.controls.iter().all(|c| c.status == ControlStatus::NoData));
+        assert!(report
+            .controls
+            .iter()
+            .all(|c| c.status == ControlStatus::NoData));
     }
 
     // ─── print_report: public dispatcher ─────────────────────────────────────
@@ -1091,7 +1487,8 @@ references:
         let mut out = Vec::new();
         print_report(&mut out, &report, "json").unwrap();
         let s = String::from_utf8(out).unwrap();
-        let _: serde_json::Value = serde_json::from_str(&s).expect("json dispatch must be valid JSON");
+        let _: serde_json::Value =
+            serde_json::from_str(&s).expect("json dispatch must be valid JSON");
     }
 
     #[test]
@@ -1100,7 +1497,10 @@ references:
         let mut out = Vec::new();
         print_report(&mut out, &report, "csv").unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.starts_with("framework,control_id,"), "csv dispatch must start with CSV header");
+        assert!(
+            s.starts_with("framework,control_id,"),
+            "csv dispatch must start with CSV header"
+        );
     }
 
     #[test]
@@ -1109,7 +1509,10 @@ references:
         let mut out = Vec::new();
         print_report(&mut out, &report, "table").unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("NIST"), "table dispatch must include framework name");
+        assert!(
+            s.contains("NIST"),
+            "table dispatch must include framework name"
+        );
     }
 
     #[test]
@@ -1119,22 +1522,26 @@ references:
         print_report(&mut out, &report, "bogus_format").unwrap();
         let s = String::from_utf8(out).unwrap();
         // Unknown format falls through to table (the `_ =>` arm).
-        assert!(s.contains("SOC2"), "unknown format should fall through to table");
+        assert!(
+            s.contains("SOC2"),
+            "unknown format should fall through to table"
+        );
     }
 
     // ─── print_report_table: Fail and Partial status arms ────────────────────
 
     #[test]
     fn print_report_table_shows_fail_status() {
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.1".into(),
                 control_title: "Access Controls".into(),
                 mapped_checks: vec![make_check_result("A", "A", "github", "L1", false)],
                 status: ControlStatus::Fail,
-            },
-        ]);
+            }],
+        );
         let mut out = Vec::new();
         print_report_table(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
@@ -1143,8 +1550,9 @@ references:
 
     #[test]
     fn print_report_table_shows_partial_status() {
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.2".into(),
                 control_title: "Auth".into(),
@@ -1153,8 +1561,8 @@ references:
                     make_check_result("B", "B", "github", "L1", false),
                 ],
                 status: ControlStatus::Partial,
-            },
-        ]);
+            }],
+        );
         let mut out = Vec::new();
         print_report_table(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
@@ -1166,37 +1574,45 @@ references:
     #[test]
     fn print_report_table_truncates_long_title() {
         let long_title = "A".repeat(50); // 50 chars → must be truncated to 37 + ellipsis
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.1".into(),
                 control_title: long_title.clone(),
                 mapped_checks: vec![],
                 status: ControlStatus::NoData,
-            },
-        ]);
+            }],
+        );
         let mut out = Vec::new();
         print_report_table(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
         // The truncated title should appear with a trailing ellipsis character.
-        assert!(s.contains('…'), "Long titles must be truncated with ellipsis");
+        assert!(
+            s.contains('…'),
+            "Long titles must be truncated with ellipsis"
+        );
         // Full title must NOT appear (it's 50 chars, display is capped at 38).
-        assert!(!s.contains(&long_title), "Full long title must not appear verbatim");
+        assert!(
+            !s.contains(&long_title),
+            "Full long title must not appear verbatim"
+        );
     }
 
     // ─── print_report_csv: empty mapped_checks row ───────────────────────────
 
     #[test]
     fn print_report_csv_empty_mapped_checks_emits_short_row() {
-        let report = make_report("soc2", vec![
-            ControlReport {
+        let report = make_report(
+            "soc2",
+            vec![ControlReport {
                 framework: "soc2".into(),
                 control_id: "CC6.1".into(),
                 control_title: "Access Controls".into(),
                 mapped_checks: vec![],
                 status: ControlStatus::NoData,
-            },
-        ]);
+            }],
+        );
         let mut out = Vec::new();
         print_report_csv(&mut out, &report).unwrap();
         let s = String::from_utf8(out).unwrap();
@@ -1204,7 +1620,11 @@ references:
         // Header + 1 data line for the NoData control.
         assert_eq!(lines.len(), 2, "Should have header + 1 NoData row");
         // The NoData row ends with trailing commas (empty check fields).
-        assert!(lines[1].ends_with(",,,"), "NoData row must end with empty check fields: {}", lines[1]);
+        assert!(
+            lines[1].ends_with(",,,"),
+            "NoData row must end with empty check fields: {}",
+            lines[1]
+        );
     }
 
     // ─── status_csv: Partial and NoData arms ─────────────────────────────────
@@ -1311,15 +1731,16 @@ assertions:
             "CC6.1 should be failing or partial when its mapped check fails; got {:?}",
             cc61.status
         );
-        assert!(!cc61.mapped_checks.is_empty(), "CC6.1 should have a mapped check");
+        assert!(
+            !cc61.mapped_checks.is_empty(),
+            "CC6.1 should have a mapped check"
+        );
     }
 
     #[test]
     fn generate_report_with_passing_check_marks_control_passing() {
         let tmp = tempfile::tempdir().unwrap();
-        let srv = crate::testutil::MockHTTPServer::new(vec![
-            (200, r#"{"x": "ok"}"#.to_string()),
-        ]);
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, r#"{"x": "ok"}"#.to_string())]);
         write_passing_soc2_check(tmp.path(), &srv.base_url);
         let report = generate_report(tmp.path(), "soc2", &HashMap::new(), None, None).unwrap();
         let cc62 = report
@@ -1340,8 +1761,12 @@ assertions:
         let srv = crate::testutil::MockHTTPServer::new(vec![(200, "{}".to_string())]);
         write_failing_soc2_check(tmp.path(), &srv.base_url);
         // Filter for "aws" — our github check should be excluded.
-        let report = generate_report(tmp.path(), "soc2", &HashMap::new(), Some("aws"), None).unwrap();
+        let report =
+            generate_report(tmp.path(), "soc2", &HashMap::new(), Some("aws"), None).unwrap();
         // All controls should be NoData since no aws-source checks exist.
-        assert!(report.controls.iter().all(|c| c.status == ControlStatus::NoData));
+        assert!(report
+            .controls
+            .iter()
+            .all(|c| c.status == ControlStatus::NoData));
     }
 }

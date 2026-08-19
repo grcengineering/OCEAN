@@ -1,0 +1,78 @@
+id: AUTH0-1.04
+name: Verify Bot Detection Is Enabled Above the Off Level
+description: |
+  Verifies that Auth0's bot_detection_level is set above "off", meaning
+  CAPTCHA or risk-based bot challenges are active on authentication
+  flows rather than disabled.
+author: grc-engineering
+version: "1.0"
+source: auth0
+profile: L2
+tags: [attack-protection, bot-detection, captcha]
+
+references:
+  cis: ["4.10"]
+  nist: [SI-4]
+  hth: "auth0:1.4"
+
+credentials:
+  AUTH0_TOKEN:
+    type: api_token
+    scopes: ["read:attack_protection"]
+    required: true
+
+inputs:
+  auth0_api_base:
+    description: Auth0 Management API base URL, including scheme and /api/v2 (e.g. https://yourcompany.auth0.com/api/v2)
+    env: AUTH0_API_BASE
+    required: true
+
+steps:
+  - id: get_bot_detection
+    action: api_call
+    request:
+      method: GET
+      url: "{{auth0_api_base}}/attack-protection/bot-detection"
+      headers:
+        Authorization: "Bearer {{AUTH0_TOKEN}}"
+    extract:
+      bot_detection_level: "$.bot_detection_level"
+
+assertions:
+  - id: bot_detection_enabled
+    expr: 'bot_detection_level != "off" && bot_detection_level != ""'
+    severity: medium
+    title: Bot Detection Is Enabled Above the Off Level
+    pass_message: "bot_detection_level is {{bot_detection_level}}"
+    fail_message: "bot_detection_level is off or not configured"
+    finding:
+      description: |
+        bot_detection_level is "off" (or missing), meaning no CAPTCHA or
+        risk-based challenge is applied to login, signup, or password
+        reset. Bot detection layers on top of rate limiting and brute
+        force protection so an attacker cannot simply rotate IPs and
+        identifiers to evade fixed thresholds; leaving it off removes
+        that layer entirely for automated credential stuffing and
+        mass account-creation abuse.
+
+remediation:
+  description: |
+    Enable bot detection at least at the medium level with risk-based
+    challenges on login, signup, and password reset.
+  steps:
+    - "Navigate to Security → Attack Protection → Bot Detection"
+    - "Enable Bot Detection and select a CAPTCHA provider (Auth Challenge or Simple CAPTCHA avoid a third-party dependency)"
+    - "Set the challenge policy to When Risky for login, signup, and password reset"
+  api:
+    method: PATCH
+    url: "{{auth0_api_base}}/attack-protection/bot-detection"
+    headers:
+      Authorization: "Bearer {{AUTH0_TOKEN}}"
+    body:
+      bot_detection_level: "medium"
+      challenge_password_policy: "when_risky"
+      challenge_passwordless_policy: "when_risky"
+      challenge_password_reset_policy: "when_risky"
+      monitoring_mode_enabled: false
+  manual:
+    - "Run in monitoring mode first if evaluating a new CAPTCHA provider, to measure false-positive rate before enforcing"

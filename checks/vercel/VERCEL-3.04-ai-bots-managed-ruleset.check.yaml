@@ -1,0 +1,78 @@
+id: VERCEL-3.04
+name: Enable the AI Bots Managed Ruleset
+description: |
+  Verifies that the Firewall's AI Bots managed ruleset is active on the
+  project. The ruleset identifies known AI crawlers — training crawlers,
+  search-assistant fetchers, and generative scrapers — most of which
+  ignore robots.txt, making edge-side enforcement the only reliable
+  control point.
+author: grc-engineering
+version: "1.0"
+source: vercel
+profile: L2
+tags: [waf, firewall, bot-management]
+
+references:
+  nist: ["SI-4", "AC-4"]
+  hth: "vercel:3.4"
+
+credentials:
+  VERCEL_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  vercel_team_id:
+    description: Vercel team ID (starts with "team_")
+    env: VERCEL_TEAM_ID
+    required: true
+  vercel_project_id:
+    description: Vercel project ID or name
+    env: VERCEL_PROJECT_ID
+    required: true
+
+steps:
+  - id: get_firewall_config
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.vercel.com/v1/security/firewall/config/active?projectId={{vercel_project_id}}&teamId={{vercel_team_id}}"
+      headers:
+        Authorization: "Bearer {{VERCEL_TOKEN}}"
+    extract:
+      managed_rulesets: "$.managedRulesets"
+
+assertions:
+  - id: ai_bots_ruleset_active
+    expr: "has(managed_rulesets.ai_bots) && managed_rulesets.ai_bots.active == true"
+    severity: medium
+    title: AI Bots Managed Ruleset Is Active
+    pass_message: "The AI Bots managed ruleset is active (at minimum in log mode)"
+    fail_message: "The AI Bots managed ruleset is not active"
+    finding:
+      description: |
+        The AI Bots managed ruleset is not active on this project. Without
+        it, known AI crawlers and generative scrapers are not identified or
+        controlled at the edge, so they can drive request-volume cost and
+        scrape licensed or sensitive content — and because most AI crawlers
+        ignore robots.txt, edge-side firewall enforcement is the only
+        reliable way to control this traffic.
+
+remediation:
+  description: |
+    Enable the AI Bots managed ruleset in log mode first, observe for a
+    review period, then switch to deny once confirmed safe.
+  steps:
+    - "Navigate to Project -> Firewall -> Managed Rulesets"
+    - "Enable the 'AI Bots' ruleset in Log mode"
+    - "Enable the 'Bot Protection' ruleset in Challenge mode"
+    - "After at least 7 days, review the Firewall observability dashboard to confirm no business-critical AI-assistant traffic is being matched, then switch AI Bots to Deny mode"
+  api:
+    method: PUT
+    url: "https://api.vercel.com/v1/security/firewall/config?projectId={{vercel_project_id}}&teamId={{vercel_team_id}}"
+    body:
+      action: managedRules.update
+      id: ai_bots
+      value:
+        active: true
+        action: log

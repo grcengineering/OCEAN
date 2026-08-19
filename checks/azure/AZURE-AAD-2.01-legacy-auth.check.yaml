@@ -32,6 +32,7 @@ inputs:
 references:
   nist: AC-17
   soc2: CC6.6
+  hth: "microsoft-entra-id:2.1"
 
 steps:
   - id: get_conditional_access_policies
@@ -44,7 +45,12 @@ steps:
 
 assertions:
   - id: legacy_auth_blocked
-    expr: "policies | selectattr('conditions.clientAppTypes', 'contains', 'exchangeActiveSync') | selectattr('grantControls.builtInControls', 'contains', 'block') | selectattr('state', 'equalto', 'enabled') | list | length > 0"
+    expr: >-
+      policies.exists(p, p.state == "enabled" &&
+        has(p.conditions) && has(p.conditions.clientAppTypes) &&
+        "exchangeActiveSync" in p.conditions.clientAppTypes &&
+        has(p.grantControls) && has(p.grantControls.builtInControls) &&
+        "block" in p.grantControls.builtInControls)
     severity: high
     title: Legacy Authentication Blocked
     pass_message: "A conditional access policy blocks legacy authentication"

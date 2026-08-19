@@ -1,0 +1,68 @@
+id: CF-4.03
+name: Verify Split Tunnel Exclusions Are Not Excessive
+description: |
+  Verifies that the WARP split tunnel exclude list has no more than 20
+  entries. Every exclusion is traffic that bypasses WARP inspection
+  entirely, so a growing exclude list quietly erodes DNS/HTTP/network
+  filtering coverage.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L2
+tags: [warp, split-tunnel, zero-trust]
+
+references:
+  cis: ["13.5"]
+  nist: [SC-7]
+  hth: "cloudflare:4.3"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_split_tunnel_exclude
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/devices/policy/exclude"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      exclusions: "$.result"
+
+assertions:
+  - id: split_tunnel_exclusions_not_excessive
+    expr: "size(exclusions) <= 20"
+    severity: low
+    title: Split Tunnel Exclusion Count Is Within a Reasonable Range
+    pass_message: "Split tunnel exclusion count is within a reasonable range"
+    fail_message: "The split tunnel exclude list has more than 20 entries"
+    finding:
+      description: |
+        The WARP split tunnel exclude list has more than 20 entries.
+        Every entry in this list is traffic and destinations that
+        bypass WARP inspection entirely — no DNS filtering, no HTTP
+        filtering, no Gateway logging. An exclude list that grows
+        unchecked over time quietly becomes the organization's largest
+        blind spot. Review each exclusion for continued business need
+        and consider switching to Include mode for maximum coverage.
+
+remediation:
+  description: |
+    Review and minimize the split tunnel exclude list; consider Include
+    mode for maximum inspection coverage.
+  steps:
+    - "Navigate to Zero Trust → Settings → WARP Client → Device settings profiles → Split Tunnels"
+    - "Review each excluded address or host and remove exclusions that no longer have a documented business need"
+    - "For maximum security (L3), switch from Exclude mode to Include mode so only explicitly listed destinations bypass WARP"
+  manual:
+    - "Any exclusion added for a specific application should have an expiry or review date attached in the change record"

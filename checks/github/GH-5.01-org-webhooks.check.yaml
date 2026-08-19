@@ -13,6 +13,7 @@ tags: [webhooks, organization, audit]
 references:
   nist: SC-8
   soc2: CC6.1
+  hth: "github:none"
 
 credentials:
   GITHUB_TOKEN:
@@ -38,19 +39,15 @@ steps:
         X-GitHub-Api-Version: "2022-11-28"
     extract:
       webhook_count: "$length"
-      webhook_urls: "$[*].config.url"
-      insecure_transport: "$[?(@.config.insecure_ssl == '1')].id"
-      insecure_transport_count: "$[?(@.config.insecure_ssl == '1')]length"
-      non_https_webhooks: "$[?(!@.config.url.startsWith('https://'))].id"
-      non_https_count: "$[?(!@.config.url.startsWith('https://'))]length"
+      webhooks: "$[*]"
 
 assertions:
   - id: webhooks_use_https
-    expr: "non_https_count == 0"
+    expr: "webhooks.all(w, has(w.config) && has(w.config.url) && w.config.url.startsWith('https://'))"
     severity: high
     title: Webhooks Use HTTPS
     pass_message: "All organization webhooks use HTTPS URLs"
-    fail_message: "{{non_https_count}} webhook(s) do not use HTTPS"
+    fail_message: "One or more webhooks do not use HTTPS"
     finding:
       description: |
         One or more organization webhooks are configured with non-HTTPS URLs.
@@ -59,11 +56,11 @@ assertions:
         to ensure payload confidentiality and integrity.
 
   - id: webhooks_ssl_verification
-    expr: "insecure_transport_count == 0"
+    expr: "webhooks.all(w, !has(w.config) || !has(w.config.insecure_ssl) || w.config.insecure_ssl != '1')"
     severity: medium
     title: Webhook SSL Verification
     pass_message: "All organization webhooks have SSL verification enabled"
-    fail_message: "{{insecure_transport_count}} webhook(s) have SSL verification disabled"
+    fail_message: "One or more webhooks have SSL verification disabled"
     finding:
       description: |
         One or more organization webhooks have SSL verification disabled

@@ -1,0 +1,197 @@
+id: BK-1.02
+name: Enforce Two-Factor Authentication for Organization Members
+description: |
+  Verifies that the Buildkite organization requires two-factor authentication for
+  every member, read from the GraphQL Organization object field
+  `membersRequireTwoFactorAuthentication`.
+
+  Read surface and its limits. Only root-level scalars on `data.organization` are
+  extracted. OCEAN's JSONPath support resolves `$[*].field` at the root array only,
+  so Relay connection traversal (`members.edges[*].node`) cannot be expressed in a
+  declarative check — per-member 2FA state is therefore out of scope here and must
+  come from a REST-backed check or a native observer.
+
+  Plan gating. `membersRequireTwoFactorAuthentication` is readable on every
+  Buildkite plan; it is not Enterprise-gated. The check nevertheless degrades
+  explicitly rather than reporting an unreadable setting as a compliance failure:
+  the `organization_readable` assertion is the discriminator. When the GraphQL read
+  fails (invalid or non-GraphQL-enabled token, wrong organization slug, API IP
+  allowlist block, or an Enterprise-gated field on a lower plan) no organization
+  object comes back, `organization_readable` FAILS, and the two-factor verdict below
+  ABSTAINS rather than emitting a collection failure as a 2FA finding the operator
+  cannot act on.
+
+  Why the guard is written against `body_root` and not against a scalar. GraphQL
+  reports request-level errors with HTTP 200, and it reports them in three distinct
+  shapes: `data.organization` null (the field resolved to nothing), `data` itself
+  null (query validation failed — this is what an Enterprise-gated field on a lower
+  plan actually produces), and no `data` key at all (the request never got as far as
+  execution). Only the first of those leaves `org_object` bound. In the other two
+  every extracted name is UNBOUND, so a guard written against `org_object` raises
+  "Undeclared reference to 'org_object'", the interpreter's fail-closed
+  `.unwrap_or(false)` converts that CEL error into a FAILURE, and the check emits
+  exactly the critical "2FA is NOT enforced" accusation the guard exists to prevent —
+  against an organization it never read. The guard therefore tests the response body
+  from the root down (`body_root` is bound for every response shape, because
+  `jsonpath_extract` returns the body verbatim for `$` before attempting any
+  navigation), stepping through `has(data)`, `data != null`, `has(organization)` and
+  `organization != null` in that order so no clause is ever reached with an
+  unnavigable receiver. Verified against cel-interpreter 0.10.0 on nine response
+  shapes: it raises on none of them and abstains on all eight unreadable ones.
+
+  What the abstention does NOT do. OCEAN emits an assertion's `pass_message` whenever
+  it evaluates Effective, and an abstaining assertion is Effective. The verdict's
+  `pass_message` is therefore worded to be true in BOTH states — it reports that no
+  violation was observed and names its dependency on `organization_readable` — rather
+  than asserting the positive fact. An abstaining row must never read as an
+  attestation that the control is in place. Read the pair together:
+  `organization_readable` PASS plus `two_factor_enforced` PASS is the only state that
+  certifies enforcement; `organization_readable` FAIL means the read never happened
+  and the 2FA row carries no evidence in either direction.
+
+  Fail-closed note. The field is a nullable Boolean. A null value (field-level
+  permission denial) is treated as not-enforced, so an unreadable setting never
+  reports as compliant.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L1
+tags: [authentication, mfa, organization, graphql]
+
+references:
+  cis: "6.5"
+  nist: ["IA-2(1)", "IA-2(2)"]
+  soc2: CC6.1
+  iso27001: A.9.4.2
+  hth: "buildkite:1.2"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_organizations]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+
+steps:
+  - id: get_org_two_factor
+    action: api_call
+    note: >-
+      GraphQL POST. The organization slug travels as a GraphQL variable rather than
+      being interpolated into the query string. `Query.organization(slug: ID)` and
+      `Organization.membersRequireTwoFactorAuthentication: Boolean` were confirmed
+      against live tenant introspection on 2026-08-18.
+    request:
+      method: POST
+      url: "https://graphql.buildkite.com/v1"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        query: "query OceanBuildkiteOrgTwoFactor($org: ID!) { organization(slug: $org) { id slug membersRequireTwoFactorAuthentication } }"
+        variables:
+          org: "{{org}}"
+    extract:
+      # Reachability discriminator. `$` is the ONLY JSONPath the interpreter
+      # binds unconditionally: `jsonpath_extract` returns `Some(body.clone())`
+      # for it before any navigation is attempted, so `body_root` is bound for
+      # EVERY response shape — including the ones where nothing else is.
+      #
+      # This is what makes the guards below total. GraphQL answers
+      # request-level errors (query validation, an Enterprise-gated field on a
+      # lower plan, a malformed query) with HTTP 200 and either `"data": null`
+      # or no `data` key at all. In both of those shapes `$.data.organization`
+      # navigates to nothing, so `org_object` and every scalar below are
+      # UNBOUND, a guard written against them raises "Undeclared reference",
+      # and the interpreter's fail-closed `.unwrap_or(false)` converts a
+      # collection failure into a false accusation. Guarding on `body_root`
+      # instead cannot reach that state.
+      body_root: "$"
+      # Retained for evidence observables (an operator reading the evidence
+      # sees the null organization directly). NOT used as a guard: it is
+      # UNBOUND whenever `data` is null or absent, which is precisely the
+      # failure mode the guards have to survive.
+      org_object: "$.data.organization"
+      org_id: "$.data.organization.id"
+      org_slug: "$.data.organization.slug"
+      mfa_enforced: "$.data.organization.membersRequireTwoFactorAuthentication"
+
+assertions:
+  - id: organization_readable
+    expr: "get_org_two_factor_status_code == 200 && body_root != null && has(body_root.data) && body_root.data != null && has(body_root.data.organization) && body_root.data.organization != null && body_root.data.organization.id != ''"
+    severity: info
+    title: Organization Readable Over GraphQL
+    pass_message: "GraphQL resolved organization '{{org}}' and returned an organization object; the two-factor verdict below was actually evaluated"
+    fail_message: "GraphQL returned no organization object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdicts below abstain and assert nothing in either direction"
+    finding:
+      description: |
+        The Buildkite GraphQL API did not return an organization object for this
+        slug, so no setting was actually observed. This is a collection failure,
+        not a compliance failure — do not treat the accompanying two-factor result
+        as evidence of a misconfiguration.
+        Common causes, in order of likelihood:
+          - The API access token does not have GraphQL API Access enabled
+            (a separate toggle from REST scopes on the token settings page).
+          - BUILDKITE_ORG_SLUG does not match a slug this token can see.
+          - The organization's API IP allowlist excludes the address OCEAN scans from.
+          - The token is expired or revoked.
+        Re-run after correcting the credential, then re-read the two-factor result.
+
+  - id: two_factor_enforced
+    expr: "get_org_two_factor_status_code != 200 || body_root == null || !has(body_root.data) || body_root.data == null || !has(body_root.data.organization) || body_root.data.organization == null || mfa_enforced == true"
+    severity: critical
+    title: Organization Two-Factor Enforcement
+    pass_message: "No two-factor-enforcement gap was observed for '{{org}}' — this row is evidence that 2FA is enforced ONLY if 'Organization Readable Over GraphQL' above also passed; when the organization could not be read it abstains and asserts nothing about 2FA"
+    fail_message: "Two-factor authentication is NOT enforced for members of '{{org}}'"
+    finding:
+      description: |
+        The Buildkite organization does not require two-factor authentication for
+        its members. Any member can authenticate with a password alone, so a single
+        phished, reused, or breached credential yields a working CI/CD identity —
+        one that can trigger builds and reach whatever the agents can reach,
+        including production.
+        Enable enforcement in Organization Settings -> Security -> Enforce
+        Two-factor authentication. Members without 2FA are prompted to enrol before
+        they can continue using the organization.
+        This finding cannot be raised by an unreadable organization. The assertion
+        is guarded from the response root down — non-200, a null body, a missing or
+        null `data`, or a missing or null `data.organization` all short-circuit it to
+        abstain — so `organization_readable` failing produces no 2FA finding at all.
+        The guard covers the GraphQL request-level error shapes (`data: null` and no
+        `data` key), which an earlier `org_object`-based guard did not: those leave
+        every extracted scalar unbound, and the resulting CEL error was evaluated
+        fail-closed into this very finding.
+
+remediation:
+  description: |
+    Enable the organization-wide two-factor requirement. The Security page toggle is
+    available on every Buildkite plan.
+
+    Terraform caveat: `buildkite_organization` carries `enforce_2fa`, but the provider
+    also touches `allowed_api_ip_addresses` on that singleton resource, so `apply`
+    fails on plans without the API IP allowlist feature even when the configuration
+    never mentions IP allowlisting. `validate` and `plan` both pass, so this surfaces
+    only at apply time. The same resource backs the audit-logging control, so adopt
+    one Terraform path for both or use ClickOps/GraphQL.
+  steps:
+    - "Navigate to buildkite.com/organizations/{{BUILDKITE_ORG_SLUG}}/settings/security"
+    - "Enable 'Enforce Two-factor authentication'"
+    - "Save, then confirm members without 2FA are prompted to enrol"
+    - "Enforce MFA at the identity provider as well, using phishing-resistant factors for admins"
+  api:
+    method: POST
+    url: "https://graphql.buildkite.com/v1"
+    headers:
+      Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+      Content-Type: application/json
+    body:
+      query: "mutation OceanEnforceTwoFactor($orgId: ID!) { organizationEnforceTwoFactorAuthenticationForMembersUpdate(input: {organizationId: $orgId, membersRequireTwoFactorAuthentication: true}) { organization { id membersRequireTwoFactorAuthentication } } }"
+      variables:
+        orgId: "{{BUILDKITE_GRAPHQL_ID}}"
+  cli:
+    command: "curl -sS -X POST https://graphql.buildkite.com/v1 -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"variables\":{\"orgId\":\"{{BUILDKITE_GRAPHQL_ID}}\"},\"query\":\"mutation OceanEnforceTwoFactor($orgId: ID!) { organizationEnforceTwoFactorAuthenticationForMembersUpdate(input: {organizationId: $orgId, membersRequireTwoFactorAuthentication: true}) { organization { membersRequireTwoFactorAuthentication } } }\"}'"

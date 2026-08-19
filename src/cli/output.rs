@@ -89,8 +89,9 @@ pub enum OutputFormat {
     Yaml,
 }
 
-impl OutputFormat {
-    pub fn from_str(s: &str) -> Self {
+impl From<&str> for OutputFormat {
+    /// Lenient, infallible parse: anything that is not YAML is JSON.
+    fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "yaml" | "yml" => Self::Yaml,
             _ => Self::Json,
@@ -146,18 +147,18 @@ mod tests {
 
     #[test]
     fn format_from_str_json_variants() {
-        assert_eq!(OutputFormat::from_str("json"), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_str("JSON"), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_str("unknown"), OutputFormat::Json);
-        assert_eq!(OutputFormat::from_str(""), OutputFormat::Json);
+        assert_eq!(OutputFormat::from("json"), OutputFormat::Json);
+        assert_eq!(OutputFormat::from("JSON"), OutputFormat::Json);
+        assert_eq!(OutputFormat::from("unknown"), OutputFormat::Json);
+        assert_eq!(OutputFormat::from(""), OutputFormat::Json);
     }
 
     #[test]
     fn format_from_str_yaml_variants() {
-        assert_eq!(OutputFormat::from_str("yaml"), OutputFormat::Yaml);
-        assert_eq!(OutputFormat::from_str("yml"), OutputFormat::Yaml);
-        assert_eq!(OutputFormat::from_str("YAML"), OutputFormat::Yaml);
-        assert_eq!(OutputFormat::from_str("YML"), OutputFormat::Yaml);
+        assert_eq!(OutputFormat::from("yaml"), OutputFormat::Yaml);
+        assert_eq!(OutputFormat::from("yml"), OutputFormat::Yaml);
+        assert_eq!(OutputFormat::from("YAML"), OutputFormat::Yaml);
+        assert_eq!(OutputFormat::from("YML"), OutputFormat::Yaml);
     }
 
     #[test]
@@ -194,21 +195,19 @@ mod tests {
         // Drive every `?` continuation in print_evaluation_table by failing
         // at write N for N = 0..50. Each invocation exits via a different ?.
         use crate::testutil::FailingWriter;
-        let results = vec![
-            EvaluationResult {
-                control_id: "iam.full".to_string(),
-                control_name: "Full".to_string(),
-                target: "github".to_string(),
-                status: "ineffective".to_string(),
-                confidence: "high".to_string(),
-                framework: "soc2 CC6.1".to_string(),
-                module_runs: vec![
-                    make_module_run("a.run", "OK", Some("disk full")),
-                    make_module_run("b.fail", "FAIL", None),
-                ],
-                findings: vec!["bad config".to_string(), "another finding".to_string()],
-            },
-        ];
+        let results = vec![EvaluationResult {
+            control_id: "iam.full".to_string(),
+            control_name: "Full".to_string(),
+            target: "github".to_string(),
+            status: "ineffective".to_string(),
+            confidence: "high".to_string(),
+            framework: "soc2 CC6.1".to_string(),
+            module_runs: vec![
+                make_module_run("a.run", "OK", Some("disk full")),
+                make_module_run("b.fail", "FAIL", None),
+            ],
+            findings: vec!["bad config".to_string(), "another finding".to_string()],
+        }];
         // n=0 should fail immediately at the header writeln.
         let mut w0 = FailingWriter::new(0);
         let r0 = print_evaluation_table(&mut w0, &results);

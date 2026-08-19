@@ -1,0 +1,172 @@
+id: ONA-3.04
+name: Blank Environment Creation Restricted to Admins
+description: |
+  Verifies that non-admin members cannot create blank environments, read from
+  `OrganizationPolicies.disableFromScratch` via
+  `gitpod.v1.OrganizationService/GetOrganizationPolicies`.
+
+  Why it matters. The vendor's wording is precise: "disable_from_scratch controls
+  whether non-admin users can create blank environments without a Git or URL
+  initializer." A from-scratch environment has no repository behind it, so it
+  inherits none of the review, ownership, or provenance that a project-backed
+  environment carries — while still receiving the organization's mounted secrets,
+  runner credentials, and network position. It is the shortest path from "member
+  account" to "credential-bearing host running arbitrary content nobody
+  reviewed", and it leaves no repository trail an auditor can follow afterwards.
+
+  Related but not asserted. `membersRequireProjects` ("controls whether
+  environments can only be created from projects by non-admin users") is the
+  stricter sibling and `membersCreateProjects` governs who may create the projects
+  themselves. Both are read as evidence; neither is asserted on, because an
+  organization can legitimately choose either of two shapes — projects-only, or
+  from-scratch-disabled with ad-hoc Git initializers still allowed — and failing
+  the second would flag a defensible configuration. The live tenant returned
+  `membersCreateProjects` in its policies object and omitted `disableFromScratch`
+  entirely.
+
+  Host, proto3 omission, and abstention follow the design documented in full on
+  ONA-1.02: `app.gitpod.io` because `app.ona.com` 308-redirects and clients drop
+  the bearer; Protobuf-JSON omits false booleans, so an organization that allows
+  from-scratch creation returns a policies object with no `disableFromScratch`
+  key at all; and every assertion is guarded from the always-bound response root
+  down, so an unreadable organization ABSTAINS rather than being accused.
+  `has(policies.disableFromScratch)` is tested before the value is compared, so
+  absence is a clean FAIL — the insecure default — and never a CEL error.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L2
+tags: [environment, least-privilege, provenance, organization, proto3]
+
+references:
+  cis: ["4.1"]
+  nist: ["CM-7", "AC-6"]
+  soc2: CC6.3
+  iso27001: A.9.4.1
+  hth: "ona:3.4"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_org_policies
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. Unknown request fields are rejected, so the body
+      carries `organizationId` only.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOrganizationPolicies"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` cannot itself
+      # discriminate shape: on a non-object receiver cel 0.14 RAISES ("No such
+      # overload"), which the fail-closed default turns into an accusation,
+      # while it answers FALSE for a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      policies: "$.policies"
+      # Evidence only, deliberately not asserted on — see the description.
+      members_require_projects: "$.policies.membersRequireProjects"
+      members_create_projects: "$.policies.membersCreateProjects"
+
+assertions:
+  - id: policies_readable
+    expr: "get_org_policies_status_code == 200 && body_root != null && body_is_object && has(body_root.policies)"
+    severity: info
+    title: Organization Policies Readable
+    pass_message: "GetOrganizationPolicies returned a policies object for organization '{{org}}'; the from-scratch verdict below was actually evaluated"
+    fail_message: "GetOrganizationPolicies returned no policies object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return an organization policies object, so no setting
+        was observed. This is a collection failure, not a compliance failure.
+        Check ONA_ORGANIZATION_ID against
+        `IdentityService/GetAuthenticatedIdentity`, confirm the token is live and
+        issued from the same management-plane domain, and confirm the principal
+        holds the permission GetOrganizationPolicies requires.
+
+  - id: from_scratch_disabled
+    expr: "get_org_policies_status_code != 200 || body_root == null || !body_is_object || !has(body_root.policies) || (has(policies.disableFromScratch) && policies.disableFromScratch == true)"
+    severity: medium
+    title: Blank Environment Creation
+    pass_message: "No unrestricted blank-environment creation was observed for '{{org}}' — this row is evidence that from-scratch creation is admin-only ONLY if 'Organization Policies Readable' above also passed; when the policies object could not be read it abstains and asserts nothing about environment creation"
+    fail_message: "Any member of '{{org}}' can create a blank environment with no Git or URL initializer — a credential-bearing host with no repository provenance behind it"
+    finding:
+      description: |
+        `disableFromScratch` is not true, so non-admin members can create blank
+        environments. Those environments have no repository behind them: nothing
+        was reviewed, nobody owns the content, and there is no commit history for
+        an auditor to walk afterwards. They still receive the organization's
+        mounted secrets, the runner's credentials, and the runner's network
+        position, so the gap between "has a member account" and "is running
+        unreviewed content next to production credentials" is a single click.
+        Remediation is one policy flip, but consider the stricter sibling too:
+        `membersRequireProjects` limits non-admins to creating environments FROM
+        PROJECTS, which adds an approval surface that from-scratch-disabled alone
+        does not. This check asserts only on `disableFromScratch`, because an
+        organization may legitimately allow ad-hoc Git-initialised environments;
+        `membersRequireProjects` and `membersCreateProjects` are collected as
+        evidence for the reviewer rather than judged.
+        Note on the read: an ABSENT field is the insecure default. Protobuf-JSON
+        omits false booleans, so a policies object with no `disableFromScratch` key
+        means from-scratch creation is allowed. This check treats absence as a
+        failure deliberately.
+        This finding cannot be raised by an unreadable organization — the guard
+        chain short-circuits to abstain on non-200, a null body, an array-shaped
+        body, or a missing `policies` key.
+
+remediation:
+  description: |
+    Set `disableFromScratch: true`. `UpdateOrganizationPolicies` returns a message
+    with NO fields, so the write is never self-proving — read back with
+    `GetOrganizationPolicies` and assert on the read-back. This check IS that
+    read-back.
+  steps:
+    - "Navigate to Settings -> Infrastructure -> Policies -> Environment setup"
+    - "Enable 'Only admins can start from scratch'"
+    - "Consider also enabling 'Only admins can create projects' and requiring projects for member-created environments, depending on how much provenance you need"
+    - "Save, re-open the page, and confirm the toggle persisted"
+    - "As a negative test, have a non-admin attempt to create a blank environment and confirm it is refused"
+    - "Re-run this check and confirm `disableFromScratch` reads true"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOrganizationPolicies"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      disableFromScratch: true
+  manual:
+    - "Ona ships no first-party CLI verb for the organization policies object; `ona organization security-policy ...` covers SecurityPolicy objects only."

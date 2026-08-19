@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "guarantee": "reversible/semantically-lossless transforms preferred over naive summarization",
+  "integration": "shell-boundary",
+  "mechanisms": [
+    "filtering",
+    "grouping",
+    "truncation",
+    "deduplication"
+  ],
+  "schemaVersion": 1,
+  "tool": "none"
+}

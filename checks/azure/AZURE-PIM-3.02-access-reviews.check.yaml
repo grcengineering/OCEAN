@@ -1,0 +1,98 @@
+id: AZURE-PIM-3.02
+name: Configure Access Reviews
+description: |
+  Verifies at least one recurring Identity Governance access review is
+  configured. Access tends to accumulate over time as employees change
+  roles, leaving users with privileges they no longer need; recurring
+  reviews force periodic re-justification and shrink the standing attack
+  surface of privileged accounts and sensitive groups.
+source: azure
+profile: L2
+severity: medium
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: ["5.1", "5.3"]
+  nist: "AC-2(3)"
+  hth: "microsoft-entra-id:3.2"
+
+steps:
+  - id: get_access_review_definitions
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identityGovernance/accessReviews/definitions"
+    extract:
+      reviews: "$.value"
+
+assertions:
+  - id: access_reviews_configured
+    expr: "size(reviews) > 0"
+    severity: medium
+    title: Access Reviews Configured
+    pass_message: "At least one Identity Governance access review is configured"
+    fail_message: "No Identity Governance access reviews are configured"
+    finding:
+      description: |
+        No access review definitions were found under Identity Governance.
+        Without recurring access reviews for privileged roles and group
+        memberships, access accumulates silently as employees change roles
+        or leave projects, and stale privileged or group memberships remain
+        available for a compromised account to exploit. Requires a
+        Microsoft Entra ID P2 license.
+
+remediation:
+  description: |
+    Create a recurring access review scoped to privileged directory roles
+    (and sensitive groups) with a defined reviewer and a recurrence
+    cadence, and configure it to remove access automatically on completion.
+  steps:
+    - "Navigate to Identity governance > Access reviews > + New access review"
+    - "Review type: Azure AD roles (or Teams + Groups)"
+    - "Scope: Global Administrator and other privileged roles"
+    - "Reviewers: Manager or Self-review"
+    - "Recurrence: Monthly or Quarterly"
+    - "Upon completion: Remove access for denied users"
+    - "Start the review"
+  api:
+    url: https://graph.microsoft.com/v1.0/identityGovernance/accessReviews/definitions
+    method: POST
+    body:
+      displayName: "Quarterly Privileged Role Review"
+      descriptionForAdmins: "Recurring review of privileged directory role assignments"
+      scope:
+        "@odata.type": "#microsoft.graph.accessReviewQueryScope"
+        query: "/roleManagement/directory/roleAssignmentScheduleInstances"
+        queryType: "MicrosoftGraph"
+      settings:
+        mailNotificationsEnabled: true
+        reminderNotificationsEnabled: true
+        justificationRequiredOnApproval: true
+        recommendationsEnabled: true
+        recurrence:
+          pattern:
+            type: "absoluteMonthly"
+            interval: 3
+          range:
+            type: "noEnd"
+
+tags:
+  - governance
+  - access-reviews
+  - azure

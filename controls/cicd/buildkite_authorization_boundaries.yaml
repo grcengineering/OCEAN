@@ -1,0 +1,58 @@
+id: cicd.buildkite_authorization_boundaries
+name: Buildkite Authorization Boundaries
+description: >
+  Verifies that organization administrators and cluster maintainers are bounded,
+  and inventories the cross-pipeline Rules that grant build-triggering and
+  artifact-read access between pipelines.
+  Administrator enumeration uses REST rather than GraphQL for two verified
+  reasons: the GraphQL members connection exposes no role filter, and OCEAN's
+  JSONPath extraction resolves only at the root array, so it cannot traverse
+  edges to node to role. REST returns a root array it can read.
+  Rules override the usual trigger-step permission checks and can grant artifact
+  reads across cluster boundaries, so an unreviewed rule is a standing
+  lateral-movement grant rather than a configuration detail.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Roughly 40% of the Buildkite hardening surface is agent-side configuration
+  (no-command-eval, allowed-plugins, redacted-vars, verification-jwks-file,
+  pre-bootstrap hooks) and is NOT visible from any Buildkite control plane.
+  It can only be attested from the agent host. This control covers the
+  control-plane half only; a passing result is not evidence that the agent
+  fleet is hardened.
+  INVOCATION — this control resolves under `--target '*'`, not `--target buildkite`.
+  Its observers are YAML checks registered under their own ids (BK-*), and
+  target_matches_module splits a module_id on '.' and compares the first segment,
+  so "BK-1" is never "buildkite". This is a property of the YAML-check namespace,
+  not of Buildkite: GH-*, OKTA-*, SLACK-* and VERCEL-* behave identically. The
+  shipped controls that DO match a vendor target reference native Rust modules
+  (okta.mfa_policy, github.branch_protection), and no native buildkite observer
+  exists yet. Using dotted buildkite.* ids here would satisfy the target filter
+  while resolving to nothing, producing a control that looks wired and can never
+  return a finding — the worse failure. Closing this properly means native Rust
+  observers, or registering YAML checks under a vendor alias.
+
+threat_mitigated: >
+  Privilege escalation through an unbounded administrator population, undetected
+  delegation of cluster secret and token authority via maintainer grants, and
+  lateral movement from a low-trust pipeline into production pipelines through
+  unreviewed cross-pipeline rules.
+framework_mappings:
+  - framework: soc2
+    control: CC6.3
+  - framework: iso27001
+    control: A.9.2.3
+  - framework: nist_csf
+    control: PR.AC-4
+  - framework: cis_controls
+    control: "6.8"
+evidence_requirements:
+  - buildkite_admin_roster
+  - buildkite_cluster_maintainers
+  - buildkite_organization_rules
+observers:
+  - module_id: BK-2.03
+  - module_id: BK-3.07
+  - module_id: BK-2.07
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

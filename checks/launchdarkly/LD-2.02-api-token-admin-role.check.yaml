@@ -1,0 +1,64 @@
+id: LD-2.02
+name: Verify No API Access Token Holds the Admin Role
+description: |
+  Audits API access tokens via the Tokens API and flags any token with
+  role: admin. An admin-role token carries the same unrestricted access
+  as an admin member but with none of a member's MFA gate, since API
+  tokens authenticate by possession of the token value alone.
+author: grc-engineering
+version: "1.0"
+source: launchdarkly
+profile: L1
+tags: [api-tokens, least-privilege]
+
+references:
+  nist: [IA-5]
+  hth: "launchdarkly:2.2"
+
+credentials:
+  LD_API_KEY:
+    type: api_token
+    scopes: ["reader"]
+    required: true
+
+steps:
+  - id: get_tokens
+    action: api_call
+    request:
+      method: GET
+      url: "https://app.launchdarkly.com/api/v2/tokens?showAll=true"
+      headers:
+        Authorization: "{{LD_API_KEY}}"
+        LD-API-Version: "20240415"
+    extract:
+      tokens: "$.items"
+
+assertions:
+  - id: no_admin_role_tokens
+    expr: 'size(tokens.filter(t, t.role == "admin")) == 0'
+    severity: high
+    title: No API Access Token Holds the Admin Role
+    pass_message: "No API access token holds the admin role"
+    fail_message: "One or more API access tokens hold the admin role"
+    finding:
+      description: |
+        At least one API access token has role: admin. Unlike an admin
+        member's login, a token authenticates by possession of its
+        value alone — no MFA gate applies. A leaked or over-shared
+        admin-role token is a full-account credential with no
+        second-factor requirement standing between an attacker and
+        every project, environment, and flag. Replace admin-role
+        tokens with tokens bound to scoped custom roles that grant only
+        the actions the integration actually performs.
+
+remediation:
+  description: |
+    Replace every admin-role API token with a token scoped to a custom
+    role granting only the necessary actions.
+  steps:
+    - "Navigate to Account Settings → Authorization → Access tokens"
+    - "Identify every token with role Admin"
+    - "Create a custom role scoped to the minimum actions and resources the integration needs"
+    - "Issue a replacement token bound to the custom role, update the consuming system, then revoke the admin-role token"
+  manual:
+    - "Prefer service tokens over personal tokens for automation so access does not depend on an individual member's account status"

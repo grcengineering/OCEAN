@@ -10,6 +10,7 @@
 
 use std::io::Write;
 use std::path::Path;
+use std::str::FromStr;
 
 use anyhow::{Context, Result};
 use handlebars::Handlebars;
@@ -31,8 +32,10 @@ pub enum BuildTarget {
     SigmaRule,
 }
 
-impl BuildTarget {
-    pub fn from_str(s: &str) -> Result<Self> {
+impl FromStr for BuildTarget {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "api-script" | "api_script" => Ok(Self::ApiScript),
             "gh-cli" | "gh_cli" => Ok(Self::GhCli),
@@ -46,7 +49,9 @@ impl BuildTarget {
             )),
         }
     }
+}
 
+impl BuildTarget {
     pub fn slug(&self) -> &'static str {
         match self {
             Self::ApiScript => "api-script",
@@ -615,7 +620,11 @@ pub fn generate<W: Write>(
     }
 
     if diff_only {
-        writeln!(out, "Would write {written} file(s) to {}", output_dir.display())?;
+        writeln!(
+            out,
+            "Would write {written} file(s) to {}",
+            output_dir.display()
+        )?;
     } else {
         writeln!(
             out,
@@ -640,8 +649,7 @@ fn write_or_diff<W: Write>(
         return Ok(());
     }
     let path = dir.join(filename);
-    std::fs::write(&path, content)
-        .with_context(|| format!("write {}", path.display()))?;
+    std::fs::write(&path, content).with_context(|| format!("write {}", path.display()))?;
     // Make scripts executable
     #[cfg(unix)]
     {
@@ -697,19 +705,43 @@ references:
 
     #[test]
     fn build_target_from_str() {
-        assert_eq!(BuildTarget::from_str("api-script").unwrap(), BuildTarget::ApiScript);
+        assert_eq!(
+            BuildTarget::from_str("api-script").unwrap(),
+            BuildTarget::ApiScript
+        );
         assert_eq!(BuildTarget::from_str("gh-cli").unwrap(), BuildTarget::GhCli);
-        assert_eq!(BuildTarget::from_str("api_script").unwrap(), BuildTarget::ApiScript);
-        assert_eq!(BuildTarget::from_str("python-sdk").unwrap(), BuildTarget::PythonSdk);
-        assert_eq!(BuildTarget::from_str("python").unwrap(), BuildTarget::PythonSdk);
+        assert_eq!(
+            BuildTarget::from_str("api_script").unwrap(),
+            BuildTarget::ApiScript
+        );
+        assert_eq!(
+            BuildTarget::from_str("python-sdk").unwrap(),
+            BuildTarget::PythonSdk
+        );
+        assert_eq!(
+            BuildTarget::from_str("python").unwrap(),
+            BuildTarget::PythonSdk
+        );
         assert_eq!(BuildTarget::from_str("go-sdk").unwrap(), BuildTarget::GoSdk);
         assert_eq!(BuildTarget::from_str("go").unwrap(), BuildTarget::GoSdk);
-        assert_eq!(BuildTarget::from_str("opa-rego").unwrap(), BuildTarget::OpaRego);
+        assert_eq!(
+            BuildTarget::from_str("opa-rego").unwrap(),
+            BuildTarget::OpaRego
+        );
         assert_eq!(BuildTarget::from_str("rego").unwrap(), BuildTarget::OpaRego);
-        assert_eq!(BuildTarget::from_str("terraform").unwrap(), BuildTarget::Terraform);
+        assert_eq!(
+            BuildTarget::from_str("terraform").unwrap(),
+            BuildTarget::Terraform
+        );
         assert_eq!(BuildTarget::from_str("tf").unwrap(), BuildTarget::Terraform);
-        assert_eq!(BuildTarget::from_str("sigma-rule").unwrap(), BuildTarget::SigmaRule);
-        assert_eq!(BuildTarget::from_str("sigma").unwrap(), BuildTarget::SigmaRule);
+        assert_eq!(
+            BuildTarget::from_str("sigma-rule").unwrap(),
+            BuildTarget::SigmaRule
+        );
+        assert_eq!(
+            BuildTarget::from_str("sigma").unwrap(),
+            BuildTarget::SigmaRule
+        );
         assert!(BuildTarget::from_str("unknown").is_err());
     }
 
@@ -884,7 +916,16 @@ references:
         write_check(checks_dir.path(), "gh-test-01.check.yaml", SIMPLE_CHECK);
 
         let mut out = Vec::new();
-        let count = generate(&mut out, checks_dir.path(), &BuildTarget::PythonSdk, output_dir.path(), false, false, None).unwrap();
+        let count = generate(
+            &mut out,
+            checks_dir.path(),
+            &BuildTarget::PythonSdk,
+            output_dir.path(),
+            false,
+            false,
+            None,
+        )
+        .unwrap();
         assert_eq!(count, 1);
         let path = output_dir.path().join("gh-test-01.py");
         assert!(path.exists());
@@ -900,7 +941,16 @@ references:
         write_check(checks_dir.path(), "gh-test-01.check.yaml", SIMPLE_CHECK);
 
         let mut out = Vec::new();
-        let count = generate(&mut out, checks_dir.path(), &BuildTarget::GoSdk, output_dir.path(), false, false, None).unwrap();
+        let count = generate(
+            &mut out,
+            checks_dir.path(),
+            &BuildTarget::GoSdk,
+            output_dir.path(),
+            false,
+            false,
+            None,
+        )
+        .unwrap();
         assert_eq!(count, 1);
         let path = output_dir.path().join("gh-test-01.go");
         assert!(path.exists());
@@ -916,7 +966,16 @@ references:
         write_check(checks_dir.path(), "gh-test-01.check.yaml", SIMPLE_CHECK);
 
         let mut out = Vec::new();
-        let count = generate(&mut out, checks_dir.path(), &BuildTarget::OpaRego, output_dir.path(), false, false, None).unwrap();
+        let count = generate(
+            &mut out,
+            checks_dir.path(),
+            &BuildTarget::OpaRego,
+            output_dir.path(),
+            false,
+            false,
+            None,
+        )
+        .unwrap();
         assert_eq!(count, 1);
         let path = output_dir.path().join("gh-test-01.rego");
         assert!(path.exists());
@@ -932,7 +991,16 @@ references:
         write_check(checks_dir.path(), "gh-test-01.check.yaml", SIMPLE_CHECK);
 
         let mut out = Vec::new();
-        let count = generate(&mut out, checks_dir.path(), &BuildTarget::Terraform, output_dir.path(), false, false, None).unwrap();
+        let count = generate(
+            &mut out,
+            checks_dir.path(),
+            &BuildTarget::Terraform,
+            output_dir.path(),
+            false,
+            false,
+            None,
+        )
+        .unwrap();
         assert_eq!(count, 1);
         let path = output_dir.path().join("gh-test-01.tf");
         assert!(path.exists());
@@ -948,7 +1016,16 @@ references:
         write_check(checks_dir.path(), "gh-test-01.check.yaml", SIMPLE_CHECK);
 
         let mut out = Vec::new();
-        let count = generate(&mut out, checks_dir.path(), &BuildTarget::SigmaRule, output_dir.path(), false, false, None).unwrap();
+        let count = generate(
+            &mut out,
+            checks_dir.path(),
+            &BuildTarget::SigmaRule,
+            output_dir.path(),
+            false,
+            false,
+            None,
+        )
+        .unwrap();
         assert_eq!(count, 1);
         let path = output_dir.path().join("gh-test-01.yml");
         assert!(path.exists());
@@ -974,7 +1051,10 @@ references:
     fn build_context_empty_references_use_none_variant() {
         let checks_dir = TempDir::new().unwrap();
         // A check with no references at all
-        write_check(checks_dir.path(), "no-refs.check.yaml", r#"
+        write_check(
+            checks_dir.path(),
+            "no-refs.check.yaml",
+            r#"
 id: NO-REFS
 name: No Refs Check
 description: ""
@@ -982,7 +1062,8 @@ source: github
 profile: L1
 steps: []
 assertions: []
-"#);
+"#,
+        );
         let defs = load_definitions_from_dir(checks_dir.path());
         assert_eq!(defs.len(), 1);
         let ctx = build_context(&defs[0]);
@@ -999,7 +1080,10 @@ assertions: []
     #[test]
     fn build_context_many_references_joined_with_comma() {
         let checks_dir = TempDir::new().unwrap();
-        write_check(checks_dir.path(), "many-refs.check.yaml", r#"
+        write_check(
+            checks_dir.path(),
+            "many-refs.check.yaml",
+            r#"
 id: MANY-REFS
 name: Many Refs Check
 description: ""
@@ -1010,7 +1094,8 @@ assertions: []
 references:
   nist: ["IA-2(1)", "IA-2(2)", "IA-3"]
   cis: "CIS-5.1"
-"#);
+"#,
+        );
         let defs = load_definitions_from_dir(checks_dir.path());
         assert_eq!(defs.len(), 1);
         let ctx = build_context(&defs[0]);
@@ -1029,7 +1114,10 @@ references:
         let output_dir = TempDir::new().unwrap();
 
         // A check marked as native implementation
-        write_check(checks_dir.path(), "native.check.yaml", r#"
+        write_check(
+            checks_dir.path(),
+            "native.check.yaml",
+            r#"
 id: GH-NATIVE-01
 name: Native Check
 description: ""
@@ -1038,7 +1126,8 @@ profile: L1
 implementation: native
 steps: []
 assertions: []
-"#);
+"#,
+        );
 
         let mut out = Vec::new();
         let count = generate(
@@ -1055,7 +1144,11 @@ assertions: []
         assert_eq!(count, 1);
         // Should produce a .stub.sh file, not a regular .sh
         let stub_path = output_dir.path().join("gh-native-01.stub.sh");
-        assert!(stub_path.exists(), "stub file should exist: {:?}", stub_path);
+        assert!(
+            stub_path.exists(),
+            "stub file should exist: {:?}",
+            stub_path
+        );
         let content = std::fs::read_to_string(&stub_path).unwrap();
         assert!(content.contains("native implementation"));
         assert!(content.contains("GH-NATIVE-01"));
@@ -1068,7 +1161,10 @@ assertions: []
         let checks_dir = TempDir::new().unwrap();
         let output_dir = TempDir::new().unwrap();
         write_check(checks_dir.path(), "gh-test-01.check.yaml", SIMPLE_CHECK);
-        write_check(checks_dir.path(), "aws-test-01.check.yaml", r#"
+        write_check(
+            checks_dir.path(),
+            "aws-test-01.check.yaml",
+            r#"
 id: AWS-TEST-01
 name: AWS Test
 description: ""
@@ -1076,7 +1172,8 @@ source: aws
 profile: L1
 steps: []
 assertions: []
-"#);
+"#,
+        );
 
         let mut out = Vec::new();
         let count = generate(
@@ -1098,7 +1195,10 @@ assertions: []
     #[test]
     fn build_context_remediation_cli_present() {
         let checks_dir = TempDir::new().unwrap();
-        write_check(checks_dir.path(), "rem.check.yaml", r#"
+        write_check(
+            checks_dir.path(),
+            "rem.check.yaml",
+            r#"
 id: REM-01
 name: Remediation Check
 description: ""
@@ -1112,7 +1212,8 @@ remediation:
     command: "gh org settings update --require-2fa=true"
   steps:
     - "Run the command above"
-"#);
+"#,
+        );
         let defs = load_definitions_from_dir(checks_dir.path());
         assert_eq!(defs.len(), 1);
         let ctx = build_context(&defs[0]);
@@ -1126,7 +1227,10 @@ remediation:
     #[test]
     fn build_context_gh_path_strips_github_api_prefix() {
         let checks_dir = TempDir::new().unwrap();
-        write_check(checks_dir.path(), "ghpath.check.yaml", r#"
+        write_check(
+            checks_dir.path(),
+            "ghpath.check.yaml",
+            r#"
 id: GHPATH-01
 name: GH Path Check
 description: ""
@@ -1140,7 +1244,8 @@ steps:
       url: "https://api.github.com/orgs/myorg/repos"
       headers: {}
 assertions: []
-"#);
+"#,
+        );
         let defs = load_definitions_from_dir(checks_dir.path());
         assert_eq!(defs.len(), 1);
         let ctx = build_context(&defs[0]);
@@ -1155,9 +1260,15 @@ assertions: []
 
     #[test]
     fn build_target_from_str_case_insensitive() {
-        assert_eq!(BuildTarget::from_str("API-SCRIPT").unwrap(), BuildTarget::ApiScript);
+        assert_eq!(
+            BuildTarget::from_str("API-SCRIPT").unwrap(),
+            BuildTarget::ApiScript
+        );
         assert_eq!(BuildTarget::from_str("GH-CLI").unwrap(), BuildTarget::GhCli);
-        assert_eq!(BuildTarget::from_str("TERRAFORM").unwrap(), BuildTarget::Terraform);
+        assert_eq!(
+            BuildTarget::from_str("TERRAFORM").unwrap(),
+            BuildTarget::Terraform
+        );
     }
 
     // --- extension for ApiScript and GhCli ---

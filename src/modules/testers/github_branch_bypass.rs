@@ -588,7 +588,10 @@ mod tests {
         let config = base_config("http://127.0.0.1:1");
         let result = BranchBypassTester.test(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("GitHub API request failed"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("GitHub API request failed"));
     }
 
     #[test]

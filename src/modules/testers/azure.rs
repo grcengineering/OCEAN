@@ -151,8 +151,7 @@ impl Tester for MfaBypassTester {
             .send_string(&body);
 
         // Parse response: success = access_token present; MFA required = error code AADSTS50076/50074
-        let (http_status, access_token_present, error_code): (u16, bool, String) = match post_resp
-        {
+        let (http_status, access_token_present, error_code): (u16, bool, String) = match post_resp {
             Ok(r) => {
                 let code = r.status();
                 let data: Value = r.into_json().unwrap_or(json!({}));
@@ -174,7 +173,11 @@ impl Tester for MfaBypassTester {
                     .and_then(|a| a.first())
                     .and_then(|v| v.as_u64())
                     .map(|n| n.to_string())
-                    .or_else(|| data.get("error").and_then(|v| v.as_str()).map(|s| s.to_string()))
+                    .or_else(|| {
+                        data.get("error")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
                     .unwrap_or_default();
                 (code, false, err_code)
             }
@@ -191,11 +194,11 @@ impl Tester for MfaBypassTester {
                 || http_status == 401);
 
         let (status_id, status_text, bypass_blocked) = if access_token_present {
+            recorder.record_observation("access token issued without MFA challenge", false);
             recorder.record_observation(
-                "access token issued without MFA challenge",
+                "MFA bypass succeeded — Conditional Access not enforcing MFA",
                 false,
             );
-            recorder.record_observation("MFA bypass succeeded — Conditional Access not enforcing MFA", false);
             (
                 StatusId::Ineffective,
                 "MFA bypass succeeded — authentication completed without MFA".to_string(),
@@ -203,7 +206,10 @@ impl Tester for MfaBypassTester {
             )
         } else if mfa_blocked {
             recorder.record_observation(
-                format!("authentication rejected (HTTP {}, error: {})", http_status, error_code),
+                format!(
+                    "authentication rejected (HTTP {}, error: {})",
+                    http_status, error_code
+                ),
                 true,
             );
             recorder.record_observation("MFA bypass attempt blocked by Conditional Access", true);
@@ -214,7 +220,10 @@ impl Tester for MfaBypassTester {
             )
         } else {
             recorder.record_observation(
-                format!("authentication failed with unexpected status (HTTP {}, error: {})", http_status, error_code),
+                format!(
+                    "authentication failed with unexpected status (HTTP {}, error: {})",
+                    http_status, error_code
+                ),
                 true,
             );
             recorder.record_observation("no access token issued without MFA", true);
@@ -335,7 +344,10 @@ mod tests {
         HashMap::from([
             ("AZURE_TENANT_ID".to_string(), "test-tenant-id".to_string()),
             ("AZURE_CLIENT_ID".to_string(), "test-client-id".to_string()),
-            ("AZURE_TEST_USER".to_string(), "test@example.com".to_string()),
+            (
+                "AZURE_TEST_USER".to_string(),
+                "test@example.com".to_string(),
+            ),
             (
                 "AZURE_TEST_PASSWORD".to_string(),
                 "TestPass123!".to_string(),
@@ -488,10 +500,7 @@ mod tests {
 
     #[test]
     fn http_401_is_effective() {
-        let srv = mock_server(
-            401,
-            r#"{"error":"unauthorized","error_codes":[]}"#,
-        );
+        let srv = mock_server(401, r#"{"error":"unauthorized","error_codes":[]}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
     }
@@ -514,10 +523,7 @@ mod tests {
 
     #[test]
     fn mfa_bypass_has_transcript() {
-        let srv = mock_server(
-            400,
-            r#"{"error":"invalid_grant","error_codes":[50076]}"#,
-        );
+        let srv = mock_server(400, r#"{"error":"invalid_grant","error_codes":[50076]}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         let t = ev.test_transcript.as_ref().unwrap();
         assert!(!t.actions_attempted.is_empty());
@@ -526,10 +532,7 @@ mod tests {
 
     #[test]
     fn mfa_bypass_raw_data_keys() {
-        let srv = mock_server(
-            400,
-            r#"{"error":"invalid_grant","error_codes":[50076]}"#,
-        );
+        let srv = mock_server(400, r#"{"error":"invalid_grant","error_codes":[50076]}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert!(ev.raw_data.get("test_scenario").is_some());
         assert!(ev.raw_data.get("bypass_blocked").is_some());
@@ -539,10 +542,7 @@ mod tests {
 
     #[test]
     fn bypass_success_raw_data_bypassed() {
-        let srv = mock_server(
-            200,
-            r#"{"access_token":"tok","token_type":"Bearer"}"#,
-        );
+        let srv = mock_server(200, r#"{"access_token":"tok","token_type":"Bearer"}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.raw_data["bypass_blocked"].as_bool(), Some(false));
         assert_eq!(ev.raw_data["test_result"].as_str(), Some("bypassed"));
@@ -550,10 +550,7 @@ mod tests {
 
     #[test]
     fn mfa_bypass_has_two_observables() {
-        let srv = mock_server(
-            400,
-            r#"{"error":"invalid_grant","error_codes":[50076]}"#,
-        );
+        let srv = mock_server(400, r#"{"error":"invalid_grant","error_codes":[50076]}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.observables.len(), 2);
         assert!(ev.observables.iter().any(|o| o.obs_type == "resource"));
@@ -562,10 +559,7 @@ mod tests {
 
     #[test]
     fn mfa_bypass_safety_classification_in_metadata() {
-        let srv = mock_server(
-            400,
-            r#"{"error":"invalid_grant","error_codes":[50076]}"#,
-        );
+        let srv = mock_server(400, r#"{"error":"invalid_grant","error_codes":[50076]}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.metadata.safety_classification.as_deref(), Some("safe"));
     }
@@ -583,10 +577,7 @@ mod tests {
     fn unexpected_status_no_access_token_is_effective() {
         // A non-400/401 status with no access token falls into the else branch
         // (mfa_blocked = false, access_token_present = false → unexpected → Effective).
-        let srv = mock_server(
-            200,
-            r#"{"error":"some_other_error","error_codes":[99999]}"#,
-        );
+        let srv = mock_server(200, r#"{"error":"some_other_error","error_codes":[99999]}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         // No access_token and error_code not in [50076, 50074, interaction_required, 400, 401]
         // → mfa_blocked = false, access_token_present = false → else branch → Effective
@@ -596,10 +587,7 @@ mod tests {
 
     #[test]
     fn interaction_required_error_is_effective() {
-        let srv = mock_server(
-            400,
-            r#"{"error":"interaction_required","error_codes":[]}"#,
-        );
+        let srv = mock_server(400, r#"{"error":"interaction_required","error_codes":[]}"#);
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
     }
@@ -639,7 +627,10 @@ mod tests {
         let config = base_config("http://127.0.0.1:1");
         let result = MfaBypassTester.test(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Azure ROPC request failed"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Azure ROPC request failed"));
     }
 
     // ── Error with string error code (interaction_required via "error" field) ─
@@ -654,7 +645,10 @@ mod tests {
         );
         let ev = &MfaBypassTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
-        assert_eq!(ev.raw_data["error_code"].as_str(), Some("interaction_required"));
+        assert_eq!(
+            ev.raw_data["error_code"].as_str(),
+            Some("interaction_required")
+        );
     }
 
     #[test]

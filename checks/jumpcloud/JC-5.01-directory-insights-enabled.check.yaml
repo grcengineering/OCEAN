@@ -1,0 +1,79 @@
+id: JC-5.01
+name: Verify Directory Insights Is Enabled
+description: |
+  Looks up the organization and verifies the directoryInsights feature flag
+  is enabled. Directory Insights is JumpCloud's event-logging feature for
+  admin and directory activity; without it, admin logins, admin updates,
+  and organization changes are not captured for later investigation.
+author: grc-engineering
+version: "1.0"
+source: jumpcloud
+profile: L1
+tags: [audit-logging, monitoring]
+
+references:
+  cis: "8.2"
+  nist: ["AU-2", "AU-6"]
+  hth: "jumpcloud:5.1"
+
+credentials:
+  JUMPCLOUD_API_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_organizations
+    action: api_call
+    request:
+      method: GET
+      url: "https://console.jumpcloud.com/api/organizations"
+      headers:
+        x-api-key: "{{JUMPCLOUD_API_KEY}}"
+    extract:
+      org_id: "$[0].id"
+
+  - id: get_organization
+    action: api_call
+    request:
+      method: GET
+      url: "https://console.jumpcloud.com/api/organizations/{{org_id}}"
+      headers:
+        x-api-key: "{{JUMPCLOUD_API_KEY}}"
+    extract:
+      directory_insights_enabled: "$.settings.features.directoryInsights.enabled"
+
+assertions:
+  - id: directory_insights_enabled
+    expr: "directory_insights_enabled == true"
+    severity: high
+    title: Directory Insights Is Enabled
+    pass_message: "Directory Insights is enabled for the organization"
+    fail_message: "Directory Insights is NOT enabled for the organization"
+    finding:
+      description: |
+        The organization's settings.features.directoryInsights.enabled flag
+        is not true. Without Directory Insights, admin logins, admin
+        updates, admin creates, and organization changes are not being
+        captured, so account compromise and unauthorized directory changes
+        can occur without any record to investigate after the fact.
+
+remediation:
+  description: |
+    Enable Directory Insights and route its events to a SIEM for alerting
+    and long-term retention.
+  steps:
+    - "Navigate to Settings -> Directory Insights"
+    - "Enable Directory Insights for the organization"
+    - "Configure a SIEM integration (or the Directory Insights API) to export events for correlation and retention beyond JumpCloud's native window"
+  api:
+    method: PUT
+    url: "https://console.jumpcloud.com/api/organizations/{{org_id}}"
+    headers:
+      x-api-key: "{{JUMPCLOUD_API_KEY}}"
+    body:
+      settings:
+        features:
+          directoryInsights:
+            enabled: true
+  manual:
+    - "Configure alerts on admin_login_attempt, admin_update, admin_create, and organization_update event types"

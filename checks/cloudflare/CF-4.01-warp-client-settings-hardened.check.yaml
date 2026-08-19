@@ -1,0 +1,98 @@
+id: CF-4.01
+name: Verify WARP Client Device Settings Are Hardened
+description: |
+  Verifies that the account-wide WARP device settings profile keeps the
+  client always-on, restricts mode switching, and uses the WireGuard
+  tunnel protocol, per the Cloudflare device settings (default) profile.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L1
+tags: [warp, device-policy, zero-trust]
+
+references:
+  cis: ["4.1"]
+  nist: [CM-7, SC-7]
+  hth: "cloudflare:4.1"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_device_policy
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/devices/policy"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      policy: "$.result"
+
+assertions:
+  - id: warp_always_on
+    expr: "policy.auto_connect == 0"
+    severity: medium
+    title: WARP Client Auto-Connect Is Set to Always-On
+    pass_message: "auto_connect is 0 (always-on)"
+    fail_message: "auto_connect is not 0 — WARP can remain disconnected"
+    finding:
+      description: |
+        The device settings profile's auto_connect value is not 0
+        (always-on). A nonzero value lets the WARP client remain
+        disconnected for a window of time, during which the device gets
+        none of Gateway's DNS/HTTP/network filtering or device posture
+        enforcement.
+
+  - id: warp_mode_switch_restricted
+    expr: "policy.allow_mode_switch == false"
+    severity: medium
+    title: Users Cannot Switch WARP Client Modes
+    pass_message: "allow_mode_switch is false"
+    fail_message: "allow_mode_switch is true — users can change WARP operating mode"
+    finding:
+      description: |
+        allow_mode_switch is true, letting end users change the WARP
+        client's operating mode (for example switching out of Gateway
+        with WARP mode), which can silently drop DNS and HTTP filtering
+        without disabling the client outright.
+
+  - id: warp_protocol_wireguard
+    expr: 'policy.tunnel_protocol == "wireguard"'
+    severity: low
+    title: WARP Client Uses the WireGuard Tunnel Protocol
+    pass_message: "tunnel_protocol is wireguard"
+    fail_message: "tunnel_protocol is not wireguard"
+    finding:
+      description: |
+        The device settings profile is not using the WireGuard tunnel
+        protocol. WireGuard is Cloudflare's recommended, modern protocol
+        for WARP; legacy protocols may lack current performance and
+        security improvements.
+
+remediation:
+  description: |
+    Apply hardened WARP client device settings account-wide.
+  steps:
+    - "Navigate to Zero Trust → Settings → WARP Client → Device settings profiles"
+    - "Edit the default profile: set Auto-connect to Always on, disable mode switching, and set the tunnel protocol to WireGuard"
+  api:
+    method: PATCH
+    url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/devices/policy"
+    headers:
+      Authorization: "Bearer {{CF_API_TOKEN}}"
+    body:
+      auto_connect: 0
+      allow_mode_switch: false
+      tunnel_protocol: "wireguard"
+  manual:
+    - "Roll changes out to a pilot group before applying account-wide to catch any split-tunnel or captive-portal regressions"

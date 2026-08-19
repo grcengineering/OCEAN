@@ -1,0 +1,59 @@
+id: WKTO-2.01
+name: Custom Role-Based Access Control Inventory
+description: |
+  Lists custom roles via the Workato API (GET /api/roles) as an
+  informational audit — this is an inventory of what exists, not a
+  bright-line pass/fail. The reviewer determines whether each role's
+  scope matches its documented business need and whether reliance on
+  default (non-custom) roles leaves any function over-privileged.
+author: grc-engineering
+version: "1.0"
+source: workato
+profile: L1
+tags: [rbac, audit]
+
+references:
+  nist: AC-6
+  hth: "workato:2.1"
+
+credentials:
+  WORKATO_API_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_roles
+    action: api_call
+    request:
+      method: GET
+      url: "https://www.workato.com/api/roles"
+      headers:
+        Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    extract:
+      roles: "$.result"
+
+assertions:
+  - id: roles_api_reachable
+    expr: "status_code == 200"
+    severity: medium
+    title: Custom Role Inventory Retrieved
+    pass_message: "GET /api/roles returned successfully — review each custom role for least-privilege scoping"
+    fail_message: "GET /api/roles did not return 200 — the custom role inventory could not be retrieved"
+    finding:
+      description: |
+        The Workato Roles API did not return a successful response. This
+        is an informational audit of every custom role defined in the
+        workspace. Cross-reference each role's granted permissions
+        against its documented business need — roles should scope to
+        the minimum set of recipes, connections, and folders the
+        function actually requires.
+
+remediation:
+  description: |
+    Review every custom role's permission scope for least privilege.
+  steps:
+    - "Navigate to Workspace Admin -> Roles"
+    - "For each role, review its permission grants against the documented business need"
+    - "Replace broad or default-role assignments with narrowly-scoped custom roles where practical"
+  manual:
+    - "Reconcile the custom role inventory against a privileged-account register quarterly"

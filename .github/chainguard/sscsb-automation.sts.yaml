@@ -1,0 +1,17 @@
+# sscsb Octo STS trust policy — lives at .github/chainguard/sscsb-automation.sts.yaml
+# in the repo that GRANTS access. Workflows in `subject_pattern` below can
+# exchange their OIDC identity for a short-lived token with EXACTLY these
+# permissions on THIS repo. No PAT, nothing stored, expires in ~1 hour.
+#
+# Docs: https://github.com/octo-sts/app
+issuer: https://token.actions.githubusercontent.com
+
+# Which workflow identities may federate. Tighten to your repos/refs:
+# repo:OWNER/REPO:ref:refs/heads/main
+subject_pattern: 'repo:grcengineering/ocean:ref:refs/heads/main'
+
+permissions:
+  # Least privilege: grant only what the automation needs.
+  contents: read
+  # issues: write
+  # pull_requests: write

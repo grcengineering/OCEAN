@@ -1,0 +1,64 @@
+id: WKTO-8.01
+name: Verify the Activity Audit Log Is Actively Capturing Events
+description: |
+  Queries the Workato Activity Audit Log API (GET /api/activity_logs) for
+  the most recent page of events. A workspace with audit logging
+  genuinely active should return recent events; zero events indicates
+  logging is not capturing activity even if the feature appears
+  configured.
+author: grc-engineering
+version: "1.0"
+source: workato
+profile: L1
+tags: [audit-logging, monitoring]
+
+references:
+  nist: [AU-2, AU-3]
+  hth: "workato:8.1"
+
+credentials:
+  WORKATO_API_TOKEN:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_activity_logs
+    action: api_call
+    request:
+      method: GET
+      url: "https://www.workato.com/api/activity_logs?page=1&per_page=100"
+      headers:
+        Authorization: "Bearer {{WORKATO_API_TOKEN}}"
+    extract:
+      events: "$.result"
+
+assertions:
+  - id: audit_log_active
+    expr: "size(events) > 0"
+    severity: high
+    title: Activity Audit Log Is Actively Capturing Events
+    pass_message: "The Activity Audit Log API returned recent events, confirming active audit logging"
+    fail_message: "The Activity Audit Log API returned zero recent events"
+    finding:
+      description: |
+        The Workato Activity Audit Log API (api/activity_logs) returned
+        zero events on the most recent page. Workato orchestrates
+        automation across every connected system in the workspace, so
+        without comprehensive activity logging, unauthorized recipe
+        changes, connection tampering, and admin abuse can occur
+        undetected and cannot be investigated after the fact. Confirm
+        logging is enabled and that the querying token has permission
+        to read activity logs, and export logs to a SIEM for correlation
+        and long-term retention.
+
+remediation:
+  description: |
+    Confirm activity capture is active and export logs to a SIEM for
+    correlation, alerting, and retention beyond the platform's native
+    window.
+  steps:
+    - "Navigate to Workspace Admin -> Activity Log and confirm recent recipe, connection, and admin events are visible"
+    - "Wire a scheduled pull of GET /api/activity_logs into your SIEM or log store"
+    - "Verify log delivery reaches the configured destination"
+  manual:
+    - "Configure alerts for admin role changes, connection deletions, and recipe deployments to production"

@@ -1,0 +1,79 @@
+id: CF-3.03
+name: Verify a Gateway Network (L4) Policy Exists
+description: |
+  Verifies that at least one Gateway rule filters non-HTTP network (L4)
+  traffic, which stops command-and-control and data exfiltration over
+  arbitrary TCP/UDP ports that HTTP and DNS filtering do not inspect.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L2
+tags: [gateway, network-filtering, zero-trust]
+
+references:
+  cis: ["4.4", "13.4"]
+  nist: [SC-7, AC-4]
+  hth: "cloudflare:3.3"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, zero_trust:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_gateway_rules
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      rules: "$.result"
+
+assertions:
+  - id: network_l4_policy_exists
+    expr: 'size(rules.filter(r, r.filters.exists(f, f == "l4"))) > 0'
+    severity: medium
+    title: A Gateway Network (L4) Policy Exists
+    pass_message: "At least one Gateway network (L4) policy is configured"
+    fail_message: "No Gateway network (L4) policy is configured"
+    finding:
+      description: |
+        No Gateway rule filters L4 network traffic. HTTP and DNS
+        filtering do not inspect arbitrary TCP/UDP traffic, so
+        command-and-control and data exfiltration over non-HTTP ports
+        (for example a reverse shell or an internet-exposed SSH
+        listener reached by a WARP client) can proceed unfiltered.
+        Create a network policy restricting risky ports and
+        destinations.
+
+remediation:
+  description: |
+    Create a Gateway network (L4) policy blocking risky outbound ports
+    and destinations not covered by HTTP or DNS filtering.
+  steps:
+    - "Navigate to Zero Trust → Gateway → Firewall Policies → Network"
+    - "Add a policy matching risky destination ports (for example 22, 3389) to internal or unexpected destination ranges"
+    - "Set Action to Block"
+  api:
+    method: POST
+    url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/gateway/rules"
+    headers:
+      Authorization: "Bearer {{CF_API_TOKEN}}"
+    body:
+      name: "HTH: Block External SSH"
+      action: "block"
+      filters: ["l4"]
+      traffic: "net.dst.port == 22 and net.dst.ip !in {10.0.0.0/8 172.16.0.0/12 192.168.0.0/16}"
+      enabled: true
+      precedence: 10
+  manual:
+    - "Review network policy matches in Gateway network logs to tune false positives before broadening enforcement"

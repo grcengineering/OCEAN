@@ -1,0 +1,82 @@
+id: AUTH0-1.02
+name: Verify Suspicious IP Throttling Is Enabled
+description: |
+  Verifies that the Auth0 attack-protection suspicious IP throttling
+  shield is enabled, which rate-limits login and signup attempts from a
+  single IP address regardless of which account identifier is being
+  targeted.
+author: grc-engineering
+version: "1.0"
+source: auth0
+profile: L1
+tags: [attack-protection, rate-limiting, authentication]
+
+references:
+  cis: ["4.10"]
+  nist: [SI-4]
+  hth: "auth0:1.2"
+
+credentials:
+  AUTH0_TOKEN:
+    type: api_token
+    scopes: ["read:attack_protection"]
+    required: true
+
+inputs:
+  auth0_api_base:
+    description: Auth0 Management API base URL, including scheme and /api/v2 (e.g. https://yourcompany.auth0.com/api/v2)
+    env: AUTH0_API_BASE
+    required: true
+
+steps:
+  - id: get_suspicious_ip_throttling
+    action: api_call
+    request:
+      method: GET
+      url: "{{auth0_api_base}}/attack-protection/suspicious-ip-throttling"
+      headers:
+        Authorization: "Bearer {{AUTH0_TOKEN}}"
+    extract:
+      enabled: "$.enabled"
+
+assertions:
+  - id: suspicious_ip_throttling_enabled
+    expr: "enabled == true"
+    severity: high
+    title: Suspicious IP Throttling Is Enabled
+    pass_message: "Suspicious IP throttling is enabled"
+    fail_message: "Suspicious IP throttling is disabled"
+    finding:
+      description: |
+        The attack-protection/suspicious-ip-throttling endpoint reports
+        enabled: false. Without this shield, a single IP address can
+        drive high-volume login or signup attempts across many different
+        account identifiers — the pattern of distributed credential
+        stuffing and IP-rotating password spraying — with no rate limit
+        at the IP level.
+
+remediation:
+  description: |
+    Enable suspicious IP throttling with admin-notification and block
+    shields for both pre-login and pre-user-registration stages.
+  steps:
+    - "Navigate to Security → Attack Protection → Suspicious IP Throttling"
+    - "Enable Suspicious IP Throttling"
+    - "Confirm both the pre-login and pre-user-registration stages have block shields active"
+  api:
+    method: PATCH
+    url: "{{auth0_api_base}}/attack-protection/suspicious-ip-throttling"
+    headers:
+      Authorization: "Bearer {{AUTH0_TOKEN}}"
+    body:
+      enabled: true
+      shields: ["admin_notification", "block"]
+      stage:
+        pre-login:
+          max_attempts: 100
+          rate: 864000
+        pre-user-registration:
+          max_attempts: 50
+          rate: 1200000
+  manual:
+    - "Review admin notifications from this shield alongside brute force protection alerts to distinguish IP-rotating campaigns from single-account attacks"

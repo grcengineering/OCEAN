@@ -44,7 +44,12 @@ steps:
 
 assertions:
   - id: no_unrestricted_ssh
-    expr: "nsgs | map(attribute='properties.securityRules') | flatten | selectattr('properties.direction', 'equalto', 'Inbound') | selectattr('properties.access', 'equalto', 'Allow') | selectattr('properties.destinationPortRange', 'in', ['22', '*']) | selectattr('properties.sourceAddressPrefix', 'in', ['*', '0.0.0.0/0', 'Internet']) | list | length == 0"
+    expr: >-
+      !nsgs.exists(n, has(n.properties) && has(n.properties.securityRules) &&
+        n.properties.securityRules.exists(r, has(r.properties) &&
+          r.properties.direction == "Inbound" && r.properties.access == "Allow" &&
+          r.properties.destinationPortRange in ["22", "*"] &&
+          r.properties.sourceAddressPrefix in ["*", "0.0.0.0/0", "Internet"]))
     severity: critical
     title: No Unrestricted SSH Inbound Rules
     pass_message: "No NSG rules allow unrestricted inbound SSH (port 22)"
@@ -57,7 +62,12 @@ assertions:
         internet. Restrict SSH access to known IP ranges or use Azure Bastion.
 
   - id: no_unrestricted_rdp
-    expr: "nsgs | map(attribute='properties.securityRules') | flatten | selectattr('properties.direction', 'equalto', 'Inbound') | selectattr('properties.access', 'equalto', 'Allow') | selectattr('properties.destinationPortRange', 'in', ['3389', '*']) | selectattr('properties.sourceAddressPrefix', 'in', ['*', '0.0.0.0/0', 'Internet']) | list | length == 0"
+    expr: >-
+      !nsgs.exists(n, has(n.properties) && has(n.properties.securityRules) &&
+        n.properties.securityRules.exists(r, has(r.properties) &&
+          r.properties.direction == "Inbound" && r.properties.access == "Allow" &&
+          r.properties.destinationPortRange in ["3389", "*"] &&
+          r.properties.sourceAddressPrefix in ["*", "0.0.0.0/0", "Internet"]))
     severity: critical
     title: No Unrestricted RDP Inbound Rules
     pass_message: "No NSG rules allow unrestricted inbound RDP (port 3389)"

@@ -122,22 +122,13 @@ impl Observer for SessionPolicyObserver {
         let policy = policies
             .iter()
             .find(|p| {
-                p.get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "Default Policy"
-                    && p.get("status")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        == "ACTIVE"
+                p.get("name").and_then(|v| v.as_str()).unwrap_or("") == "Default Policy"
+                    && p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE"
             })
             .or_else(|| {
-                policies.iter().find(|p| {
-                    p.get("status")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        == "ACTIVE"
-                })
+                policies
+                    .iter()
+                    .find(|p| p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE")
             })
             .ok_or_else(|| anyhow!("No active OKTA_SIGN_ON policy found"))?;
 
@@ -166,12 +157,7 @@ impl Observer for SessionPolicyObserver {
         // Pick the first ACTIVE rule (rules are returned in priority order)
         let active_rule = rules
             .iter()
-            .find(|r| {
-                r.get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "ACTIVE"
-            })
+            .find(|r| r.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE")
             .ok_or_else(|| anyhow!("No active rules found for policy {}", policy_id))?;
 
         let session = active_rule
@@ -460,9 +446,7 @@ mod tests {
 
     #[test]
     fn missing_token_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let result = SessionPolicyObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
@@ -470,9 +454,7 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_API_TOKEN".to_string(), "test".to_string())]);
         let result = SessionPolicyObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
@@ -480,7 +462,10 @@ mod tests {
 
     #[test]
     fn api_returns_403_errors() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#,
+        );
         let result = SessionPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
@@ -523,7 +508,10 @@ mod tests {
         thread::spawn(move || {
             let responses: Vec<(u16, &str)> = vec![
                 (200, POLICY_WITH_ID),
-                (403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#),
+                (
+                    403,
+                    r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#,
+                ),
             ];
             for (status, body) in responses {
                 if let Ok((mut stream, _)) = listener.accept() {
@@ -554,10 +542,8 @@ mod tests {
         let addr = listener.local_addr().unwrap();
 
         thread::spawn(move || {
-            let responses: Vec<(u16, &str)> = vec![
-                (200, POLICY_WITH_ID),
-                (200, r#""not an array""#),
-            ];
+            let responses: Vec<(u16, &str)> =
+                vec![(200, POLICY_WITH_ID), (200, r#""not an array""#)];
             for (status, body) in responses {
                 if let Ok((mut stream, _)) = listener.accept() {
                     let mut buf = [0u8; 8192];
@@ -578,7 +564,8 @@ mod tests {
 
     #[test]
     fn no_active_rules_errors() {
-        let inactive_rule = r#"[{"id":"rule1","name":"Default Rule","status":"INACTIVE","actions":{}}]"#;
+        let inactive_rule =
+            r#"[{"id":"rule1","name":"Default Rule","status":"INACTIVE","actions":{}}]"#;
         let srv = mock_server_multi(POLICY_WITH_ID, inactive_rule);
         let result = SessionPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());

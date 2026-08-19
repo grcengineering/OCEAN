@@ -1,0 +1,68 @@
+id: AUTH0-5.01
+name: Verify at Least One Log Stream Is Active
+description: |
+  Verifies that the tenant has at least one log stream with status
+  "active", meaning authentication and Management API events are being
+  exported to an external destination for SIEM correlation rather than
+  aging out of Auth0's limited native retention window.
+author: grc-engineering
+version: "1.0"
+source: auth0
+profile: L1
+tags: [logging, monitoring, siem]
+
+references:
+  cis: ["8.2"]
+  nist: [AU-2, AU-6]
+  hth: "auth0:5.1"
+
+credentials:
+  AUTH0_TOKEN:
+    type: api_token
+    scopes: ["read:log_streams"]
+    required: true
+
+inputs:
+  auth0_api_base:
+    description: Auth0 Management API base URL, including scheme and /api/v2 (e.g. https://yourcompany.auth0.com/api/v2)
+    env: AUTH0_API_BASE
+    required: true
+
+steps:
+  - id: get_log_streams
+    action: api_call
+    request:
+      method: GET
+      url: "{{auth0_api_base}}/log-streams"
+      headers:
+        Authorization: "Bearer {{AUTH0_TOKEN}}"
+    extract:
+      log_streams: "$[*]"
+
+assertions:
+  - id: active_log_stream_exists
+    expr: 'size(log_streams.filter(s, s.status == "active")) > 0'
+    severity: high
+    title: At Least One Log Stream Is Active
+    pass_message: "At least one active log stream is configured"
+    fail_message: "No active log stream is configured"
+    finding:
+      description: |
+        No log stream with status "active" was found. Auth0 retains
+        logs for a limited window natively, so without an active export
+        to a SIEM or log management platform, credential stuffing,
+        brute force, and unauthorized admin activity age out with no
+        durable record for detection or incident response. Configure a
+        log stream (requires a Professional plan or above for most
+        destinations).
+
+remediation:
+  description: |
+    Configure and activate a log stream exporting authentication and
+    Management API events to a SIEM or log management platform.
+  steps:
+    - "Navigate to Monitoring → Streams"
+    - "Create a log stream for the organization's SIEM (Splunk, Datadog, HTTP endpoint, AWS EventBridge, or Azure Event Grid)"
+    - "Confirm the stream status shows Active and events are arriving at the destination"
+  manual:
+    - "Correlate Auth0 login and Management API events with other identity providers' logs to surface account takeover and privilege abuse spanning systems"

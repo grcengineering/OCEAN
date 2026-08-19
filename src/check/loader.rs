@@ -23,7 +23,10 @@ use super::interpreter::{YamlObserver, YamlTester};
 /// Returns the number of checks successfully registered.
 pub fn load_checks_from_dir(registry: &Registry, dir: &Path) -> Result<usize> {
     if !dir.exists() {
-        debug!("checks directory does not exist, skipping: {}", dir.display());
+        debug!(
+            "checks directory does not exist, skipping: {}",
+            dir.display()
+        );
         return Ok(0);
     }
 
@@ -78,10 +81,10 @@ fn is_check_file(path: &Path) -> bool {
 
 /// Parse a single `.check.yaml` file into a CheckDefinition.
 pub fn load_check_file(path: &Path) -> Result<CheckDefinition> {
-    let content = fs::read_to_string(path)
-        .with_context(|| format!("reading {}", path.display()))?;
-    let def: CheckDefinition = serde_yaml::from_str(&content)
-        .with_context(|| format!("parsing {}", path.display()))?;
+    let content =
+        fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let def: CheckDefinition =
+        serde_yaml::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
     Ok(def)
 }
 
@@ -92,7 +95,10 @@ pub fn load_check_file(path: &Path) -> Result<CheckDefinition> {
 /// Skips files that fail to parse with a warning.
 pub fn load_definitions_from_dir(dir: &Path) -> Vec<CheckDefinition> {
     if !dir.exists() {
-        debug!("checks directory does not exist, skipping: {}", dir.display());
+        debug!(
+            "checks directory does not exist, skipping: {}",
+            dir.display()
+        );
         return Vec::new();
     }
     walk_check_files(dir)
@@ -147,7 +153,11 @@ pub fn load_all_checks(registry: &Registry, bundled_dir: &Path) -> usize {
                 }
                 total += n;
             }
-            Err(e) => warn!("failed to load user checks from {}: {:#}", user_dir.display(), e),
+            Err(e) => warn!(
+                "failed to load user checks from {}: {:#}",
+                user_dir.display(),
+                e
+            ),
         }
     }
 
@@ -291,7 +301,10 @@ assertions: []
         let result = load_check_file(Path::new("/nonexistent/file.check.yaml"));
         assert!(result.is_err());
         let err_msg = format!("{:#}", result.unwrap_err());
-        assert!(err_msg.contains("reading"), "error should mention reading: {err_msg}");
+        assert!(
+            err_msg.contains("reading"),
+            "error should mention reading: {err_msg}"
+        );
     }
 
     #[test]
@@ -459,7 +472,10 @@ assertions: []
         fs::write(&path, yaml).unwrap();
         // Should succeed because CheckDefinition doesn't deny unknown fields
         let result = load_check_file(&path);
-        assert!(result.is_ok(), "extra fields should be tolerated: {result:?}");
+        assert!(
+            result.is_ok(),
+            "extra fields should be tolerated: {result:?}"
+        );
     }
 
     // ── load_definitions_from_dir tests ─────────────────────────────────────
@@ -605,12 +621,12 @@ assertions: []
             return;
         }
         let schema_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("schemas/check.schema.json");
-        let schema_str = fs::read_to_string(&schema_path)
-            .expect("failed to read check.schema.json");
-        let schema_value: serde_json::Value = serde_json::from_str(&schema_str)
-            .expect("failed to parse check.schema.json");
-        let validator = jsonschema::validator_for(&schema_value)
-            .expect("failed to compile JSON Schema");
+        let schema_str =
+            fs::read_to_string(&schema_path).expect("failed to read check.schema.json");
+        let schema_value: serde_json::Value =
+            serde_json::from_str(&schema_str).expect("failed to parse check.schema.json");
+        let validator =
+            jsonschema::validator_for(&schema_value).expect("failed to compile JSON Schema");
 
         let mut failures = Vec::new();
         for path in walk_check_files(&checks_dir) {

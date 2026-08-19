@@ -1,0 +1,72 @@
+id: OKTA-1.70
+name: Verify PIV/CAC Smart Card Identity Provider
+description: |
+  Verifies that an active X.509 certificate-based Identity Provider is
+  configured for PIV/CAC smart card authentication. Smart card credentials
+  bind authentication to a hardware-held private key validated against an
+  approved certificate authority, satisfying AAL3 hardware-bound assurance
+  for high-sensitivity and U.S. Government systems.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L3
+tags: [piv, cac, smart-card, certificate-auth, federal]
+
+references:
+  nist: "IA-2(12)"
+  disa_stig: ["V-273204", "V-273207"]
+  hth: "okta:1.7"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.idps.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_identity_providers
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/idps"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      idps: "$[*]"
+
+assertions:
+  - id: smart_card_idp_active
+    expr: "size(idps.filter(i, i.type == 'X509' && i.status == 'ACTIVE')) > 0"
+    severity: medium
+    title: Smart Card (X.509) Identity Provider Active
+    pass_message: "An active X.509 smart card identity provider is configured"
+    fail_message: "No active X.509 smart card identity provider is configured"
+    finding:
+      description: |
+        No active X.509-type Identity Provider is configured for PIV/CAC
+        smart card authentication. This control is required only for
+        federal and high-assurance environments (Profile Level L3). Where
+        required, configure a Smart Card IdP with the approved certificate
+        chain (root and intermediate CAs) and map the certificate's
+        Electronic Data Interchange Personnel Identifier (EDIPI) or
+        equivalent identifier to the Okta user profile.
+
+remediation:
+  description: |
+    Configure a Smart Card Identity Provider backed by the organization's
+    approved PIV/CAC certificate authority chain.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Authenticators → Setup → Add authenticator → Smart Card IdP"
+    - "Navigate to Security → Identity Providers → Add identity provider → Smart Card IdP"
+    - "Upload the root and intermediate CA certificates to build the certificate chain"
+    - "Set IdP username to idpuser.subjectAltNameUpn and match against the correct Okta profile attribute"
+    - "Activate the identity provider"
+  manual:
+    - "Verify the certificate chain builds successfully with all issuing CAs present"
+    - "Confirm this control applies to your environment before implementing — it is federal/L3-scoped"

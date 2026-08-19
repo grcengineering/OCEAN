@@ -186,10 +186,7 @@ impl Observer for MfaPolicyObserver {
                     .and_then(|a| a.as_array())
                     .map(|auths| {
                         auths.iter().any(|auth| {
-                            let key = auth
-                                .get("key")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
+                            let key = auth.get("key").and_then(|v| v.as_str()).unwrap_or("");
                             // Only count non-password authenticators as MFA factors
                             key != "okta_password"
                                 && auth
@@ -222,12 +219,7 @@ impl Observer for MfaPolicyObserver {
 
         let first_active = policies
             .iter()
-            .find(|p| {
-                p.get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "ACTIVE"
-            });
+            .find(|p| p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE");
 
         if let Some(active_policy) = first_active {
             first_active_policy_name = active_policy
@@ -790,7 +782,10 @@ mod tests {
         let srv = mock_server(200, ALL_NOT_ALLOWED_POLICY);
         let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        assert!(ev.findings.iter().any(|f| f.title == "No Required MFA Factors"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "No Required MFA Factors"));
         let iam = &ev.raw_data["iam_auth"];
         assert_eq!(iam["phishing_resistant_required"], false);
         assert_eq!(iam["phishable_factors_allowed"], false);
@@ -859,10 +854,7 @@ mod tests {
     fn policy_name_is_captured_in_iam_auth() {
         let srv = mock_server(200, ACTIVE_REQUIRED_POLICY);
         let ev = &MfaPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
-        assert_eq!(
-            ev.raw_data["iam_auth"]["policy_name"],
-            "Default MFA Policy"
-        );
+        assert_eq!(ev.raw_data["iam_auth"]["policy_name"], "Default MFA Policy");
     }
 
     #[test]

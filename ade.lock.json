@@ -1,0 +1,58 @@
+{
+  "adeVersion": "0.2.0",
+  "audit": {
+    "headHash": "143b0393774e59c99042d785302aeedf25c69b14fe3ae7f9e705ac7392dfe987",
+    "length": 35
+  },
+  "environment": {
+    "arch": "x64",
+    "os": "win32",
+    "tools": {
+      "ccc": "present",
+      "cocoindex": "cocoindex version 1.0.19",
+      "gitleaks": "8.30.1",
+      "nono": null,
+      "ocean": "ocean 0.1.0",
+      "openwiki": "present",
+      "osv-scanner": "osv-scanner version: 2.4.0",
+      "pre-commit": "pre-commit 4.6.0",
+      "rtk": null,
+      "serena": "Serena 1.6.2.dev0",
+      "sscsb": "sscsb 0.1.0",
+      "trufflehog": "trufflehog 3.96.0"
+    }
+  },
+  "files": {
+    ".ade/context/codemap.md": "529db43b42094ec7663ba64fcf1c89e14c7e2d7dc29dce7efe7a3be2f3418cb2",
+    ".ade/guardrails/authn-authz.md": "a978bdccfbfb6ef331b49e3fd86034608e31e74436a46e06050c70262fbe77ab",
+    ".ade/guardrails/crypto.md": "9d03304f75c78764b6cb3aa189b687044e565f238ec4c8a220b2ee443b791167",
+    ".ade/guardrails/dependencies.md": "13b7f8952aa7738754b1cd97e372bb39dd8f7c8b5a5328e107eb41472566aeff",
+    ".ade/guardrails/error-handling.md": "04235139dbda7468558571a53319cc0bd41806bd867f72306ffc515fdcd6f040",
+    ".ade/guardrails/injection.md": "e790f757e806183eb69ea021b41634fd3e7317836892666cf317cd5dead4a81c",
+    ".ade/guardrails/input-validation.md": "2ebfd27001fff252cf6fe7331a4769388c82dbe2de145b1f81239a8a118e0e66",
+    ".ade/guardrails/secrets-handling.md": "1d96a07b2fe9d500814f0dc5f5f35afd1d53e6d15a705c075a3db3bce257090b",
+    ".ade/hooks/audit-log.ts": "975fa2d287837704dda22083aa0e0591ffac6bdeda68121285aaeb77078c2a32",
+    ".ade/hooks/scan-untrusted.ts": "b911f24c3592c217e7d64b62eada5dd2bc4cceed42279c0e94ab6007f9ce4500",
+    ".ade/instructions.local.md": "c7eb5321ad5750806d52b864416cfb36b996b303264554dbb3940cc7e7147456",
+    ".ade/instructions.md": "dbb7832bfa73c866868d59121080e68a3fb6e916879b8afb1822db4253bc2136",
+    ".ade/manifest.json": "50bb221c8540ef455d703a9905ab82a4c74dd7230e6554dab09c7171708bcd22",
+    ".ade/memory.json": "6e4636c6b3d02e685ae38cfc639e7f568abf4d9a0002af2b1b99f9287604f2c6",
+    ".ade/policy/approvals.json": "7f132cc513a22a77fa9df4cbc59b59eeed1061fc1a55e312d8d9936fc0b78dbb",
+    ".ade/policy/budget.json": "fcc846a30df2f3c0f6cb7c605e196f6759a4e52ef0caadae76ddbabd45dbc91b",
+    ".ade/policy/context-engines.json": "efa07d7d1412787c6a61a817f154ad73d95e565cedeb5e12a75c4e5412a32a59",
+    ".ade/policy/context-trust.json": "e322885870c782e61c13cbecf4d9d7a74951903c78a10f36ac6e9d724af4050f",
+    ".ade/policy/dependencies.json": "c73ab6a8180976fb58a86d05b362fec52414f393dd1d6cb8151362a2974b37bd",
+    ".ade/policy/git.json": "11507e7a81eb978d780a4a37dcbc2d8594bf90316e3976203e3b1f1977efaed9",
+    ".ade/policy/instructions-governance.json": "7c2fa2c5d0c958657a8f4dae2a388c3a690662bffd3c6e79cb76a7aeae2e2d03",
+    ".ade/policy/sandbox.json": "957d9460a0844a8a2cd261d39da27f664fc8e9a0fb030951cc7987953af8b8f3",
+    ".ade/policy/secrets.json": "5aae0d0ea8f39ccfb52e93ae6bccd5e519e06e0b31dc1c2f0bb0ca8ae09b3586",
+    ".ade/policy/token-efficiency.json": "1dd386f14303a636aec4f267fb5eb1377d1b9f87e2013b86b5eadcd8fb0c212d",
+    ".ade/templates/commit-conventions.md": "fc5388783d61cfb14371f84e0deb043f1e79a1cb630e5265fea7b1d3fd64c76b",
+    ".ade/templates/pr-checklist.md": "2c18a4ee3e08d41dc354a4447da148c863f4b136a130c9f330e53377378bca1f",
+    ".ade/templates/testing-conventions.md": "3b74a5117eab054dc7807c650998ec3ee92fda8ec575d9c290a250206e12d9a6"
+  },
+  "harnesses": [
+    "claude-code"
+  ],
+  "schemaVersion": 1
+}

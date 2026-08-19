@@ -61,7 +61,7 @@ steps:
 
 assertions:
   - id: trail_exists
-    expr: "trails | length > 0"
+    expr: "size(trails) > 0"
     severity: critical
     title: CloudTrail Trail Exists
     pass_message: "At least one CloudTrail trail is configured"
@@ -74,7 +74,7 @@ assertions:
         This is a critical gap in security visibility.
 
   - id: multi_region_enabled
-    expr: "trails | selectattr('IsMultiRegionTrail', 'equalto', true) | list | length > 0"
+    expr: "size(trails.filter(t, t.IsMultiRegionTrail == true)) > 0"
     severity: critical
     title: Multi-Region Trail Enabled
     pass_message: "At least one trail is configured for all regions"

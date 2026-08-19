@@ -74,7 +74,7 @@ impl Observer for RunnerConfigObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/actions/runners", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -104,9 +104,9 @@ impl Observer for RunnerConfigObserver {
                 r.get("labels")
                     .and_then(|l| l.as_array())
                     .map(|labels| {
-                        labels
-                            .iter()
-                            .any(|label| label.get("name").and_then(|n| n.as_str()) == Some("self-hosted"))
+                        labels.iter().any(|label| {
+                            label.get("name").and_then(|n| n.as_str()) == Some("self-hosted")
+                        })
                     })
                     .unwrap_or(false)
             })
@@ -147,10 +147,7 @@ impl Observer for RunnerConfigObserver {
         let status_msg = if status_id == StatusId::Effective {
             format!("Runner configuration safe for organization {}", org)
         } else {
-            format!(
-                "Self-hosted runners present for organization {}",
-                org
-            )
+            format!("Self-hosted runners present for organization {}", org)
         };
 
         Ok(vec![Evidence {

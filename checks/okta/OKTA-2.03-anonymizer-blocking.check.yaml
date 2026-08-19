@@ -1,0 +1,76 @@
+id: OKTA-2.03
+name: Verify Anonymizer and Tor Blocking
+description: |
+  Verifies that Okta's DefaultEnhancedDynamicZone is activated as a
+  blocklist. This zone automatically blocks traffic from anonymizing
+  proxies, Tor exit nodes, and residential proxies using Okta's IP
+  intelligence, but ships inactive by default.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [anonymizer, tor, proxy, dynamic-zone, network-security]
+
+references:
+  nist: ["SC-7", "AC-3"]
+  hth: "okta:2.3"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.networkZones.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_network_zones
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/zones"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      zones: "$[*]"
+
+assertions:
+  - id: enhanced_dynamic_zone_active_blocklist
+    expr: "size(zones.filter(z, z.name == 'DefaultEnhancedDynamicZone' && z.status == 'ACTIVE' && z.usage == 'BLOCKLIST')) > 0"
+    severity: high
+    title: Enhanced Dynamic Zone Active as Blocklist
+    pass_message: "DefaultEnhancedDynamicZone is active and set to blocklist"
+    fail_message: "DefaultEnhancedDynamicZone is not active as a blocklist"
+    finding:
+      description: |
+        The DefaultEnhancedDynamicZone is not active with usage set to
+        BLOCKLIST. This zone ships inactive by default, so many
+        organizations unknowingly leave anonymizing proxies, Tor exit
+        nodes, and residential proxies unblocked. Activate the zone and set
+        it to blocklist to reduce the anonymized-infrastructure attack
+        surface for credential stuffing and session replay.
+
+remediation:
+  description: |
+    Activate the DefaultEnhancedDynamicZone and set it to blocklist.
+  steps:
+    - "Navigate to Okta Admin Console → Security → Networks"
+    - "Locate DefaultEnhancedDynamicZone and click Edit"
+    - "Set Zone Status to Active and Usage to Blocklist"
+    - "Select categories to block: Anonymizing Proxies, Tor Exit Nodes (Residential Proxies optional)"
+    - "Add a deny rule in Authentication Policies for this zone, prioritized above allow rules"
+  manual:
+    - "Monitor blocked traffic patterns monthly for false positives affecting legitimate remote workers"
+  api:
+    method: PUT
+    url: "https://{{okta_domain}}/api/v1/zones/{{zone_id}}"
+    body:
+      type: DYNAMIC_V2
+      name: DefaultEnhancedDynamicZone
+      status: ACTIVE
+      usage: BLOCKLIST
+      proxyType: TorAnonymizer

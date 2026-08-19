@@ -1,0 +1,85 @@
+{
+  "actions": {
+    "branchOps": {
+      "decision": "ask",
+      "examples": [
+        "git branch -D",
+        "git push --force",
+        "rewriting published history"
+      ],
+      "rationale": "branch deletion and force operations can discard unreviewed history"
+    },
+    "credentialUse": {
+      "decision": "ask",
+      "examples": [
+        "reading .env values",
+        "using AWS/GH tokens",
+        "authenticating to external services"
+      ],
+      "rationale": "credential use can exfiltrate or misuse secrets beyond the task's scope"
+    },
+    "dependencyInstall": {
+      "decision": "ask",
+      "examples": [
+        "npm install <pkg>",
+        "bun add <pkg>",
+        "pip install <pkg>",
+        "cargo add <pkg>"
+      ],
+      "rationale": "installing dependencies executes third-party code inside the project"
+    },
+    "destructiveShell": {
+      "decision": "ask",
+      "examples": [
+        "rm -rf",
+        "git reset --hard",
+        "sudo rm",
+        "dd of=/dev/…",
+        "DROP TABLE"
+      ],
+      "rationale": "destructive shell commands can irreversibly delete work or system state"
+    },
+    "externalNetwork": {
+      "decision": "ask",
+      "examples": [
+        "curl/fetch to non-allowlisted hosts",
+        "uploading files",
+        "calling third-party APIs"
+      ],
+      "rationale": "external network access can leak repository content or fetch untrusted code"
+    },
+    "merge": {
+      "decision": "ask",
+      "examples": [
+        "gh pr merge",
+        "git merge into main",
+        "clicking the merge button"
+      ],
+      "rationale": "merging lands changes on shared branches other collaborators build on"
+    },
+    "prCreation": {
+      "decision": "ask",
+      "examples": [
+        "gh pr create",
+        "opening a merge request"
+      ],
+      "rationale": "opening a PR publishes work product and triggers CI under the human's identity"
+    },
+    "productionAffecting": {
+      "decision": "deny",
+      "examples": [
+        "deploys",
+        "database migrations",
+        "infra changes",
+        "editing prod config or feature flags"
+      ],
+      "rationale": "production-affecting changes have blast radius beyond the repository"
+    }
+  },
+  "neverAllow": [
+    "destructiveShell",
+    "credentialUse",
+    "productionAffecting"
+  ],
+  "schemaVersion": 1
+}

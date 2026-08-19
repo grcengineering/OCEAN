@@ -1,0 +1,210 @@
+id: ONA-4.02
+name: OIDC Workload Identity Uses V3 With Scoped Sub Claims
+description: |
+  Verifies that the organization's OIDC token configuration selects V3 AND
+  declares at least one `extraSubFields` entry, read from
+  `gitpod.v1.OrganizationService/GetOIDCConfig`.
+
+  Why extraSubFields is the control, not the version. OIDC workload identity lets
+  an environment assume a cloud role with no long-lived key — a real improvement
+  over a stored secret, but only as tight as the trust policy on the cloud side,
+  and that trust policy conditions on the token's `sub` claim. With a bare V3
+  configuration the `sub` carries the default shape, so the tightest AWS or GCP
+  condition an operator can write pins the ORGANIZATION and nothing more: every
+  environment, every project, every runner, every member's agent shares one
+  identity from the cloud's point of view. `extraSubFields` is what makes a
+  narrower condition expressible — the vendor's valid keys include
+  `project_id`, `runner_id`, `environment_id`, `creator_id`, `creator_email`,
+  `service_account_id` and dot-notation claims such as
+  `creator_idp_claims.groups`. Without at least one, keyless access is
+  organization-wide by construction, which is why an empty V3 configuration fails
+  this check as surely as a V2 one.
+
+  404 is a FINDING, not a collection failure — the design decision worth reading.
+  `GetOIDCConfig` answers HTTP 404 with
+  `{"code":"not_found","message":"OIDC config not found"}` when no configuration
+  exists. That is a definitive, authoritative answer about the organization's
+  state, so treating it as unreadable and abstaining would suppress the very
+  finding the check exists to raise. The reachability assertion therefore accepts
+  BOTH 200 and 404 as "the endpoint answered", and the compliance assertion fails
+  on 404 with a message that names it as not-configured. Only the genuinely
+  ambiguous statuses — 401, 403, a 400 `failed_precondition` from Enterprise
+  gating, any 5xx — land in the abstain branch. This is deliberately different
+  from every other check in this vendor, where any non-200 abstains, and it is
+  different because a 404 here carries information those others' non-200s do not.
+  No `on_error` handler is used: an `on_error` of `continue` SKIPS extraction
+  entirely, which would leave `body_root` unbound and defeat the guard chain.
+
+  Response shape. `GetOIDCConfigResponse.oidcConfig` is REQUIRED and its
+  `version` is a oneof — `v2` (a message with NO fields) or
+  `v3 { extraSubFields[] }`. Protobuf-JSON renders the selected arm only, and
+  omits `extraSubFields` when empty, so a bare V3 configuration appears as
+  `{"oidcConfig": {"v3": {}}}`. Every level is `has()`-tested before it is
+  dereferenced, so each of those shapes produces a clean verdict rather than a CEL
+  error.
+
+  Host. The request goes to `app.gitpod.io` because the documented
+  `app.ona.com` base 308-redirects and clients drop the `Authorization` header on
+  the hop, producing a 401 that reads like a bad credential.
+
+  Not asserted: the cloud side. Whether your AWS or GCP trust policy actually
+  conditions on the extra claims — the half that turns a scoped token into scoped
+  access — is invisible from Ona and must be verified in the cloud account.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L2
+tags: [secrets, oidc, workload-identity, keyless, organization]
+
+references:
+  cis: ["3.3", "16.9"]
+  nist: ["IA-5", "AC-3"]
+  soc2: CC6.1
+  iso27001: A.9.4.3
+  hth: "ona:4.2"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_oidc_config
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. Deliberately NO `on_error` handler: `on_error`
+      `continue` skips extraction, which would leave `body_root` unbound and
+      defeat the guard chain. The 404 that means "not configured" is handled in
+      the assertions instead, where it can be reported as a finding rather than
+      silently dropped.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOIDCConfig"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` cannot itself
+      # discriminate shape: on a non-object receiver cel 0.14 RAISES ("No such
+      # overload"), which the fail-closed default turns into an accusation,
+      # while it answers FALSE for a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      oidc_config: "$.oidcConfig"
+
+assertions:
+  - id: oidc_endpoint_answered
+    expr: "get_oidc_config_status_code == 200 || get_oidc_config_status_code == 404"
+    severity: info
+    title: OIDC Configuration Endpoint Answered
+    pass_message: "GetOIDCConfig answered definitively for organization '{{org}}' (HTTP {{status_code}}) — either a configuration was returned, or the API confirmed none exists; the verdict below was actually evaluated"
+    fail_message: "GetOIDCConfig could not be read for '{{org}}' (HTTP {{status_code}}) — this is neither a configuration nor a confirmed absence, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API answered GetOIDCConfig with neither 200 nor 404, so the
+        organization's OIDC state is unknown. This is a collection failure, not a
+        compliance failure.
+        A 404 is NOT this case: `{"code":"not_found","message":"OIDC config not
+        found"}` is a definitive answer that no configuration exists, and it is
+        reported as a finding by the verdict below rather than as an unread result.
+        What lands here instead: 401 (token expired, revoked, or issued from a
+        different management-plane domain), 403 / `permission_denied` (the
+        principal lacks the permission the method requires), 400
+        `failed_precondition` (OIDC token configuration is Enterprise-gated), or
+        any 5xx.
+
+  - id: oidc_v3_with_scoped_sub_claims
+    expr: "(get_oidc_config_status_code != 200 && get_oidc_config_status_code != 404) || (get_oidc_config_status_code == 200 && body_root != null && body_is_object && has(body_root.oidcConfig) && has(body_root.oidcConfig.v3) && has(body_root.oidcConfig.v3.extraSubFields) && size(body_root.oidcConfig.v3.extraSubFields) > 0)"
+    severity: medium
+    title: OIDC Token Sub-Claim Scoping
+    pass_message: "No sub-claim scoping gap was observed for '{{org}}' — this row is evidence of a V3 configuration carrying extraSubFields ONLY if 'OIDC Configuration Endpoint Answered' above also passed; when the endpoint could not be read it abstains and asserts nothing about OIDC"
+    fail_message: "OIDC workload identity for '{{org}}' is not configured, or is configured without scoped sub claims — cloud trust policies can pin no more than the whole organization"
+    finding:
+      description: |
+        One of three states holds, and the HTTP status distinguishes them.
+        HTTP 404 — no OIDC configuration exists at all. Environments cannot assume
+        cloud roles keylessly, so whatever cloud access they have runs on
+        long-lived credentials stored as secrets. That is the weaker posture this
+        control exists to replace.
+        HTTP 200 with `oidcConfig.v2` — V2 tokens are selected. V3 is documented as
+        "the default for new organizations" and is the only version offering sub
+        claim customization, so a V2 configuration cannot be scoped at all.
+        HTTP 200 with `oidcConfig.v3` and no `extraSubFields` — V3 is selected but
+        the sub claim carries only its default shape. This is the subtle failure,
+        and the reason this check reads the array rather than just the version: the
+        cloud-side trust policy conditions on `sub`, so with nothing extra in it,
+        the tightest AWS or GCP condition an operator can write pins the
+        ORGANIZATION. Every environment, every project, every runner, and every
+        member's agent then presents the same identity to the cloud — one
+        compromised environment reaches everything the role grants.
+        Remediation is to select V3 and declare the claims your trust policy needs.
+        Valid keys include `account_id`, `user_id`, `organization_id`, `project_id`,
+        `runner_id`, `environment_id`, `creator_id`, `creator_principal`,
+        `creator_email`, `creator_name`, `creator_idp`, `email`, `name`, `idp`,
+        `runner_name`, `service_account_id`, plus dot-notation keys such as
+        `creator_idp_claims.groups` or `idp_claims.department`; the list is capped
+        at 50 unique entries.
+        Not covered by this finding: the cloud side. Adding claims to the token
+        changes nothing until the AWS or GCP trust policy conditions on them.
+        Verify that in the cloud account — this check can only see Ona's half.
+        This finding cannot be raised by an unreadable response: 401, 403, a
+        400 `failed_precondition` and any 5xx all short-circuit to abstain. Only a
+        200 or a definitive 404 reaches the verdict.
+
+remediation:
+  description: |
+    Select V3 and declare the extra sub-claim fields your cloud trust policies
+    condition on. `UpdateOIDCConfig` echoes the configuration back, but read back
+    with `GetOIDCConfig` regardless — this check IS that read-back. Then tighten
+    the cloud-side trust policy to use the new claims; the Ona change alone
+    narrows nothing.
+  steps:
+    - "Navigate to Settings -> Login & Identity -> OIDC Tokens"
+    - "Select V3 tokens if the organization is still on V2"
+    - "Add the sub-claim fields your cloud conditions need — `project_id` and `runner_id` are the usual minimum for pinning a role to one project's environments; add `environment_id` where a role should be reachable by a single environment"
+    - "Update the AWS IAM role trust policy (or GCP workload identity pool provider) to condition on the new claims — until this step the token is scoped but the access is not"
+    - "Have an environment assume the role and confirm it succeeds, then confirm an environment OUTSIDE the intended scope is refused"
+    - "Re-run this check and confirm `oidcConfig.v3.extraSubFields` is non-empty"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOIDCConfig"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      oidcConfig:
+        v3:
+          extraSubFields:
+            - "project_id"
+            - "runner_id"
+  manual:
+    - "The field list above is a starting shape — choose the claims your cloud trust policies will actually condition on, and remember the cloud-side change is what turns a scoped token into scoped access."
+    - "`IdentityService/GetIDToken` mints a real OIDC JWT; decode one to inspect the resulting `sub` shape. It is a credential-minting method, so treat its output accordingly."
+    - "OIDC token configuration is Enterprise-gated; on a lower plan this check abstains rather than reporting a gap the operator cannot close."

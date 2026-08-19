@@ -1,0 +1,72 @@
+id: OKTA-3.02
+name: Audit SCIM-Enabled Application Inventory
+description: |
+  Enumerates active applications in the Okta organization as an
+  informational audit for identifying SCIM-enabled provisioning
+  connectors. SCIM tokens can create and delete users in downstream apps;
+  compromised or over-scoped SCIM tokens enable backdoor account creation
+  across the connected SaaS estate.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [scim, provisioning, integration-security, token-management]
+
+references:
+  nist: ["AC-2", "IA-4"]
+  hth: "okta:3.2"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.apps.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_active_apps
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/apps?filter=status+eq+%22ACTIVE%22"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+      paginate: true
+    extract:
+      app_count: "$length"
+      apps: "$[*]"
+
+assertions:
+  - id: scim_app_inventory_audit
+    expr: "app_count >= 0"
+    severity: medium
+    title: SCIM-Enabled Application Inventory
+    pass_message: "{{app_count}} active application(s) found — review each for SCIM provisioning and rotate SCIM tokens quarterly"
+    fail_message: "Unable to retrieve active applications for SCIM inventory"
+    finding:
+      description: |
+        This is an informational audit of active applications for SCIM
+        provisioning review. For each application with Provisioning
+        enabled, verify SCIM tokens are rotated at least quarterly, sync
+        scope is limited to required attributes, "Sync Password" is
+        disabled unless required, and Group Push is limited to necessary
+        groups.
+
+remediation:
+  description: |
+    Audit each SCIM-enabled application and tighten provisioning scope and
+    token rotation.
+  steps:
+    - "Navigate to Okta Admin Console → Applications → Applications"
+    - "Filter by Provisioning: Enabled and document all SCIM integrations"
+    - "For each SCIM-enabled app, regenerate the provisioning API token and update the receiving application"
+    - "Configure provisioning to sync only required attributes; disable Sync Password unless required"
+    - "Enable Group Push only for necessary groups"
+  manual:
+    - "Document a quarterly SCIM token rotation schedule"
+    - "Monitor system.scim.user.create and system.scim.user.update events for anomalies"

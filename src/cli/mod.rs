@@ -7,6 +7,7 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
 use std::io::Write;
+use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -27,7 +28,9 @@ use crate::{
     storage::{EvidenceQuery, SqliteStore, Store},
 };
 
-use output::{print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat};
+use output::{
+    print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat,
+};
 
 // ---------------------------------------------------------------------------
 // CLI structure
@@ -428,7 +431,7 @@ pub fn run() -> Result<()> {
 /// Split from `run()` so tests can exercise the dispatcher with an in-memory
 /// writer and `Cli::try_parse_from(...)`.
 pub fn run_with<W: Write>(out: &mut W, cli: Cli) -> Result<()> {
-    let format = OutputFormat::from_str(&cli.format);
+    let format = OutputFormat::from(cli.format.as_str());
 
     let command = cli.command.unwrap_or(Commands::Dashboard {
         refresh: 30,
@@ -446,9 +449,9 @@ pub fn run_with<W: Write>(out: &mut W, cli: Cli) -> Result<()> {
         } => {
             if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
+                let p = control
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
                 cmd_observe_path(out, format, &cli.db, t, p, &controls_dir, !no_store)
             } else if let Some(m) = module.as_deref() {
                 cmd_observe(out, format, &cli.db, m, !no_store)
@@ -469,10 +472,20 @@ pub fn run_with<W: Write>(out: &mut W, cli: Cli) -> Result<()> {
         } => {
             if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
-                cmd_test_path(out, format, &cli.db, t, p, &env, &controls_dir, !no_store, confirm)
+                let p = control
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
+                cmd_test_path(
+                    out,
+                    format,
+                    &cli.db,
+                    t,
+                    p,
+                    &env,
+                    &controls_dir,
+                    !no_store,
+                    confirm,
+                )
             } else if let Some(m) = module.as_deref() {
                 cmd_test(out, format, &cli.db, m, &env, !no_store, confirm)
             } else {
@@ -496,9 +509,9 @@ pub fn run_with<W: Write>(out: &mut W, cli: Cli) -> Result<()> {
         } => {
             if target.is_some() || control_path.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control_path.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
+                let p = control_path
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
                 cmd_evaluate_path(out, format, &cli.db, t, p, &controls_dir)
             } else if let Some(ctrl) = control.as_deref() {
                 cmd_evaluate(out, format, &cli.db, ctrl, cel.as_deref(), &controls_dir)
@@ -542,13 +555,15 @@ pub fn run_with<W: Write>(out: &mut W, cli: Cli) -> Result<()> {
             if let Some(frameworks) = framework {
                 cmd_report_framework(
                     out,
-                    &checks_dir,
-                    &frameworks,
-                    include_passing,
-                    &rep_fmt,
-                    &check_filter,
-                    source.as_deref(),
-                    profile.as_deref(),
+                    ReportFrameworkParams {
+                        checks_dir: &checks_dir,
+                        frameworks: &frameworks,
+                        include_passing,
+                        format: &rep_fmt,
+                        check_filter: &check_filter,
+                        source_filter: source.as_deref(),
+                        profile_filter: profile.as_deref(),
+                    },
                 )
             } else {
                 let p = period.ok_or_else(|| {
@@ -584,31 +599,35 @@ pub fn run_with<W: Write>(out: &mut W, cli: Cli) -> Result<()> {
                 // Fleet mode: multi-target hardening
                 cmd_harden_fleet(
                     out,
-                    &fleet_path,
-                    &checks_dir,
-                    &mode,
-                    apply,
-                    confirm,
-                    &terraform_dir,
-                    &harden_fmt,
-                    &check_filter,
-                    concurrency,
-                    continue_on_error,
-                    &output,
-                    dry_run,
+                    HardenFleetParams {
+                        fleet_path: &fleet_path,
+                        checks_dir: &checks_dir,
+                        mode: &mode,
+                        apply,
+                        confirm,
+                        terraform_dir: &terraform_dir,
+                        _format: &harden_fmt,
+                        _check_filter: &check_filter,
+                        concurrency,
+                        continue_on_error,
+                        output_dir: &output,
+                        dry_run,
+                    },
                 )
             } else {
                 // Single-target mode (existing behavior)
                 cmd_harden(
                     out,
-                    &checks_dir,
-                    &mode,
-                    apply,
-                    confirm,
-                    target.as_deref(),
-                    &terraform_dir,
-                    &harden_fmt,
-                    &check_filter,
+                    HardenParams {
+                        checks_dir: &checks_dir,
+                        mode: &mode,
+                        apply,
+                        confirm,
+                        id_filter: target.as_deref(),
+                        terraform_dir: &terraform_dir,
+                        format: &harden_fmt,
+                        check_filter: &check_filter,
+                    },
                 )
             }
         }
@@ -1030,9 +1049,7 @@ fn target_matches_module(target: &str, module_id: &str) -> bool {
 fn resolve_controls(controls_dir: &str, path: &str) -> Result<Vec<Control>> {
     let dir = std::path::Path::new(controls_dir);
     if !dir.exists() {
-        return Err(anyhow!(
-            "controls directory not found: '{controls_dir}'"
-        ));
+        return Err(anyhow!("controls directory not found: '{controls_dir}'"));
     }
 
     let mut all: Vec<Control> = Vec::new();
@@ -1438,7 +1455,7 @@ fn cmd_report<W: Write>(
                 "evidence_count": evidence.len(),
                 "evidence": evidence,
             });
-            let fmt = OutputFormat::from_str(format);
+            let fmt = OutputFormat::from(format);
             print_output(out, &report, fmt)?;
         }
     }
@@ -1520,16 +1537,26 @@ fn cmd_serve(port: u16, auth_token: Option<&str>, db: &str) -> Result<()> {
 
 // ─── ocean report --framework ─────────────────────────────────────────────────
 
-fn cmd_report_framework<W: Write>(
-    out: &mut W,
-    checks_dir: &str,
-    frameworks: &[String],
+struct ReportFrameworkParams<'a> {
+    checks_dir: &'a str,
+    frameworks: &'a [String],
     include_passing: bool,
-    format: &str,
-    check_filter: &filter::CheckFilter,
-    source_filter: Option<&str>,
-    profile_filter: Option<&str>,
-) -> Result<()> {
+    format: &'a str,
+    check_filter: &'a filter::CheckFilter,
+    source_filter: Option<&'a str>,
+    profile_filter: Option<&'a str>,
+}
+
+fn cmd_report_framework<W: Write>(out: &mut W, params: ReportFrameworkParams) -> Result<()> {
+    let ReportFrameworkParams {
+        checks_dir,
+        frameworks,
+        include_passing,
+        format,
+        check_filter,
+        source_filter,
+        profile_filter,
+    } = params;
     let dir = std::path::Path::new(checks_dir);
     let config = env_as_config();
 
@@ -1562,13 +1589,8 @@ fn cmd_report_framework<W: Write>(
 
     // Generate a ComplianceReport for each requested framework.
     for fw in &requested {
-        let report = crate::report::generate_report(
-            dir,
-            fw,
-            &config,
-            source_filter,
-            profile_filter,
-        )?;
+        let report =
+            crate::report::generate_report(dir, fw, &config, source_filter, profile_filter)?;
 
         // If not including passing and there are no failing/partial controls, skip.
         if !include_passing && report.summary.failing == 0 && report.summary.partial == 0 {
@@ -1593,7 +1615,10 @@ fn cmd_report_framework_sarif<W: Write>(
     let defs: Vec<_> = if check_filter.is_empty() {
         all_defs
     } else {
-        all_defs.into_iter().filter(|d| check_filter.matches(d)).collect()
+        all_defs
+            .into_iter()
+            .filter(|d| check_filter.matches(d))
+            .collect()
     };
 
     if defs.is_empty() {
@@ -1623,18 +1648,27 @@ fn cmd_report_framework_sarif<W: Write>(
                 let any_fail = evidence
                     .iter()
                     .any(|e| matches!(e.status_id, crate::StatusId::Ineffective));
-                if any_fail { "FAIL" } else { "PASS" }
+                if any_fail {
+                    "FAIL"
+                } else {
+                    "PASS"
+                }
             }
             Err(_) => "ERROR",
         };
 
-        let sev = def.assertions.first().map(|a| a.severity.as_str()).unwrap_or(&def.severity);
+        let sev = def
+            .assertions
+            .first()
+            .map(|a| a.severity.as_str())
+            .unwrap_or(&def.severity);
         sarif_results.push(sarif::CheckResult {
             check_id: def.id.clone(),
-            check_name: def.name.clone(),
-            description: def.description.clone(),
-            severity: if sev.is_empty() { "medium".to_string() } else { sev.to_string() },
-            tags: def.tags.clone(),
+            severity: if sev.is_empty() {
+                "medium".to_string()
+            } else {
+                sev.to_string()
+            },
             status: status.to_string(),
             message: if status == "PASS" {
                 format!("{}: passed", def.name)
@@ -1652,17 +1686,28 @@ fn cmd_report_framework_sarif<W: Write>(
 
 // ─── ocean harden ─────────────────────────────────────────────────────────────
 
-fn cmd_harden<W: Write>(
-    out: &mut W,
-    checks_dir: &str,
-    mode: &str,
+struct HardenParams<'a> {
+    checks_dir: &'a str,
+    mode: &'a str,
     apply: bool,
     confirm: bool,
-    id_filter: Option<&str>,
-    terraform_dir: &str,
-    format: &str,
-    check_filter: &filter::CheckFilter,
-) -> Result<()> {
+    id_filter: Option<&'a str>,
+    terraform_dir: &'a str,
+    format: &'a str,
+    check_filter: &'a filter::CheckFilter,
+}
+
+fn cmd_harden<W: Write>(out: &mut W, params: HardenParams) -> Result<()> {
+    let HardenParams {
+        checks_dir,
+        mode,
+        apply,
+        confirm,
+        id_filter,
+        terraform_dir,
+        format,
+        check_filter,
+    } = params;
     let dir = std::path::Path::new(checks_dir);
     let rem_mode = RemediationMode::from_str(mode)?;
     let config = env_as_config();
@@ -1673,7 +1718,9 @@ fn cmd_harden<W: Write>(
     // Validate that target check ID exists if a specific one was given.
     if let Some(target) = id_filter {
         let all_defs = crate::check::loader::load_definitions_from_dir(dir);
-        let target_exists = all_defs.iter().any(|d| d.id == target || d.source == target || d.id.starts_with(target));
+        let target_exists = all_defs
+            .iter()
+            .any(|d| d.id == target || d.source == target || d.id.starts_with(target));
         if !target_exists {
             return Err(anyhow!("Check '{}' not found in {}", target, checks_dir));
         }
@@ -1746,21 +1793,36 @@ fn confirm_fleet_with_reader<W: Write, R: std::io::BufRead>(
 
 // ─── ocean harden --fleet ─────────────────────────────────────────────────────
 
-fn cmd_harden_fleet<W: Write>(
-    out: &mut W,
-    fleet_path: &std::path::Path,
-    checks_dir: &str,
-    mode: &str,
+struct HardenFleetParams<'a> {
+    fleet_path: &'a std::path::Path,
+    checks_dir: &'a str,
+    mode: &'a str,
     apply: bool,
     confirm: bool,
-    terraform_dir: &str,
-    _format: &str,
-    _check_filter: &filter::CheckFilter,
+    terraform_dir: &'a str,
+    _format: &'a str,
+    _check_filter: &'a filter::CheckFilter,
     concurrency: u8,
     continue_on_error: bool,
-    output_dir: &std::path::Path,
+    output_dir: &'a std::path::Path,
     dry_run: bool,
-) -> Result<()> {
+}
+
+fn cmd_harden_fleet<W: Write>(out: &mut W, params: HardenFleetParams) -> Result<()> {
+    let HardenFleetParams {
+        fleet_path,
+        checks_dir,
+        mode,
+        apply,
+        confirm,
+        terraform_dir,
+        _format,
+        _check_filter,
+        concurrency,
+        continue_on_error,
+        output_dir,
+        dry_run,
+    } = params;
     let rem_mode = RemediationMode::from_str(mode)?;
 
     // Load and validate the fleet manifest (F9, F10, F5, F7, F2, F1)
@@ -1794,7 +1856,10 @@ fn cmd_harden_fleet<W: Write>(
             )?;
         }
         writeln!(out)?;
-        writeln!(out, "Dry run — no checks executed, no credentials resolved beyond manifest validation.")?;
+        writeln!(
+            out,
+            "Dry run — no checks executed, no credentials resolved beyond manifest validation."
+        )?;
         return Ok(());
     }
 
@@ -1903,7 +1968,15 @@ fn cmd_build<W: Write>(
     let default_output = format!("packs/{}", build_target.slug());
     let output_dir = std::path::Path::new(output.unwrap_or(&default_output));
 
-    codegen_generate(out, source_dir, &build_target, output_dir, validate, diff, filter)?;
+    codegen_generate(
+        out,
+        source_dir,
+        &build_target,
+        output_dir,
+        validate,
+        diff,
+        filter,
+    )?;
     Ok(())
 }
 
@@ -1921,10 +1994,7 @@ fn cmd_compliance<W: Write>(
         None => {
             // Scan controls_dir for *.framework.yaml or frameworks/*.yaml files.
             let dir = std::path::Path::new(controls_dir);
-            let candidates = [
-                dir.join("frameworks"),
-                dir.to_path_buf(),
-            ];
+            let candidates = [dir.join("frameworks"), dir.to_path_buf()];
             let mut found_yaml: Option<String> = None;
             'outer: for search_dir in &candidates {
                 if !search_dir.exists() {
@@ -1948,15 +2018,12 @@ fn cmd_compliance<W: Write>(
                 }
             }
             found_yaml.ok_or_else(|| {
-                anyhow!(
-                    "no framework YAML found; use --framework to specify a path"
-                )
+                anyhow!("no framework YAML found; use --framework to specify a path")
             })?
         }
     };
 
-    let framework = Framework::load_yaml(&framework_yaml)
-        .context("parsing framework YAML")?;
+    let framework = Framework::load_yaml(&framework_yaml).context("parsing framework YAML")?;
 
     let db_store = open_store(db)?;
     let checked_at = Utc::now().to_rfc3339();
@@ -2063,7 +2130,7 @@ fn cmd_compliance<W: Write>(
                     "unknown": unknown,
                 },
             });
-            let fmt = OutputFormat::from_str(format);
+            let fmt = OutputFormat::from(format);
             print_output(out, &report, fmt)?;
         }
     }
@@ -2260,8 +2327,8 @@ mod tests {
 
     #[test]
     fn load_control_cel_override() {
-        let dir = std::env::temp_dir();
-        let ctrl_path = dir.join("test_ctrl.yaml");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctrl_path = tmp.path().join("test_ctrl.yaml");
         let yaml = r#"
 id: test_ctrl
 name: Test Control
@@ -2270,7 +2337,7 @@ evaluation_logic:
   preset: all_effective
 "#;
         std::fs::write(&ctrl_path, yaml).unwrap();
-        let dir_str = dir.to_str().unwrap();
+        let dir_str = tmp.path().to_str().unwrap();
 
         let control = load_control("test_ctrl", dir_str, Some("evidence.size() > 0")).unwrap();
         assert_eq!(
@@ -2278,8 +2345,6 @@ evaluation_logic:
             "evidence.size() > 0"
         );
         assert!(control.evaluation_logic.preset.is_empty());
-
-        let _ = std::fs::remove_file(ctrl_path);
     }
 
     // --- cmd_observe + cmd_test with in-memory store ---
@@ -2348,7 +2413,11 @@ evaluation_logic:
             false,
             true, // --confirm
         );
-        assert!(result.is_ok(), "test with --confirm should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "test with --confirm should succeed: {:?}",
+            result
+        );
         let s = String::from_utf8(buf).unwrap();
         let ev: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert!(ev.as_array().unwrap().len() >= 1);
@@ -2371,8 +2440,9 @@ evaluation_logic:
 
     #[test]
     fn cmd_history_empty_db() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_hist_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2392,13 +2462,13 @@ evaluation_logic:
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["control_id"].as_str().unwrap(), "cc6.1");
         assert_eq!(v["history"].as_array().unwrap().len(), 0);
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_schedule_add_list_remove_roundtrip() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_sched_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2442,21 +2512,22 @@ evaluation_logic:
         let s3 = String::from_utf8(buf3).unwrap();
         let list3: serde_json::Value = serde_json::from_str(&s3).unwrap();
         assert_eq!(list3.as_array().unwrap().len(), 0);
-
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_observe_and_evaluate_roundtrip() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_eval_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
             .to_string();
 
         // Write a minimal control YAML
-        let ctrl_dir = dir.join(format!("ctrl_dir_{}", uuid::Uuid::new_v4()));
+        let ctrl_dir = tmp
+            .path()
+            .join(format!("ctrl_dir_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&ctrl_dir).unwrap();
         let ctrl_yaml = r#"
 id: mock.ctrl
@@ -2486,17 +2557,15 @@ evaluation_logic:
         let s2 = String::from_utf8(buf2).unwrap();
         let status: serde_json::Value = serde_json::from_str(&s2).unwrap();
         assert!(status["status"].as_str().is_some());
-
-        let _ = std::fs::remove_file(&db_path);
-        let _ = std::fs::remove_dir_all(&ctrl_dir);
     }
 
     // --- report ---
 
     #[test]
     fn cmd_report_empty_db_json() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_report_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2506,13 +2575,13 @@ evaluation_logic:
         let s = String::from_utf8(buf).unwrap();
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["evidence_count"].as_i64().unwrap(), 0);
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_report_markdown_format() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_report_md_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2529,13 +2598,13 @@ evaluation_logic:
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("# OCEAN Compliance Report"));
         assert!(s.contains("**Period:**"));
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_report_csv_format() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_report_csv_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2544,7 +2613,6 @@ evaluation_logic:
         cmd_report(&mut buf, &db_path, "2024-01-01:2024-12-31", "csv", None).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.starts_with("id,module,status,time"));
-        let _ = std::fs::remove_file(&db_path);
     }
 
     // --- cmd_compliance ---
@@ -2554,7 +2622,12 @@ evaluation_logic:
         // Should fail gracefully when framework file doesn't exist
         let tmp = tempfile::TempDir::new().unwrap();
         let db = tmp.path().join("ocean.db").to_str().unwrap().to_string();
-        let fw = tmp.path().join("nonexistent.yaml").to_str().unwrap().to_string();
+        let fw = tmp
+            .path()
+            .join("nonexistent.yaml")
+            .to_str()
+            .unwrap()
+            .to_string();
         let mut out = Vec::new();
         let result = cmd_compliance(&mut out, &db, Some(&fw), "controls", "json");
         assert!(result.is_err());
@@ -2589,10 +2662,7 @@ controls:
         assert_eq!(v["summary"]["passing"].as_u64().unwrap(), 0);
         assert_eq!(v["summary"]["unknown"].as_u64().unwrap(), 1);
         // The requirement has no status in DB so it is "unknown"
-        assert_eq!(
-            v["requirements"][0]["status"].as_str().unwrap(),
-            "unknown"
-        );
+        assert_eq!(v["requirements"][0]["status"].as_str().unwrap(), "unknown");
     }
 
     #[test]
@@ -2739,7 +2809,11 @@ classification:
 
         let result = resolve_controls(dir.path().to_str().unwrap(), "a").unwrap();
         // All three a.* controls match "a" prefix
-        assert!(result.len() >= 3, "expected ≥3 matches, got {}", result.len());
+        assert!(
+            result.len() >= 3,
+            "expected ≥3 matches, got {}",
+            result.len()
+        );
     }
 
     #[test]
@@ -3045,7 +3119,12 @@ classification:
     }
 
     // --- cmd_observe_path ---
-    fn write_simple_control_yaml(dir: &std::path::Path, file: &str, control_id: &str, module_id: &str) {
+    fn write_simple_control_yaml(
+        dir: &std::path::Path,
+        file: &str,
+        control_id: &str,
+        module_id: &str,
+    ) {
         let yaml = format!(
             r#"
 id: {control_id}
@@ -3154,7 +3233,12 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let mut out = Vec::new();
         let result = cmd_evaluate_path(
-            &mut out, OutputFormat::Json, &db, "*", "ghost", cdir.to_str().unwrap(),
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "ghost",
+            cdir.to_str().unwrap(),
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -3189,7 +3273,12 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let mut out = Vec::new();
         let result = cmd_evaluate_path(
-            &mut out, OutputFormat::Json, &db, "*", "ghost", cdir.to_str().unwrap(),
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "ghost",
+            cdir.to_str().unwrap(),
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -3205,7 +3294,13 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let mut out = Vec::new();
         let result = cmd_observe_path(
-            &mut out, OutputFormat::Json, &db, "*", "ghost", cdir.to_str().unwrap(), false,
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "ghost",
+            cdir.to_str().unwrap(),
+            false,
         );
         assert!(result.is_ok());
     }
@@ -3237,8 +3332,15 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let mut out = Vec::new();
         let result = cmd_test_path(
-            &mut out, OutputFormat::Json, &db, "*", "ghost", "production",
-            cdir.to_str().unwrap(), false, false,
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "*",
+            "ghost",
+            "production",
+            cdir.to_str().unwrap(),
+            false,
+            false,
         );
         assert!(result.is_ok());
     }
@@ -3285,7 +3387,13 @@ classification:
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let mut out = Vec::new();
-        let result = cmd_observe(&mut out, OutputFormat::Json, &db, "nonexistent.observer", false);
+        let result = cmd_observe(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "nonexistent.observer",
+            false,
+        );
         assert!(result.is_err());
     }
 
@@ -3362,7 +3470,13 @@ classification:
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let mut out = Vec::new();
-        let result = cmd_report(&mut out, &db, "2024-01-01:2024-12-31", "markdown", Some("iam.test"));
+        let result = cmd_report(
+            &mut out,
+            &db,
+            "2024-01-01:2024-12-31",
+            "markdown",
+            Some("iam.test"),
+        );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("# OCEAN Compliance Report"));
@@ -3611,14 +3725,17 @@ controls:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            false, // apply = false → dry-run
-            false,
-            None,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                // apply = false → dry-run
+                confirm: false,
+                id_filter: None,
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_ok());
     }
@@ -3634,14 +3751,16 @@ controls:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            false,
-            false,
-            Some("does.not.exist"),
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                confirm: false,
+                id_filter: Some("does.not.exist"),
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_err());
     }
@@ -3699,14 +3818,16 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            true, // apply
-            true, // confirm
-            None,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: true,
+                confirm: true,
+                id_filter: None,
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         // Should reach execute_plans + print_results; result may be Err if
         // remediation call fails (no real GitHub creds) but path is covered.
@@ -3765,14 +3886,17 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            false, // dry-run
-            false,
-            None,
-            tf.to_str().unwrap(),
-            "table",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                // dry-run
+                confirm: false,
+                id_filter: None,
+                terraform_dir: tf.to_str().unwrap(),
+                format: "table",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -3834,26 +3958,31 @@ remediation:
             let mut w = crate::testutil::FailingWriter::new(n);
             let _ = cmd_harden(
                 &mut w,
-                checks.to_str().unwrap(),
-                "api",
-                true, // apply
-                true, // confirm
-                None,
-                tf.to_str().unwrap(),
-                "json",
-                &filter,
+                HardenParams {
+                    checks_dir: checks.to_str().unwrap(),
+                    mode: "api",
+                    apply: true,
+                    confirm: true,
+                    id_filter: None,
+                    terraform_dir: tf.to_str().unwrap(),
+                    format: "json",
+                    check_filter: &filter,
+                },
             );
             let mut w = crate::testutil::FailingWriter::new(n);
             let _ = cmd_harden(
                 &mut w,
-                checks.to_str().unwrap(),
-                "api",
-                false, // dry-run
-                false,
-                None,
-                tf.to_str().unwrap(),
-                "table",
-                &filter,
+                HardenParams {
+                    checks_dir: checks.to_str().unwrap(),
+                    mode: "api",
+                    apply: false,
+                    // dry-run
+                    confirm: false,
+                    id_filter: None,
+                    terraform_dir: tf.to_str().unwrap(),
+                    format: "table",
+                    check_filter: &filter,
+                },
             );
         }
     }
@@ -3911,14 +4040,17 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            false,
-            false,
-            Some("MATCH-1"), // id_filter exact match
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                confirm: false,
+                id_filter: Some("MATCH-1"),
+                // id_filter exact match
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_ok());
     }
@@ -3934,14 +4066,18 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            true, // apply = true
-            true, // confirm = true (skip prompt)
-            None,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: true,
+                // apply = true
+                confirm: true,
+                // confirm = true (skip prompt)
+                id_filter: None,
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4003,14 +4139,16 @@ remediation:
         };
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            false,
-            false,
-            None,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                confirm: false,
+                id_filter: None,
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4030,14 +4168,16 @@ remediation:
         };
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "api",
-            true,
-            true,
-            None,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: true,
+                confirm: true,
+                id_filter: None,
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4053,14 +4193,16 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden(
             &mut out,
-            checks.to_str().unwrap(),
-            "definitely-not-a-mode",
-            false,
-            false,
-            None,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
+            HardenParams {
+                checks_dir: checks.to_str().unwrap(),
+                mode: "definitely-not-a-mode",
+                apply: false,
+                confirm: false,
+                id_filter: None,
+                terraform_dir: tf.to_str().unwrap(),
+                format: "json",
+                check_filter: &filter,
+            },
         );
         assert!(result.is_err());
     }
@@ -4075,13 +4217,15 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["not-a-real-framework".to_string()],
-            false,
-            "json",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["not-a-real-framework".to_string()],
+                include_passing: false,
+                format: "json",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_err());
     }
@@ -4095,13 +4239,16 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true, // include_passing so we still print
-            "json",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                // include_passing so we still print
+                format: "json",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4115,17 +4262,24 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("No checks found") || s.contains("sarif") || s.contains("$schema") || s.contains("version"));
+        assert!(
+            s.contains("No checks found")
+                || s.contains("sarif")
+                || s.contains("$schema")
+                || s.contains("version")
+        );
     }
 
     #[test]
@@ -4137,13 +4291,16 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["all".to_string()],
-            false, // don't include passing — empty dir → no print
-            "json",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["all".to_string()],
+                include_passing: false,
+                // don't include passing — empty dir → no print
+                format: "json",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4157,13 +4314,15 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["pci-dss".to_string()],
-            true,
-            "json",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["pci-dss".to_string()],
+                include_passing: true,
+                format: "json",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4211,10 +4370,16 @@ remediation:
         write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let cli = parse_args(&[
-            "ocean", "--db", &db, "observe",
-            "--target", "*",
-            "--control", "mock",
-            "--controls-dir", cdir.to_str().unwrap(),
+            "ocean",
+            "--db",
+            &db,
+            "observe",
+            "--target",
+            "*",
+            "--control",
+            "mock",
+            "--controls-dir",
+            cdir.to_str().unwrap(),
             "--no-store",
         ]);
         let mut out = Vec::new();
@@ -4240,8 +4405,14 @@ remediation:
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let cli = parse_args(&[
-            "ocean", "--db", &db, "test", "mock.safety_test",
-            "--env", "production", "--no-store",
+            "ocean",
+            "--db",
+            &db,
+            "test",
+            "mock.safety_test",
+            "--env",
+            "production",
+            "--no-store",
         ]);
         let mut out = Vec::new();
         assert!(run_with(&mut out, cli).is_ok());
@@ -4277,8 +4448,13 @@ remediation:
         write_simple_control_yaml(&cdir, "mock.test.yaml", "mock.test", "mock.test");
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let cli = parse_args(&[
-            "ocean", "--db", &db, "evaluate", "mock.test",
-            "--controls-dir", cdir.to_str().unwrap(),
+            "ocean",
+            "--db",
+            &db,
+            "evaluate",
+            "mock.test",
+            "--controls-dir",
+            cdir.to_str().unwrap(),
         ]);
         let mut out = Vec::new();
         let _ = run_with(&mut out, cli);
@@ -4289,9 +4465,7 @@ remediation:
         // cmd_test dispatch via positional module arg
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
-        let cli = parse_args(&[
-            "ocean", "--db", &db, "test", "mock.safety_test",
-        ]);
+        let cli = parse_args(&["ocean", "--db", &db, "test", "mock.safety_test"]);
         let mut out = Vec::new();
         let _ = run_with(&mut out, cli);
     }
@@ -4307,10 +4481,7 @@ remediation:
     fn run_with_history_dispatches() {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
-        let cli = parse_args(&[
-            "ocean", "--db", &db, "history",
-            "--control", "iam.test",
-        ]);
+        let cli = parse_args(&["ocean", "--db", &db, "history", "--control", "iam.test"]);
         let mut out = Vec::new();
         let _ = run_with(&mut out, cli);
     }
@@ -4327,8 +4498,12 @@ remediation:
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let cli = parse_args(&[
-            "ocean", "--db", &db, "report",
-            "--period", "2024-01-01:2024-12-31",
+            "ocean",
+            "--db",
+            &db,
+            "report",
+            "--period",
+            "2024-01-01:2024-12-31",
         ]);
         let mut out = Vec::new();
         assert!(run_with(&mut out, cli).is_ok());
@@ -4342,13 +4517,20 @@ remediation:
         let checks = dir.path().join("checks");
         std::fs::create_dir_all(&checks).unwrap();
         let cli = parse_args(&[
-            "ocean", "report",
-            "--framework", "soc2",
-            "--checks-dir", checks.to_str().unwrap(),
-            "--tags", "iam,mfa",
-            "--severity", "critical,high",
-            "--profile", "L1",
-            "--source", "github",
+            "ocean",
+            "report",
+            "--framework",
+            "soc2",
+            "--checks-dir",
+            checks.to_str().unwrap(),
+            "--tags",
+            "iam,mfa",
+            "--severity",
+            "critical,high",
+            "--profile",
+            "L1",
+            "--source",
+            "github",
             "--include-passing",
         ]);
         let mut out = Vec::new();
@@ -4362,12 +4544,18 @@ remediation:
         let checks = dir.path().join("checks");
         std::fs::create_dir_all(&checks).unwrap();
         let cli = parse_args(&[
-            "ocean", "harden",
-            "--checks-dir", checks.to_str().unwrap(),
-            "--mode", "api",
-            "--tags", "iam",
-            "--severity", "high",
-            "--profile", "L1",
+            "ocean",
+            "harden",
+            "--checks-dir",
+            checks.to_str().unwrap(),
+            "--mode",
+            "api",
+            "--tags",
+            "iam",
+            "--severity",
+            "high",
+            "--profile",
+            "L1",
         ]);
         let mut out = Vec::new();
         assert!(run_with(&mut out, cli).is_ok());
@@ -4379,9 +4567,12 @@ remediation:
         let checks = dir.path().join("checks");
         std::fs::create_dir_all(&checks).unwrap();
         let cli = parse_args(&[
-            "ocean", "report",
-            "--framework", "soc2",
-            "--checks-dir", checks.to_str().unwrap(),
+            "ocean",
+            "report",
+            "--framework",
+            "soc2",
+            "--checks-dir",
+            checks.to_str().unwrap(),
             "--include-passing",
         ]);
         let mut out = Vec::new();
@@ -4394,9 +4585,12 @@ remediation:
         let checks = dir.path().join("checks");
         std::fs::create_dir_all(&checks).unwrap();
         let cli = parse_args(&[
-            "ocean", "harden",
-            "--checks-dir", checks.to_str().unwrap(),
-            "--mode", "api",
+            "ocean",
+            "harden",
+            "--checks-dir",
+            checks.to_str().unwrap(),
+            "--mode",
+            "api",
         ]);
         let mut out = Vec::new();
         assert!(run_with(&mut out, cli).is_ok());
@@ -4418,9 +4612,14 @@ remediation:
         let cdir = dir.path().join("controls");
         std::fs::create_dir_all(&cdir).unwrap();
         let cli = parse_args(&[
-            "ocean", "--db", &db, "compliance",
-            "--controls-dir", cdir.to_str().unwrap(),
-            "--format", "json",
+            "ocean",
+            "--db",
+            &db,
+            "compliance",
+            "--controls-dir",
+            cdir.to_str().unwrap(),
+            "--format",
+            "json",
         ]);
         let mut out = Vec::new();
         let _ = run_with(&mut out, cli);
@@ -4642,13 +4841,15 @@ assertions:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -4709,13 +4910,15 @@ assertions:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4726,9 +4929,7 @@ assertions:
         let dir = tempfile::tempdir().unwrap();
         let checks = dir.path().join("checks");
         std::fs::create_dir_all(&checks).unwrap();
-        let srv = crate::testutil::MockHTTPServer::new(vec![
-            (200, r#"{"x": "ok"}"#.to_string()),
-        ]);
+        let srv = crate::testutil::MockHTTPServer::new(vec![(200, r#"{"x": "ok"}"#.to_string())]);
         std::fs::write(
             checks.join("PASS.check.yaml"),
             format!(
@@ -4767,13 +4968,15 @@ assertions:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -4813,13 +5016,15 @@ assertions: []
         };
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4856,13 +5061,15 @@ assertions: []
         };
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -4915,13 +5122,15 @@ assertions:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
     }
@@ -4951,17 +5160,24 @@ references:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_report_framework(
             &mut out,
-            checks.to_str().unwrap(),
-            &["soc2".to_string()],
-            true,
-            "sarif",
-            &filter,
-            None,
-            None,
+            ReportFrameworkParams {
+                checks_dir: checks.to_str().unwrap(),
+                frameworks: &["soc2".to_string()],
+                include_passing: true,
+                format: "sarif",
+                check_filter: &filter,
+                source_filter: None,
+                profile_filter: None,
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("DUMMY-1") || s.contains("sarif") || s.contains("schema") || s.contains("version"));
+        assert!(
+            s.contains("DUMMY-1")
+                || s.contains("sarif")
+                || s.contains("schema")
+                || s.contains("version")
+        );
     }
 
     // --- cmd_history with explicit from/to ---
@@ -5005,10 +5221,17 @@ references:
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let cli = parse_args(&[
-            "ocean", "--db", &db, "schedule", "add",
-            "--control", "iam.test",
-            "--cron", "0 * * * *",
-            "--modules", "mock.test",
+            "ocean",
+            "--db",
+            &db,
+            "schedule",
+            "add",
+            "--control",
+            "iam.test",
+            "--cron",
+            "0 * * * *",
+            "--modules",
+            "mock.test",
         ]);
         let mut out = Vec::new();
         let _ = run_with(&mut out, cli);
@@ -5042,11 +5265,16 @@ references:
         std::fs::create_dir_all(&checks).unwrap();
         let outd = dir.path().join("out");
         let cli = parse_args(&[
-            "ocean", "harden",
-            "--fleet", fleet.to_str().unwrap(),
-            "--checks-dir", checks.to_str().unwrap(),
-            "--mode", "api",
-            "--output", outd.to_str().unwrap(),
+            "ocean",
+            "harden",
+            "--fleet",
+            fleet.to_str().unwrap(),
+            "--checks-dir",
+            checks.to_str().unwrap(),
+            "--mode",
+            "api",
+            "--output",
+            outd.to_str().unwrap(),
             "--dry-run",
         ]);
         let mut out = Vec::new();
@@ -5086,18 +5314,20 @@ targets:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden_fleet(
             &mut out,
-            &fleet,
-            checks.to_str().unwrap(),
-            "definitely-not-a-mode",
-            false,
-            true,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
-            2,
-            false,
-            &outd,
-            false,
+            HardenFleetParams {
+                fleet_path: &fleet,
+                checks_dir: checks.to_str().unwrap(),
+                mode: "definitely-not-a-mode",
+                apply: false,
+                confirm: true,
+                terraform_dir: tf.to_str().unwrap(),
+                _format: "json",
+                _check_filter: &filter,
+                concurrency: 2,
+                continue_on_error: false,
+                output_dir: &outd,
+                dry_run: false,
+            },
         );
         assert!(result.is_err());
     }
@@ -5115,18 +5345,20 @@ targets:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden_fleet(
             &mut out,
-            std::path::Path::new("/definitely/does/not/exist.yaml"),
-            checks.to_str().unwrap(),
-            "api",
-            false,
-            true,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
-            2,
-            false,
-            &outd,
-            false,
+            HardenFleetParams {
+                fleet_path: std::path::Path::new("/definitely/does/not/exist.yaml"),
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                confirm: true,
+                terraform_dir: tf.to_str().unwrap(),
+                _format: "json",
+                _check_filter: &filter,
+                concurrency: 2,
+                continue_on_error: false,
+                output_dir: &outd,
+                dry_run: false,
+            },
         );
         assert!(result.is_err());
     }
@@ -5146,18 +5378,21 @@ targets:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden_fleet(
             &mut out,
-            &fleet,
-            checks.to_str().unwrap(),
-            "api",
-            false,
-            true,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
-            2,
-            false,
-            &outd,
-            true, // dry_run = true
+            HardenFleetParams {
+                fleet_path: &fleet,
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                confirm: true,
+                terraform_dir: tf.to_str().unwrap(),
+                _format: "json",
+                _check_filter: &filter,
+                concurrency: 2,
+                continue_on_error: false,
+                output_dir: &outd,
+                dry_run: true,
+                // dry_run = true
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -5227,18 +5462,20 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden_fleet(
             &mut out,
-            &fleet,
-            checks.to_str().unwrap(),
-            "api",
-            true,  // apply
-            true,  // confirm
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
-            1,
-            true,  // continue_on_error
-            &outd,
-            false, // dry_run
+            HardenFleetParams {
+                fleet_path: &fleet,
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: true,
+                confirm: true,
+                terraform_dir: tf.to_str().unwrap(),
+                _format: "json",
+                _check_filter: &filter,
+                concurrency: 1,
+                continue_on_error: true,
+                output_dir: &outd,
+                dry_run: false,
+            },
         );
         // Whether it ends Ok or Err, the summary code paths get exercised.
         let _ = result;
@@ -5312,18 +5549,21 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let _ = cmd_harden_fleet(
             &mut out,
-            &fleet,
-            checks.to_str().unwrap(),
-            "api",
-            true,
-            true,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
-            1,
-            false, // continue_on_error = false → abort
-            &outd,
-            false,
+            HardenFleetParams {
+                fleet_path: &fleet,
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: true,
+                confirm: true,
+                terraform_dir: tf.to_str().unwrap(),
+                _format: "json",
+                _check_filter: &filter,
+                concurrency: 1,
+                continue_on_error: false,
+                // continue_on_error = false → abort
+                output_dir: &outd,
+                dry_run: false,
+            },
         );
     }
 
@@ -5347,18 +5587,20 @@ remediation:
             let mut w = crate::testutil::FailingWriter::new(n);
             let _ = cmd_harden_fleet(
                 &mut w,
-                &fleet,
-                checks.to_str().unwrap(),
-                "api",
-                true,
-                true,
-                tf.to_str().unwrap(),
-                "json",
-                &filter,
-                1,
-                true,
-                &outd,
-                false,
+                HardenFleetParams {
+                    fleet_path: &fleet,
+                    checks_dir: checks.to_str().unwrap(),
+                    mode: "api",
+                    apply: true,
+                    confirm: true,
+                    terraform_dir: tf.to_str().unwrap(),
+                    _format: "json",
+                    _check_filter: &filter,
+                    concurrency: 1,
+                    continue_on_error: true,
+                    output_dir: &outd,
+                    dry_run: false,
+                },
             );
         }
     }
@@ -5380,18 +5622,20 @@ remediation:
         // execute_fleet will fail target since github creds are fake.
         let result = cmd_harden_fleet(
             &mut out,
-            &fleet,
-            checks.to_str().unwrap(),
-            "api",
-            true,
-            true,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
-            1,
-            true,
-            &outd,
-            false,
+            HardenFleetParams {
+                fleet_path: &fleet,
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: true,
+                confirm: true,
+                terraform_dir: tf.to_str().unwrap(),
+                _format: "json",
+                _check_filter: &filter,
+                concurrency: 1,
+                continue_on_error: true,
+                output_dir: &outd,
+                dry_run: false,
+            },
         );
         // Either Ok (everything skipped) or Err (target failures). Both
         // exercise the summary-printing code path.
@@ -5414,18 +5658,21 @@ remediation:
         let filter = crate::cli::filter::CheckFilter::default();
         let result = cmd_harden_fleet(
             &mut out,
-            &fleet,
-            checks.to_str().unwrap(),
-            "api",
-            false, // apply = false
-            true,
-            tf.to_str().unwrap(),
-            "json",
-            &filter,
-            2,
-            false,
-            &outd,
-            false,
+            HardenFleetParams {
+                fleet_path: &fleet,
+                checks_dir: checks.to_str().unwrap(),
+                mode: "api",
+                apply: false,
+                // apply = false
+                confirm: true,
+                terraform_dir: tf.to_str().unwrap(),
+                _format: "json",
+                _check_filter: &filter,
+                concurrency: 2,
+                continue_on_error: false,
+                output_dir: &outd,
+                dry_run: false,
+            },
         );
         assert!(result.is_ok());
         let s = String::from_utf8(out).unwrap();
@@ -5446,10 +5693,7 @@ remediation:
     fn run_with_serve_dispatches_bad_db_errors() {
         let dir = tempfile::tempdir().unwrap();
         let bad_db = dir.path().to_str().unwrap();
-        let cli = parse_args(&[
-            "ocean", "--db", bad_db, "serve",
-            "--port", "0",
-        ]);
+        let cli = parse_args(&["ocean", "--db", bad_db, "serve", "--port", "0"]);
         let mut out = Vec::new();
         assert!(run_with(&mut out, cli).is_err());
     }
@@ -5471,10 +5715,14 @@ remediation:
         std::fs::create_dir_all(&source).unwrap();
         let out_dir = dir.path().join("out");
         let cli = parse_args(&[
-            "ocean", "build",
-            "--target", "terraform",
-            "--source", source.to_str().unwrap(),
-            "--output", out_dir.to_str().unwrap(),
+            "ocean",
+            "build",
+            "--target",
+            "terraform",
+            "--source",
+            source.to_str().unwrap(),
+            "--output",
+            out_dir.to_str().unwrap(),
         ]);
         let mut out = Vec::new();
         let _ = run_with(&mut out, cli);
@@ -5523,10 +5771,22 @@ remediation:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         fault_inject(40, |mut w| {
             let _ = cmd_observe_path(
-                &mut w, OutputFormat::Json, &db, "*", "mock", cdir.to_str().unwrap(), false,
+                &mut w,
+                OutputFormat::Json,
+                &db,
+                "*",
+                "mock",
+                cdir.to_str().unwrap(),
+                false,
             );
             let _ = cmd_observe_path(
-                &mut w, OutputFormat::Yaml, &db, "*", "mock", cdir.to_str().unwrap(), false,
+                &mut w,
+                OutputFormat::Yaml,
+                &db,
+                "*",
+                "mock",
+                cdir.to_str().unwrap(),
+                false,
             );
         });
     }
@@ -5537,7 +5797,13 @@ remediation:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         fault_inject(20, |mut w| {
             let _ = cmd_test(
-                &mut w, OutputFormat::Json, &db, "mock.safety_test", "production", false, false,
+                &mut w,
+                OutputFormat::Json,
+                &db,
+                "mock.safety_test",
+                "production",
+                false,
+                false,
             );
         });
     }
@@ -5569,12 +5835,26 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         fault_inject(40, |mut w| {
             let _ = cmd_test_path(
-                &mut w, OutputFormat::Json, &db, "*", "mock", "production",
-                cdir.to_str().unwrap(), false, false,
+                &mut w,
+                OutputFormat::Json,
+                &db,
+                "*",
+                "mock",
+                "production",
+                cdir.to_str().unwrap(),
+                false,
+                false,
             );
             let _ = cmd_test_path(
-                &mut w, OutputFormat::Yaml, &db, "*", "mock", "production",
-                cdir.to_str().unwrap(), false, false,
+                &mut w,
+                OutputFormat::Yaml,
+                &db,
+                "*",
+                "mock",
+                "production",
+                cdir.to_str().unwrap(),
+                false,
+                false,
             );
         });
     }
@@ -5613,7 +5893,12 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         fault_inject(20, |mut w| {
             let _ = cmd_evaluate(
-                &mut w, OutputFormat::Json, &db, "mock.test", None, cdir.to_str().unwrap(),
+                &mut w,
+                OutputFormat::Json,
+                &db,
+                "mock.test",
+                None,
+                cdir.to_str().unwrap(),
             );
         });
     }
@@ -5627,10 +5912,20 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         fault_inject(40, |mut w| {
             let _ = cmd_evaluate_path(
-                &mut w, OutputFormat::Json, &db, "*", "mock", cdir.to_str().unwrap(),
+                &mut w,
+                OutputFormat::Json,
+                &db,
+                "*",
+                "mock",
+                cdir.to_str().unwrap(),
             );
             let _ = cmd_evaluate_path(
-                &mut w, OutputFormat::Yaml, &db, "*", "mock", cdir.to_str().unwrap(),
+                &mut w,
+                OutputFormat::Yaml,
+                &db,
+                "*",
+                "mock",
+                cdir.to_str().unwrap(),
             );
         });
     }
@@ -5669,10 +5964,18 @@ classification:
         write_three_status_framework(&fwpath);
         fault_inject(80, |mut w| {
             let _ = cmd_compliance(
-                &mut w, &db, Some(fwpath.to_str().unwrap()), cdir.to_str().unwrap(), "markdown",
+                &mut w,
+                &db,
+                Some(fwpath.to_str().unwrap()),
+                cdir.to_str().unwrap(),
+                "markdown",
             );
             let _ = cmd_compliance(
-                &mut w, &db, Some(fwpath.to_str().unwrap()), cdir.to_str().unwrap(), "json",
+                &mut w,
+                &db,
+                Some(fwpath.to_str().unwrap()),
+                cdir.to_str().unwrap(),
+                "json",
             );
         });
     }
@@ -5691,12 +5994,39 @@ classification:
         let filter = crate::cli::filter::CheckFilter::default();
         fault_inject(40, |mut w| {
             let _ = cmd_harden_fleet(
-                &mut w, &fleet, checks.to_str().unwrap(), "api", false, true,
-                tf.to_str().unwrap(), "json", &filter, 2, false, &outd, true, // dry_run
+                &mut w,
+                HardenFleetParams {
+                    fleet_path: &fleet,
+                    checks_dir: checks.to_str().unwrap(),
+                    mode: "api",
+                    apply: false,
+                    confirm: true,
+                    terraform_dir: tf.to_str().unwrap(),
+                    _format: "json",
+                    _check_filter: &filter,
+                    concurrency: 2,
+                    continue_on_error: false,
+                    output_dir: &outd,
+                    dry_run: true,
+                },
             );
             let _ = cmd_harden_fleet(
-                &mut w, &fleet, checks.to_str().unwrap(), "api", false, true,
-                tf.to_str().unwrap(), "json", &filter, 2, false, &outd, false, // !apply
+                &mut w,
+                HardenFleetParams {
+                    fleet_path: &fleet,
+                    checks_dir: checks.to_str().unwrap(),
+                    mode: "api",
+                    apply: false,
+                    confirm: true,
+                    terraform_dir: tf.to_str().unwrap(),
+                    _format: "json",
+                    _check_filter: &filter,
+                    concurrency: 2,
+                    continue_on_error: false,
+                    output_dir: &outd,
+                    dry_run: false,
+                    // !apply
+                },
             );
         });
     }
@@ -5735,7 +6065,11 @@ classification:
         let db = dir.path().join("evidence.db").to_str().unwrap().to_string();
         let mut out = Vec::new();
         let result = cmd_test(
-            &mut out, OutputFormat::Json, &db, "mock.safety_test", "production",
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "mock.safety_test",
+            "production",
             true, // store = true
             false,
         );
@@ -5747,7 +6081,13 @@ classification:
         let (_d, db) = bad_db_path();
         let mut out = Vec::new();
         assert!(cmd_test(
-            &mut out, OutputFormat::Json, &db, "mock.safety_test", "production", true, false,
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "mock.safety_test",
+            "production",
+            true,
+            false,
         )
         .is_err());
     }
@@ -5761,7 +6101,12 @@ classification:
         let bad_db = dir.path().to_str().unwrap().to_string();
         let mut out = Vec::new();
         assert!(cmd_evaluate(
-            &mut out, OutputFormat::Json, &bad_db, "mock.test", None, cdir.to_str().unwrap(),
+            &mut out,
+            OutputFormat::Json,
+            &bad_db,
+            "mock.test",
+            None,
+            cdir.to_str().unwrap(),
         )
         .is_err());
     }
@@ -5775,7 +6120,12 @@ classification:
         let bad_db = dir.path().to_str().unwrap().to_string();
         let mut out = Vec::new();
         assert!(cmd_evaluate_path(
-            &mut out, OutputFormat::Json, &bad_db, "*", "mock", cdir.to_str().unwrap(),
+            &mut out,
+            OutputFormat::Json,
+            &bad_db,
+            "*",
+            "mock",
+            cdir.to_str().unwrap(),
         )
         .is_err());
     }
@@ -5789,7 +6139,13 @@ classification:
         let bad_db = dir.path().to_str().unwrap().to_string();
         let mut out = Vec::new();
         assert!(cmd_observe_path(
-            &mut out, OutputFormat::Json, &bad_db, "*", "mock", cdir.to_str().unwrap(), true,
+            &mut out,
+            OutputFormat::Json,
+            &bad_db,
+            "*",
+            "mock",
+            cdir.to_str().unwrap(),
+            true,
         )
         .is_err());
     }
@@ -5803,8 +6159,15 @@ classification:
         let bad_db = dir.path().to_str().unwrap().to_string();
         let mut out = Vec::new();
         assert!(cmd_test_path(
-            &mut out, OutputFormat::Json, &bad_db, "*", "mock", "production",
-            cdir.to_str().unwrap(), true, false,
+            &mut out,
+            OutputFormat::Json,
+            &bad_db,
+            "*",
+            "mock",
+            "production",
+            cdir.to_str().unwrap(),
+            true,
+            false,
         )
         .is_err());
     }
@@ -5813,7 +6176,16 @@ classification:
     fn cmd_history_open_store_err() {
         let (_d, db) = bad_db_path();
         let mut out = Vec::new();
-        assert!(cmd_history(&mut out, OutputFormat::Json, &db, "iam.test", 30, None, None).is_err());
+        assert!(cmd_history(
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            "iam.test",
+            30,
+            None,
+            None
+        )
+        .is_err());
     }
 
     #[test]
@@ -5848,8 +6220,16 @@ classification:
         let (_d, db) = bad_db_path();
         let mut out = Vec::new();
         assert!(cmd_schedule_add(
-            &mut out, OutputFormat::Json, &db, Some("iam.test"),
-            "0 * * * *", &["mock.test".to_string()], "safe", "production", true, false,
+            &mut out,
+            OutputFormat::Json,
+            &db,
+            Some("iam.test"),
+            "0 * * * *",
+            &["mock.test".to_string()],
+            "safe",
+            "production",
+            true,
+            false,
         )
         .is_err());
     }
@@ -5857,7 +6237,15 @@ classification:
     #[test]
     fn cmd_build_invalid_target_returns_err() {
         let mut out = Vec::new();
-        let result = cmd_build(&mut out, "src", "not-a-real-target", None, false, false, None);
+        let result = cmd_build(
+            &mut out,
+            "src",
+            "not-a-real-target",
+            None,
+            false,
+            false,
+            None,
+        );
         assert!(result.is_err());
     }
 
@@ -5911,7 +6299,11 @@ classification:
         let bad_db = bad_db_dir.to_str().unwrap().to_string();
         let mut out = Vec::new();
         let result = cmd_compliance(
-            &mut out, &bad_db, Some(fwpath.to_str().unwrap()), cdir.to_str().unwrap(), "json",
+            &mut out,
+            &bad_db,
+            Some(fwpath.to_str().unwrap()),
+            cdir.to_str().unwrap(),
+            "json",
         );
         assert!(result.is_err());
     }

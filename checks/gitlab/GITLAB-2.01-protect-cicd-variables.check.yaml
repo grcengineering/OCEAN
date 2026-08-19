@@ -1,0 +1,92 @@
+id: GITLAB-2.01
+name: Protect and Mask CI/CD Variables
+description: |
+  Verifies that every project-level CI/CD variable is both protected
+  (restricted to protected branches and tags) and masked (hidden from job
+  logs). CI/CD variables typically hold deployment credentials, API keys,
+  and cloud secrets that grant access far beyond GitLab itself.
+author: grc-engineering
+version: "1.0"
+source: gitlab
+profile: L1
+tags: [ci-cd, secrets, variables]
+
+references:
+  nist: SC-28
+  soc2: CC6.1
+  hth: "gitlab:2.1"
+
+credentials:
+  GITLAB_TOKEN:
+    type: api_token
+    scopes: [api]
+    required: true
+
+inputs:
+  gitlab_url:
+    description: GitLab instance base URL
+    env: GITLAB_URL
+    default: "https://gitlab.com"
+    required: false
+  project_id:
+    description: GitLab project ID or URL-encoded path (e.g. "42" or "group%2Fproject")
+    env: GITLAB_PROJECT_ID
+    required: true
+
+steps:
+  - id: get_project_variables
+    action: api_call
+    request:
+      method: GET
+      url: "{{gitlab_url}}/api/v4/projects/{{project_id}}/variables"
+      headers:
+        PRIVATE-TOKEN: "{{GITLAB_TOKEN}}"
+    extract:
+      variables: "$[*]"
+      variable_count: "$length"
+
+assertions:
+  - id: all_variables_protected
+    expr: "size(variables.filter(v, v.protected != true)) == 0"
+    severity: high
+    title: All CI/CD Variables Are Protected
+    pass_message: "All {{variable_count}} CI/CD variable(s) are protected"
+    fail_message: "One or more CI/CD variables are not protected"
+    finding:
+      description: |
+        At least one project CI/CD variable is not marked protected, so it
+        is exposed to jobs running on any branch or tag, including
+        unprotected feature branches and forks. Mark every variable that
+        holds a credential as protected so it is only exposed to pipelines
+        running on protected branches and tags.
+
+  - id: all_variables_masked
+    expr: "size(variables.filter(v, v.masked != true)) == 0"
+    severity: high
+    title: All CI/CD Variables Are Masked
+    pass_message: "All {{variable_count}} CI/CD variable(s) are masked"
+    fail_message: "One or more CI/CD variables are not masked"
+    finding:
+      description: |
+        At least one project CI/CD variable is not marked masked, so its
+        value can be printed in plaintext in job logs, which are visible to
+        anyone who can view the pipeline. Mark every variable that holds a
+        credential as masked so its value is hidden from job output.
+
+remediation:
+  description: |
+    Enable protection and masking on every CI/CD variable that currently
+    lacks them.
+  steps:
+    - "Navigate to Project → Settings → CI/CD → Variables"
+    - "For each flagged variable, click Edit"
+    - "Enable 'Protect variable' and 'Mask variable'"
+    - "Click 'Update variable'"
+  api:
+    method: PUT
+    url: "{{gitlab_url}}/api/v4/projects/{{project_id}}/variables/{key}"
+    body:
+      protected: true
+      masked: true
+  manual:
+    - "Values containing characters GitLab cannot mask (short values, values with newlines) must be rotated to a maskable format before 'Mask variable' can be enabled"

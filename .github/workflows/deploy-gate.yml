@@ -1,0 +1,109 @@
+# sscsb: verification gate before promote/publish. The publish job CANNOT run
+# unless signature verification (cosign) and provenance verification
+# (slsa-verifier) both pass — `needs:` enforces the ordering.
+#
+# Pattern: release workflows publish a DRAFT release with signed artifacts +
+# provenance; this gate verifies everything and only then flips it public.
+name: Deploy Gate — Verify then Publish
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to verify and publish (draft release)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # The tag is passed through the ENVIRONMENT, never interpolated into a shell
+    # command. `run: gh release download "${{ inputs.tag }}"` would splice an
+    # attacker-influenced string straight into bash — the exact script-injection
+    # shape `sscsb verify workflow-audit-extended` flags in your workflows.
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p assets && cd assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY"
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Install slsa-verifier
+        uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6 # v2.7.1
+      # Both gates below fail EXPLICITLY when there is nothing to verify. An
+      # unmatched glob silently becoming a literal string is not a verification
+      # result, and "we found no artifacts, so nothing failed" must never be a
+      # way to reach the publish job.
+      - name: Verify cosign bundles (signature gate)
+        run: |
+          set -uo pipefail
+          cd assets
+          shopt -s nullglob
+          bundles=(*.sigstore.json)
+          if [ ${#bundles[@]} -eq 0 ]; then
+            echo "::error::no *.sigstore.json bundles found — refusing to certify unsigned artifacts"
+            exit 1
+          fi
+          # Identity regexp is ANCHORED (^) and the host dots are escaped, so it
+          # cannot match a look-alike host or a repo whose name merely starts
+          # with yours. The trailing `/` keeps it scoped to workflows UNDER this
+          # repository.
+          fail=0
+          for bundle in "${bundles[@]}"; do
+            artifact="${bundle%.sigstore.json}"
+            cosign verify-blob "$artifact" \
+              --bundle "$bundle" \
+              --certificate-identity-regexp "^https://github\.com/${GITHUB_REPOSITORY}/" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com || fail=1
+          done
+          exit $fail
+      - name: Verify SLSA provenance (provenance gate)
+        run: |
+          set -uo pipefail
+          cd assets
+          shopt -s nullglob
+          provenance=(*.intoto.jsonl)
+          artifacts=(*.tar.gz)
+          if [ ${#provenance[@]} -eq 0 ]; then
+            echo "::error::no *.intoto.jsonl provenance found — refusing to publish unprovenanced artifacts"
+            exit 1
+          fi
+          if [ ${#artifacts[@]} -eq 0 ]; then
+            echo "::error::no *.tar.gz artifacts found — nothing was verified"
+            exit 1
+          fi
+          fail=0
+          for f in "${artifacts[@]}"; do
+            slsa-verifier verify-artifact "$f" \
+              --provenance-path "${provenance[0]}" \
+              --source-uri "github.com/${GITHUB_REPOSITORY}" \
+              --source-tag "$TAG" || fail=1
+          done
+          exit $fail
+
+  publish:
+    # The gate: publish is unreachable unless verify succeeded.
+    needs: [verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Promote draft release to published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

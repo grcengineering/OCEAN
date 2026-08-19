@@ -8,19 +8,49 @@
   <meta name="og:title" content="OCEAN — Metasploit for GRC">
   <meta name="og:description" content="Open-source evidence acquisition and active control verification. Pairs with Corsair (grcorsair.com) for audit-grade cryptographic provenance.">
   <meta name="theme-color" content="#FFA84F">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Unbounded:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- GRCE Design System fonts — self-hosted (General Sans · Satoshi · Martian Mono · Unbounded) -->
+  <link rel="preload" href="ds-fonts/general-sans-vf.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="ds-fonts/satoshi-vf.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="ds-fonts/martian-mono-vf.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="ds-fonts/unbounded-vf.woff2" as="font" type="font/woff2" crossorigin>
   <style>
+    /* ═══════════════════════════════════════════ GRCE DS FONTS (self-hosted) */
+    @font-face {
+      font-family: "General Sans";
+      src: url("ds-fonts/general-sans-vf.woff2") format("woff2");
+      font-weight: 400 700; font-style: normal; font-display: swap;
+    }
+    @font-face {
+      font-family: "Satoshi";
+      src: url("ds-fonts/satoshi-vf.woff2") format("woff2");
+      font-weight: 300 900; font-style: normal; font-display: swap;
+    }
+    @font-face {
+      font-family: "Satoshi";
+      src: url("ds-fonts/satoshi-vf-italic.woff2") format("woff2");
+      font-weight: 300 900; font-style: italic; font-display: swap;
+    }
+    @font-face {
+      font-family: "Martian Mono";
+      src: url("ds-fonts/martian-mono-vf.woff2") format("woff2");
+      font-weight: 400 700; font-style: normal; font-display: swap;
+    }
+    @font-face {
+      font-family: "Unbounded";
+      src: url("ds-fonts/unbounded-vf.woff2") format("woff2");
+      font-weight: 200 900; font-style: normal; font-display: swap;
+    }
+
     /* ═══════════════════════════════════════════
        DESIGN SYSTEM
        Mix: GRCOrsair (dark/terminal) + Pluto.security (bold/clean) + GRC.Engineering (orange+blue)
     ═══════════════════════════════════════════ */
     :root {
-      --bg:         #080E1C;
-      --bg-2:       #0D1628;
-      --bg-card:    #111E33;
-      --bg-card-2:  #0F1A2E;
+      /* GRCE DS dark surfaces — deep engineering navy */
+      --bg:         #0A0E16;   /* --surface-page */
+      --bg-2:       #0C111B;   /* --surface-sunken */
+      --bg-card:    #111722;   /* --surface-card */
+      --bg-card-2:  #0E141E;
       --orange:     #FFA84F;
       --orange-dim: #CC8640;
       --orange-glow: rgba(255, 168, 79, 0.18);
@@ -31,17 +61,19 @@
       --cyan:       #22D3EE;
       --green:      #10B981;
       --red:        #EF4444;
-      --text:       #F0F4FF;
-      --text-muted: #8A9BC4;
-      --text-dim:   #4A5A80;
-      --border:     rgba(27, 149, 193, 0.18);
+      --text:       #F1F5F9;   /* DS --text-strong (dark) */
+      --text-muted: #8B97A4;   /* DS --text-muted (dark) */
+      --text-dim:   #5E6C7A;   /* DS slate, de-blued */
+      --border:     rgba(255, 255, 255, 0.12);  /* DS neutral border (dark) */
       --border-orange: rgba(255, 168, 79, 0.25);
-      --border-card: rgba(27, 149, 193, 0.12);
+      --border-card: rgba(255, 255, 255, 0.08);
       --radius:     10px;
-      --radius-lg:  16px;
-      --mono: 'JetBrains Mono', 'Consolas', monospace;
-      --sans: system-ui, -apple-system, sans-serif;
-      --heading: 'Unbounded', sans-serif;
+      --radius-lg:  13px;      /* DS --radius-lg */
+      /* GRCE DS type roles: mono → Martian Mono · body → Satoshi · display → General Sans
+         (Unbounded reserved for the .nav-logo-mark ToolLockup pill only) */
+      --mono: 'Martian Mono', ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+      --sans: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      --heading: 'General Sans', ui-sans-serif, system-ui, sans-serif;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -73,7 +105,7 @@
     section { position: relative; }
 
     /* ═══════════════════════════════════════════ TYPOGRAPHY */
-    h1, h2, h3, h4 { line-height: 1.15; letter-spacing: -0.02em; font-family: var(--heading); }
+    h1, h2, h3, h4 { line-height: 1.15; letter-spacing: -0.02em; font-family: var(--heading); font-weight: 600; /* DS --display-weight */ }
     h1 { font-size: clamp(2.6rem, 6vw, 4.5rem); font-weight: 900; }
     h2 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 800; }
     h3 { font-size: 1.2rem; font-weight: 700; }
@@ -167,7 +199,7 @@
     /* ═══════════════════════════════════════════ NAV */
     nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      background: rgba(8, 14, 28, 0.85);
+      background: rgba(10, 14, 22, 0.85);
       backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       padding: 14px 0;
@@ -186,7 +218,8 @@
       background: linear-gradient(135deg, var(--orange), var(--blue));
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      font-family: var(--heading); font-weight: 700; font-size: 0.9rem;
+      /* ToolLockup pill — Unbounded stays HERE only (DS reserves it for the pill) */
+      font-family: 'Unbounded', var(--heading), sans-serif; font-weight: 700; font-size: 0.9rem;
       letter-spacing: 0.06em;
       color: #000;
       box-shadow: 0 0 20px var(--orange-glow);
@@ -194,15 +227,16 @@
       z-index: 1;
     }
     .nav-logo-mark::before {
+      /* DS ToolLockup ring — 1.5px white arc flush on the pill edge */
       content: '';
       position: absolute;
-      inset: -1px;
-      border-radius: 9px;
+      inset: -1.5px;
+      border-radius: calc(8px + 1.5px);
       background: conic-gradient(
         from var(--gradient-angle, 0deg),
-        transparent,
-        #fff 10%,
-        transparent 30%
+        transparent 5%,
+        #FFFFFF 20%,
+        transparent 35%
       );
       z-index: -1;
     }
@@ -287,7 +321,7 @@
 
     /* ═══════════════════════════════════════════ TERMINAL */
     .terminal {
-      background: #050D1A;
+      background: #0C1117; /* DS --surface-ink code-panel idiom */
       border: 1px solid rgba(27,149,193,0.25);
       border-radius: var(--radius-lg);
       overflow: hidden;
@@ -731,7 +765,7 @@
       top: 100%;
       left: 0;
       right: 0;
-      background: rgba(8, 14, 28, 0.95);
+      background: rgba(10, 14, 22, 0.95);
       backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       padding: 16px 0;

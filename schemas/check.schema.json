@@ -10,7 +10,7 @@
     "id": {
       "type": "string",
       "description": "Unique check identifier (e.g., GH-1.01, AWS-IAM-01).",
-      "pattern": "^[A-Z][A-Z0-9-]*-[0-9]+(\\.[0-9]+)*$"
+      "pattern": "^[A-Z][A-Z0-9-]*-[0-9]+(\\.[0-9]+)*[a-z]?$"
     },
     "name": {
       "type": "string",
@@ -74,7 +74,11 @@
         "soc2":     { "$ref": "#/$defs/stringOrArray" },
         "iso27001": { "$ref": "#/$defs/stringOrArray" },
         "pci_dss":  { "$ref": "#/$defs/stringOrArray" },
-        "disa_stig":{ "$ref": "#/$defs/stringOrArray" }
+        "disa_stig":{ "$ref": "#/$defs/stringOrArray" },
+        "hth": {
+          "type": "string",
+          "description": "HTH guide control this check derives from, as 'vendor-slug:N.N' (e.g. 'slack:1.2')."
+        }
       }
     },
     "credentials": {
@@ -219,6 +223,11 @@
         },
         "body": {
           "description": "Request body (any JSON value)."
+        },
+        "body_form": {
+          "type": "object",
+          "description": "Form-urlencoded body as key/value string pairs (templated). Mutually exclusive with body; OAuth token endpoints are form-only.",
+          "additionalProperties": { "type": "string" }
         },
         "paginate": {
           "type": "boolean",

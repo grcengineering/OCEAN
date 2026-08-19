@@ -24,10 +24,16 @@ pub fn register_all(registry: &Registry) {
     registry.register_tester(Arc::new(github::SecretPushTester));
     registry.register_tester(Arc::new(github_branch_bypass::BranchBypassTester));
     registry.register_tester(Arc::new(okta::MfaBypassTester));
-    registry.register_tester(Arc::new(okta_admin_ip_restriction::AdminIpRestrictionTester));
-    registry.register_tester(Arc::new(okta_default_policy_bypass::DefaultPolicyBypassTester));
+    registry.register_tester(Arc::new(
+        okta_admin_ip_restriction::AdminIpRestrictionTester,
+    ));
+    registry.register_tester(Arc::new(
+        okta_default_policy_bypass::DefaultPolicyBypassTester,
+    ));
     registry.register_tester(Arc::new(okta_pr_mfa_downgrade::PrMfaDowngradeTester));
-    registry.register_tester(Arc::new(github_actions_restriction::ActionsRestrictionTester));
+    registry.register_tester(Arc::new(
+        github_actions_restriction::ActionsRestrictionTester,
+    ));
     registry.register_tester(Arc::new(github_unsigned_commit::UnsignedCommitTester));
     registry.register_tester(Arc::new(github_workflow_injection::WorkflowInjectionTester));
     registry.register_tester(Arc::new(github_action_pin_audit::ActionPinAuditTester));

@@ -15,6 +15,7 @@ references:
   nist: SI-7
   soc2: CC8.1
   iso27001: A.14.2.7
+  hth: "github:2.4"
 
 credentials:
   GITHUB_TOKEN:

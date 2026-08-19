@@ -1,0 +1,90 @@
+id: AUTH0-1.01
+name: Verify Brute Force Protection Is Enabled With a Hardened Threshold
+description: |
+  Verifies that the Auth0 attack-protection brute force shield is enabled
+  and that max_attempts is at or below the recommended threshold of 5,
+  which caps repeated login attempts against a single identifier and IP
+  before a block shield engages.
+author: grc-engineering
+version: "1.0"
+source: auth0
+profile: L1
+tags: [attack-protection, brute-force, authentication]
+
+references:
+  cis: ["4.10"]
+  nist: [AC-7, SI-4]
+  hth: "auth0:1.1"
+
+credentials:
+  AUTH0_TOKEN:
+    type: api_token
+    scopes: ["read:attack_protection"]
+    required: true
+
+inputs:
+  auth0_api_base:
+    description: Auth0 Management API base URL, including scheme and /api/v2 (e.g. https://yourcompany.auth0.com/api/v2)
+    env: AUTH0_API_BASE
+    required: true
+
+steps:
+  - id: get_brute_force_protection
+    action: api_call
+    request:
+      method: GET
+      url: "{{auth0_api_base}}/attack-protection/brute-force-protection"
+      headers:
+        Authorization: "Bearer {{AUTH0_TOKEN}}"
+    extract:
+      enabled: "$.enabled"
+      max_attempts: "$.max_attempts"
+
+assertions:
+  - id: brute_force_protection_enabled
+    expr: "enabled == true"
+    severity: critical
+    title: Brute Force Protection Is Enabled
+    pass_message: "Brute force protection is enabled"
+    fail_message: "Brute force protection is disabled"
+    finding:
+      description: |
+        The attack-protection/brute-force-protection endpoint reports
+        enabled: false. Without this shield, an attacker can attempt
+        unlimited password guesses against a single account with no
+        automated block, turning any weak or reused password into a
+        matter of time rather than a real barrier.
+
+  - id: brute_force_max_attempts_hardened
+    expr: "max_attempts <= 5"
+    severity: medium
+    title: Brute Force max_attempts Is at or Below the Recommended Threshold
+    pass_message: "max_attempts ({{max_attempts}}) is at or below the recommended threshold of 5"
+    fail_message: "max_attempts exceeds the recommended threshold of 5"
+    finding:
+      description: |
+        max_attempts is set above 5, the guide's recommended threshold.
+        A higher threshold gives an attacker more guesses per identifier
+        and IP combination before the block shield engages, widening the
+        window for password-guessing success.
+
+remediation:
+  description: |
+    Enable brute force protection with a hardened attempt threshold and
+    both block and user-notification shields.
+  steps:
+    - "Navigate to Security → Attack Protection → Brute-force Protection"
+    - "Enable Brute-force Protection"
+    - "Set max_attempts to 5 and enable both Block and User Notification shields"
+  api:
+    method: PATCH
+    url: "{{auth0_api_base}}/attack-protection/brute-force-protection"
+    headers:
+      Authorization: "Bearer {{AUTH0_TOKEN}}"
+    body:
+      enabled: true
+      shields: ["block", "user_notification"]
+      mode: "count_per_identifier_and_ip"
+      max_attempts: 5
+  manual:
+    - "Review blocked-login notifications for patterns suggesting a sustained credential-stuffing campaign rather than isolated forgotten passwords"

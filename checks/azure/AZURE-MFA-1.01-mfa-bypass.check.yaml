@@ -31,6 +31,7 @@ inputs:
 references:
   nist: IA-2(1)
   soc2: CC6.1
+  hth: "microsoft-entra-id:2.2"
 
 steps:
   - id: get_conditional_access_policies
@@ -51,7 +52,11 @@ steps:
 
 assertions:
   - id: mfa_enforcement_exists
-    expr: "security_defaults_enabled == true or (policies | selectattr('grantControls.builtInControls', 'contains', 'mfa') | selectattr('state', 'equalto', 'enabled') | list | length > 0)"
+    expr: >-
+      security_defaults_enabled == true ||
+      policies.exists(p, p.state == "enabled" &&
+        has(p.grantControls) && has(p.grantControls.builtInControls) &&
+        "mfa" in p.grantControls.builtInControls)
     severity: critical
     title: MFA Enforcement Exists
     pass_message: "MFA is enforced via security defaults or conditional access"
@@ -64,7 +69,10 @@ assertions:
         brute force attacks. MFA blocks over 99.9% of account compromise.
 
   - id: no_broad_mfa_exclusions
-    expr: "policies | selectattr('grantControls.builtInControls', 'contains', 'mfa') | selectattr('conditions.users.excludeUsers', 'defined') | list | length == 0"
+    expr: >-
+      !policies.exists(p, has(p.grantControls) && has(p.grantControls.builtInControls) &&
+        "mfa" in p.grantControls.builtInControls &&
+        has(p.conditions) && has(p.conditions.users) && has(p.conditions.users.excludeUsers))
     severity: critical
     title: No Broad MFA Exclusions
     pass_message: "No MFA policies have user exclusions configured"

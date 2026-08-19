@@ -26,7 +26,12 @@ jobs:
       fail-fast: false
     continue-on-error: ${{ matrix.toolchain == 'nightly' }}
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -52,7 +57,12 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -60,7 +70,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: cargo install cargo-audit --locked
       - name: Run audit
         run: cargo audit
 
@@ -71,7 +81,12 @@ jobs:
     name: Supply Chain (cargo-vet)
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -90,14 +105,22 @@ jobs:
     name: Supply Chain (cargo-deny)
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
           GRC_TOKEN: ${{ secrets.GRC_CONTROLS_TOKEN }}
-      - uses: EmbarkStudios/cargo-deny-action@5bb39ff5d5a0e94dc9e2dc94eced0c6129743a57 # v2
-        with:
-          command: check all
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Run cargo-deny check
+        run: cargo deny --all-features check all
 
   # -------------------------------------------------------------------------
   # Behavioral dependency analysis (Socket.dev)
@@ -108,7 +131,12 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ vars.SOCKET_ENABLED == 'true' }}
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Run Socket.dev scan
         uses: SocketDev/socket-sdk-js@7631a686c3eb51ec5a44b91059bb405f43348350 # v1.11.2
         with:
@@ -121,7 +149,12 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -140,9 +173,13 @@ jobs:
     name: Secret Scanning (TruffleHog)
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: TruffleHog scan
         uses: trufflesecurity/trufflehog@17456f8c7d042d8c82c9a8ca9e937231f9f42e26 # v3.95.2
         with:
@@ -157,7 +194,12 @@ jobs:
     container:
       image: semgrep/semgrep
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Run Semgrep
         run: semgrep scan --config auto --config p/rust --config p/owasp-top-ten --error --sarif --output semgrep.sarif .
       - name: Upload SARIF
@@ -175,7 +217,12 @@ jobs:
     needs: [test, lint, audit, deny, vet]
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -191,7 +238,12 @@ jobs:
     needs: [test, lint, audit, deny, vet]
     runs-on: macos-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -207,7 +259,12 @@ jobs:
     needs: [test, lint, audit, deny, vet]
     runs-on: windows-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -226,7 +283,12 @@ jobs:
     name: Coverage (100% gate)
     runs-on: ubuntu-latest
     steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Checkout grc-controls sibling
         run: git clone --depth 1 "https://x-access-token:${GRC_TOKEN}@github.com/grcengineering/grc-controls.git" ../grc-controls
         env:
@@ -270,3 +332,23 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # -------------------------------------------------------------------------
+  # HTH parity manifest consistency (no HTH checkout needed — validates the
+  # committed parity/hth-parity.json against checks/ + references.hth)
+  # -------------------------------------------------------------------------
+  parity:
+    name: HTH Parity Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml
+      - run: python3 scripts/hth_parity.py --validate

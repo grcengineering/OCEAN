@@ -1,0 +1,64 @@
+id: LD-1.01
+name: Verify All Members Have MFA Enabled
+description: |
+  Audits every LaunchDarkly account member via the Members API and
+  flags any member with mfa: false. SSO/SAML and MFA enforcement
+  configuration in LaunchDarkly are GUI-only settings with no
+  corresponding read API, so this check verifies the outcome — every
+  member actually enrolled in MFA — rather than the toggle itself.
+author: grc-engineering
+version: "1.0"
+source: launchdarkly
+profile: L1
+tags: [mfa, members, authentication]
+
+references:
+  nist: [IA-2(1)]
+  hth: "launchdarkly:1.1"
+
+credentials:
+  LD_API_KEY:
+    type: api_token
+    scopes: ["reader"]
+    required: true
+
+steps:
+  - id: get_members
+    action: api_call
+    request:
+      method: GET
+      url: "https://app.launchdarkly.com/api/v2/members?limit=100"
+      headers:
+        Authorization: "{{LD_API_KEY}}"
+        LD-API-Version: "20240415"
+    extract:
+      members: "$.items"
+      total_count: "$.totalCount"
+
+assertions:
+  - id: all_members_have_mfa
+    expr: "size(members.filter(m, m.mfa == false)) == 0"
+    severity: critical
+    title: All Members Have MFA Enabled
+    pass_message: "All {{total_count}} member(s) have MFA enabled"
+    fail_message: "One or more members do not have MFA enabled"
+    finding:
+      description: |
+        At least one account member has mfa: false. LaunchDarkly holds
+        the keys to every feature flag in the account, including
+        kill-switches for production behavior — an account member
+        without MFA is a single-factor path to flag manipulation,
+        lateral movement via exposed SDK keys, or a full outage
+        triggered by a malicious flag change.
+
+remediation:
+  description: |
+    Require MFA for every account member and remediate any member found
+    without it enrolled.
+  steps:
+    - "Navigate to Account Settings → Security"
+    - "Enable Require MFA for the account (GUI-only setting)"
+    - "For each member flagged without MFA, require enrollment before restoring full access"
+  manual:
+    - "Configure SAML SSO under Account Settings → Security if the organization has an identity provider, so authentication inherits the IdP's MFA and conditional access policies"
+    - "Re-run this audit after enabling enforcement to confirm no member remains unenrolled"

@@ -1,0 +1,90 @@
+id: CF-2.03
+name: Verify Recommended Device Posture Checks Are Configured
+description: |
+  Verifies that the three device posture check types the guide
+  recommends — disk encryption, firewall, and OS version — are each
+  configured at least once in the account's Zero Trust device posture
+  rules.
+author: grc-engineering
+version: "1.0"
+source: cloudflare
+profile: L2
+tags: [device-posture, zero-trust]
+
+references:
+  cis: ["4.1"]
+  nist: [AC-2(11)]
+  hth: "cloudflare:2.3"
+
+credentials:
+  CF_API_TOKEN:
+    type: api_token
+    scopes: [account:read, access:read]
+    required: true
+
+inputs:
+  cf_account_id:
+    description: Cloudflare account ID
+    env: CF_ACCOUNT_ID
+    required: true
+
+steps:
+  - id: get_posture_rules
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.cloudflare.com/client/v4/accounts/{{cf_account_id}}/devices/posture"
+      headers:
+        Authorization: "Bearer {{CF_API_TOKEN}}"
+    extract:
+      posture_rules: "$.result"
+
+assertions:
+  - id: disk_encryption_check_configured
+    expr: 'size(posture_rules.filter(r, r.type == "disk_encryption")) > 0'
+    severity: medium
+    title: A Disk Encryption Posture Check Is Configured
+    pass_message: "A disk encryption device posture check is configured"
+    fail_message: "No disk encryption device posture check is configured"
+    finding:
+      description: |
+        No posture rule of type "disk_encryption" exists. Without this
+        check, a lost or stolen device with local, unencrypted storage
+        can expose cached data even though it reached the application
+        through Access.
+
+  - id: firewall_check_configured
+    expr: 'size(posture_rules.filter(r, r.type == "firewall")) > 0'
+    severity: medium
+    title: A Firewall Posture Check Is Configured
+    pass_message: "A firewall device posture check is configured"
+    fail_message: "No firewall device posture check is configured"
+    finding:
+      description: |
+        No posture rule of type "firewall" exists. Without this check,
+        a compromised endpoint with its host firewall disabled can
+        still satisfy Access policies, widening the blast radius of
+        malware that seeks lateral movement.
+
+  - id: os_version_check_configured
+    expr: 'size(posture_rules.filter(r, r.type == "os_version")) > 0'
+    severity: medium
+    title: An OS Version Posture Check Is Configured
+    pass_message: "An OS version device posture check is configured"
+    fail_message: "No OS version device posture check is configured"
+    finding:
+      description: |
+        No posture rule of type "os_version" exists. Without this
+        check, devices running an unpatched or end-of-life OS carrying
+        known, exploitable vulnerabilities can still be granted access.
+
+remediation:
+  description: |
+    Configure disk encryption, firewall, and OS version posture checks,
+    and require them in Access policies for sensitive applications.
+  steps:
+    - "Navigate to Zero Trust → Settings → WARP Client → Device posture"
+    - "Add posture checks for Disk Encryption, Firewall, and OS Version with the organization's minimum acceptable values"
+    - "Reference the new posture checks as Require conditions on sensitive Access applications"
+  manual:
+    - "Review posture check thresholds (minimum OS version, required firewall state) at least quarterly as new OS versions ship"

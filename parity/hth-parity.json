@@ -1,0 +1,7179 @@
+{
+  "generated_by": "scripts/hth_parity.py",
+  "hth_repo": "how-to-harden",
+  "totals": {
+    "guides": 130,
+    "controls": 1813,
+    "pack_vendors": 76,
+    "pack_sections": 678,
+    "checks": 272,
+    "controls_covered": 184
+  },
+  "vendors": [
+    {
+      "vendor": "1password",
+      "status": "partial",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {
+        "2.4": [
+          "cli"
+        ],
+        "3.1": [
+          "cli"
+        ],
+        "3.4": [
+          "cli"
+        ],
+        "4.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "OP-4.01",
+          "file": "checks/1password/OP-4.01-events-api-audit-logging.check.yaml",
+          "section": "4.1"
+        }
+      ],
+      "controls_covered": [
+        "4.1"
+      ]
+    },
+    {
+      "vendor": "abnormal",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "4.1",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "adp",
+      "status": "missing",
+      "guide_controls": 7,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "3.1",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "airtable",
+      "status": "missing",
+      "guide_controls": 18,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "amplitude",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "anthropic-api",
+      "status": "partial",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [
+        {
+          "id": "ANTH-2.01",
+          "file": "checks/anthropic-claude/ANTH-2.01-api-key-workspace-scoping.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ANTH-3.02",
+          "file": "checks/anthropic-claude/ANTH-3.02-workspace-admin-count.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "ANTH-4.01",
+          "file": "checks/anthropic-claude/ANTH-4.01-data-residency-configured.check.yaml",
+          "section": "3.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "2.2",
+        "3.1"
+      ]
+    },
+    {
+      "vendor": "anthropic-claude",
+      "status": "partial",
+      "guide_controls": 6,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api"
+        ],
+        "1.2": [
+          "api"
+        ],
+        "1.3": [
+          "api"
+        ],
+        "2.1": [
+          "api"
+        ],
+        "2.2": [
+          "api"
+        ],
+        "2.3": [
+          "api",
+          "config",
+          "sdk"
+        ],
+        "3.1": [
+          "api"
+        ],
+        "3.2": [
+          "api"
+        ],
+        "4.1": [
+          "api"
+        ],
+        "5.1": [
+          "api"
+        ],
+        "5.2": [
+          "api"
+        ],
+        "6.1": [
+          "api"
+        ],
+        "7.1": [
+          "api",
+          "config"
+        ],
+        "7.2": [
+          "api",
+          "config"
+        ],
+        "7.3": [
+          "api",
+          "config"
+        ],
+        "7.4": [
+          "api"
+        ],
+        "7.5": [
+          "config"
+        ],
+        "7.6": [
+          "config"
+        ],
+        "7.7": [
+          "api"
+        ],
+        "7.8": [
+          "config"
+        ],
+        "7.9": [
+          "api"
+        ],
+        "7.10": [
+          "config"
+        ],
+        "7.11": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "ANTH-1.02",
+          "file": "checks/anthropic-claude/ANTH-1.02-least-privilege-org-roles.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ANTH-6.01",
+          "file": "checks/anthropic-claude/ANTH-6.01-pending-invites-audit.check.yaml",
+          "section": "2.1"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "2.1"
+      ]
+    },
+    {
+      "vendor": "asana",
+      "status": "missing",
+      "guide_controls": 17,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "atlassian",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "6.1"
+      ],
+      "pack_sections": {
+        "2.2": [
+          "api"
+        ],
+        "3.2": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "auth0",
+      "status": "partial",
+      "guide_controls": 14,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "terraform"
+        ],
+        "1.3": [
+          "api",
+          "terraform"
+        ],
+        "1.4": [
+          "api",
+          "terraform"
+        ],
+        "2.1": [
+          "api",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "4.2": [
+          "api",
+          "terraform"
+        ],
+        "5.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "AUTH0-1.01",
+          "file": "checks/auth0/AUTH0-1.01-brute-force-protection.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "AUTH0-1.02",
+          "file": "checks/auth0/AUTH0-1.02-suspicious-ip-throttling.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "AUTH0-1.03",
+          "file": "checks/auth0/AUTH0-1.03-breached-password-detection.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "AUTH0-1.04",
+          "file": "checks/auth0/AUTH0-1.04-bot-detection.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "AUTH0-2.01",
+          "file": "checks/auth0/AUTH0-2.01-connection-password-policy.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "AUTH0-2.02",
+          "file": "checks/auth0/AUTH0-2.02-guardian-mfa-policy.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "AUTH0-3.01",
+          "file": "checks/auth0/AUTH0-3.01-tenant-settings-hardened.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "AUTH0-4.02",
+          "file": "checks/auth0/AUTH0-4.02-application-configuration-audit.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "AUTH0-5.01",
+          "file": "checks/auth0/AUTH0-5.01-log-stream-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "4.2",
+        "5.1"
+      ]
+    },
+    {
+      "vendor": "aws-iam-identity-center",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "1.3": [
+          "terraform"
+        ],
+        "3.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "sigma"
+        ],
+        "4.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "4.2": [
+          "api",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "azure-devops",
+      "status": "missing",
+      "guide_controls": 14,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "6.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "1.3": [
+          "api",
+          "terraform"
+        ],
+        "2.1": [
+          "config",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "terraform"
+        ],
+        "2.3": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "3.3": [
+          "cli",
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "config",
+          "terraform"
+        ],
+        "5.1": [
+          "terraform"
+        ],
+        "5.2": [
+          "config",
+          "terraform"
+        ],
+        "6.1": [
+          "api",
+          "siem",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "bamboohr",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "beyondtrust",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "6.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api"
+        ],
+        "1.3": [
+          "api"
+        ],
+        "2.1": [
+          "sdk"
+        ],
+        "6.2": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "bitbucket",
+      "status": "missing",
+      "guide_controls": 12,
+      "controls": [
+        "1.1",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {
+        "4.2": [
+          "config"
+        ],
+        "4.3": [
+          "config"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "box",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {
+        "1.2": [
+          "cli"
+        ],
+        "3.2": [
+          "cli"
+        ],
+        "4.1": [
+          "cli"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "braze",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "buildkite",
+      "status": "partial",
+      "guide_controls": 22,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7",
+        "3.8",
+        "3.9",
+        "3.10",
+        "3.11",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "terraform"
+        ],
+        "2.4": [
+          "config"
+        ],
+        "2.5": [
+          "api",
+          "terraform"
+        ],
+        "2.6": [
+          "api"
+        ],
+        "2.7": [
+          "terraform"
+        ],
+        "3.1": [
+          "api",
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "3.3": [
+          "terraform"
+        ],
+        "3.4": [
+          "cli",
+          "config"
+        ],
+        "3.5": [
+          "api",
+          "config",
+          "terraform"
+        ],
+        "3.6": [
+          "cli",
+          "config"
+        ],
+        "3.7": [
+          "terraform"
+        ],
+        "3.8": [
+          "config"
+        ],
+        "3.9": [
+          "config"
+        ],
+        "3.10": [
+          "terraform"
+        ],
+        "3.11": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "cli",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "BK-1.02",
+          "file": "checks/buildkite/BK-1.02-enforce-2fa.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "BK-2.02",
+          "file": "checks/buildkite/BK-2.02-no-public-pipelines.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "BK-2.02b",
+          "file": "checks/buildkite/BK-2.02b-fork-builds-disabled.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "BK-2.03",
+          "file": "checks/buildkite/BK-2.03-admin-count-bounded.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "BK-2.05a",
+          "file": "checks/buildkite/BK-2.05a-api-ip-allowlist.check.yaml",
+          "section": "2.5"
+        },
+        {
+          "id": "BK-2.05b",
+          "file": "checks/buildkite/BK-2.05b-inactive-token-revocation.check.yaml",
+          "section": "2.5"
+        },
+        {
+          "id": "BK-2.07",
+          "file": "checks/buildkite/BK-2.07-rules-inventory.check.yaml",
+          "section": "2.7"
+        },
+        {
+          "id": "BK-3.01a",
+          "file": "checks/buildkite/BK-3.01a-agent-token-expiry.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "BK-3.01b",
+          "file": "checks/buildkite/BK-3.01b-agent-token-ip-restricted.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "BK-3.05",
+          "file": "checks/buildkite/BK-3.05-secret-policies.check.yaml",
+          "section": "3.5"
+        },
+        {
+          "id": "BK-3.07",
+          "file": "checks/buildkite/BK-3.07-cluster-maintainers-bounded.check.yaml",
+          "section": "3.7"
+        },
+        {
+          "id": "BK-4.01",
+          "file": "checks/buildkite/BK-4.01-org-not-public.check.yaml",
+          "section": "2.2"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.7",
+        "3.1",
+        "3.5",
+        "3.7"
+      ]
+    },
+    {
+      "vendor": "chatgpt-enterprise",
+      "status": "partial",
+      "guide_controls": 22,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "6.5",
+        "6.6",
+        "6.7",
+        "6.8"
+      ],
+      "pack_sections": {
+        "6.1": [
+          "api",
+          "config"
+        ],
+        "6.2": [
+          "config"
+        ],
+        "6.3": [
+          "config"
+        ],
+        "6.4": [
+          "api",
+          "sigma"
+        ],
+        "6.5": [
+          "api",
+          "sigma"
+        ],
+        "6.6": [
+          "api"
+        ],
+        "6.7": [
+          "config"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "CGPT-6.01",
+          "file": "checks/chatgpt-enterprise/CGPT-6.01-agent-rbac-audit-log-active.check.yaml",
+          "section": "6.1"
+        },
+        {
+          "id": "CGPT-6.06",
+          "file": "checks/chatgpt-enterprise/CGPT-6.06-compliance-log-export-active.check.yaml",
+          "section": "6.6"
+        }
+      ],
+      "controls_covered": [
+        "6.1",
+        "6.6"
+      ]
+    },
+    {
+      "vendor": "circleci",
+      "status": "missing",
+      "guide_controls": 12,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1"
+      ],
+      "pack_sections": {
+        "2.1": [
+          "config"
+        ],
+        "2.2": [
+          "config"
+        ],
+        "2.3": [
+          "api",
+          "config"
+        ],
+        "3.1": [
+          "config"
+        ],
+        "3.2": [
+          "config"
+        ],
+        "3.3": [
+          "config"
+        ],
+        "4.1": [
+          "api",
+          "config"
+        ],
+        "5.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "clari",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1"
+      ],
+      "pack_sections": {
+        "3.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "claude-code",
+      "status": "partial",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [
+        {
+          "id": "ANTH-7.04",
+          "file": "checks/anthropic-claude/ANTH-7.04-claude-code-metrics-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "5.1"
+      ]
+    },
+    {
+      "vendor": "claude-enterprise",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "cloudflare",
+      "status": "partial",
+      "guide_controls": 23,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "5.3",
+        "6.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "terraform"
+        ],
+        "1.3": [
+          "api",
+          "terraform"
+        ],
+        "1.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "terraform"
+        ],
+        "3.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "terraform"
+        ],
+        "3.3": [
+          "api",
+          "terraform"
+        ],
+        "3.4": [
+          "api",
+          "terraform"
+        ],
+        "4.1": [
+          "api",
+          "terraform"
+        ],
+        "4.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "4.3": [
+          "api",
+          "terraform"
+        ],
+        "5.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "5.2": [
+          "api",
+          "terraform"
+        ],
+        "6.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "CF-1.01",
+          "file": "checks/cloudflare/CF-1.01-identity-provider-configured.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "CF-1.03",
+          "file": "checks/cloudflare/CF-1.03-device-enrollment-policy-audit.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "CF-1.04",
+          "file": "checks/cloudflare/CF-1.04-super-admin-count.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "CF-2.02",
+          "file": "checks/cloudflare/CF-2.02-warp-device-posture-rule.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "CF-2.03",
+          "file": "checks/cloudflare/CF-2.03-device-posture-checks-configured.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "CF-3.01",
+          "file": "checks/cloudflare/CF-3.01-gateway-dns-block-rule.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "CF-3.02",
+          "file": "checks/cloudflare/CF-3.02-gateway-http-block-rule.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "CF-3.03",
+          "file": "checks/cloudflare/CF-3.03-gateway-network-policy.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "CF-3.04",
+          "file": "checks/cloudflare/CF-3.04-browser-isolation-policy.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "CF-4.01",
+          "file": "checks/cloudflare/CF-4.01-warp-client-settings-hardened.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "CF-4.02",
+          "file": "checks/cloudflare/CF-4.02-warp-client-locked.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "CF-4.03",
+          "file": "checks/cloudflare/CF-4.03-split-tunnel-exclusion-count.check.yaml",
+          "section": "4.3"
+        },
+        {
+          "id": "CF-5.01",
+          "file": "checks/cloudflare/CF-5.01-tunnel-configuration-audit.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "CF-6.01",
+          "file": "checks/cloudflare/CF-6.01-logpush-zero-trust-datasets.check.yaml",
+          "section": "6.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.3",
+        "1.4",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "6.1"
+      ]
+    },
+    {
+      "vendor": "concur",
+      "status": "missing",
+      "guide_controls": 17,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "coupa",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "crowdstrike",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "3.3": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ],
+        "5.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "cursor",
+      "status": "missing",
+      "guide_controls": 28,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3",
+        "6.1",
+        "6.2",
+        "7.1",
+        "7.2",
+        "8.1",
+        "9.1",
+        "9.2",
+        "10.1",
+        "10.2",
+        "11.1",
+        "11.2",
+        "11.3"
+      ],
+      "pack_sections": {
+        "2.1": [
+          "config"
+        ],
+        "2.3": [
+          "config"
+        ],
+        "3.1": [
+          "config"
+        ],
+        "3.2": [
+          "config"
+        ],
+        "4.1": [
+          "config"
+        ],
+        "5.1": [
+          "config"
+        ],
+        "6.1": [
+          "config"
+        ],
+        "7.1": [
+          "config"
+        ],
+        "8.1": [
+          "config"
+        ],
+        "9.1": [
+          "config"
+        ],
+        "9.2": [
+          "config"
+        ],
+        "10.1": [
+          "config"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "cyberark",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "6.1",
+        "6.2"
+      ],
+      "pack_sections": {
+        "1.2": [
+          "api"
+        ],
+        "2.1": [
+          "config"
+        ],
+        "3.1": [
+          "config",
+          "sdk"
+        ],
+        "3.3": [
+          "api"
+        ],
+        "4.1": [
+          "config"
+        ],
+        "5.1": [
+          "config"
+        ],
+        "5.2": [
+          "terraform"
+        ],
+        "6.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "databricks",
+      "status": "missing",
+      "guide_controls": 16,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "2.1": [
+          "db",
+          "terraform"
+        ],
+        "2.2": [
+          "db",
+          "terraform"
+        ],
+        "2.3": [
+          "db",
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "cli",
+          "sdk",
+          "terraform"
+        ],
+        "4.2": [
+          "cli",
+          "terraform"
+        ],
+        "5.1": [
+          "db",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "datadog",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "5.1",
+        "6.1",
+        "6.2",
+        "6.3"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "dockerhub",
+      "status": "missing",
+      "guide_controls": 16,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {
+        "2.1": [
+          "cli"
+        ],
+        "2.2": [
+          "cli"
+        ],
+        "2.3": [
+          "cli"
+        ],
+        "2.4": [
+          "cli"
+        ],
+        "2.5": [
+          "cli"
+        ],
+        "4.2": [
+          "cli"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "docusign",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "drata",
+      "status": "missing",
+      "guide_controls": 16,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "dropbox",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "3.1",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "duo",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "6.1",
+        "6.3"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "sdk"
+        ],
+        "2.2": [
+          "sdk"
+        ],
+        "3.1": [
+          "sdk"
+        ],
+        "6.1": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "figma",
+      "status": "missing",
+      "guide_controls": 16,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "fivetran",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "1.4": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.3": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ],
+        "4.3": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "freshservice",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "fullstory",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "github",
+      "status": "partial",
+      "guide_controls": 56,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.7",
+        "1.8",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "2.8",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7",
+        "3.8",
+        "3.9",
+        "3.10",
+        "3.11",
+        "3.12",
+        "3.13",
+        "3.14",
+        "3.15",
+        "3.16",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "5.5",
+        "5.6",
+        "5.7",
+        "5.8",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "6.5",
+        "6.6",
+        "6.7",
+        "6.8",
+        "7.1",
+        "7.2",
+        "7.3",
+        "8.1",
+        "8.2",
+        "8.3"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.3": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.5": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.6": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.7": [
+          "api"
+        ],
+        "1.8": [
+          "api"
+        ],
+        "1.9": [
+          "api"
+        ],
+        "1.10": [
+          "api"
+        ],
+        "1.11": [
+          "api"
+        ],
+        "1.12": [
+          "api",
+          "sigma"
+        ],
+        "2.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.5": [
+          "api",
+          "terraform"
+        ],
+        "2.6": [
+          "api",
+          "sigma"
+        ],
+        "2.7": [
+          "api"
+        ],
+        "2.8": [
+          "cli"
+        ],
+        "2.9": [
+          "api"
+        ],
+        "2.10": [
+          "api",
+          "sigma"
+        ],
+        "2.11": [
+          "api",
+          "sigma"
+        ],
+        "3.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.3": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.4": [
+          "api",
+          "config",
+          "sigma",
+          "terraform"
+        ],
+        "3.5": [
+          "api",
+          "config",
+          "sigma",
+          "terraform"
+        ],
+        "3.6": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.7": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.8": [
+          "api"
+        ],
+        "3.9": [
+          "api"
+        ],
+        "3.10": [
+          "sdk"
+        ],
+        "3.11": [
+          "config"
+        ],
+        "3.12": [
+          "cli"
+        ],
+        "3.13": [
+          "config"
+        ],
+        "3.14": [
+          "config"
+        ],
+        "3.15": [
+          "api"
+        ],
+        "3.16": [
+          "api"
+        ],
+        "3.17": [
+          "config"
+        ],
+        "3.18": [
+          "api"
+        ],
+        "3.19": [
+          "api",
+          "config",
+          "sigma"
+        ],
+        "3.20": [
+          "api"
+        ],
+        "3.21": [
+          "api"
+        ],
+        "3.22": [
+          "config"
+        ],
+        "3.23": [
+          "config"
+        ],
+        "3.24": [
+          "cli"
+        ],
+        "3.25": [
+          "api"
+        ],
+        "3.26": [
+          "api"
+        ],
+        "3.27": [
+          "api"
+        ],
+        "3.28": [
+          "config"
+        ],
+        "3.30": [
+          "config"
+        ],
+        "4.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "4.2": [
+          "api",
+          "sigma"
+        ],
+        "4.3": [
+          "api",
+          "sigma"
+        ],
+        "4.4": [
+          "api",
+          "sigma"
+        ],
+        "4.5": [
+          "config"
+        ],
+        "4.6": [
+          "sdk"
+        ],
+        "4.7": [
+          "api"
+        ],
+        "4.8": [
+          "api"
+        ],
+        "5.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "5.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "5.3": [
+          "api",
+          "sigma"
+        ],
+        "5.5": [
+          "api",
+          "config",
+          "sigma",
+          "terraform"
+        ],
+        "5.6": [
+          "api",
+          "config",
+          "sigma"
+        ],
+        "5.7": [
+          "api",
+          "sigma"
+        ],
+        "5.8": [
+          "api",
+          "sigma"
+        ],
+        "5.9": [
+          "api",
+          "sigma"
+        ],
+        "5.10": [
+          "api"
+        ],
+        "5.11": [
+          "api"
+        ],
+        "5.12": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "5.20": [
+          "config"
+        ],
+        "6.1": [
+          "api"
+        ],
+        "6.2": [
+          "cli"
+        ],
+        "6.3": [
+          "config"
+        ],
+        "6.4": [
+          "config"
+        ],
+        "6.5": [
+          "config"
+        ],
+        "6.6": [
+          "api"
+        ],
+        "6.7": [
+          "cli"
+        ],
+        "6.20": [
+          "config"
+        ],
+        "7.1": [
+          "siem"
+        ],
+        "7.2": [
+          "api"
+        ],
+        "7.3": [
+          "api"
+        ],
+        "7.4": [
+          "api"
+        ],
+        "8.1": [
+          "api"
+        ],
+        "8.4": [
+          "api",
+          "sigma"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "GH-1.01",
+          "file": "checks/github/GH-1.01-org-mfa.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "GH-1.02",
+          "file": "checks/github/GH-1.02-org-base-permissions.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "GH-1.03",
+          "file": "checks/github/GH-1.03-saml-sso.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "GH-1.04",
+          "file": "checks/github/GH-1.04-admin-audit.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "GH-1.05",
+          "file": "checks/github/GH-1.05-ip-allow-list.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "GH-1.07",
+          "file": "checks/github/GH-1.07-pat-policy.check.yaml",
+          "section": "1.7"
+        },
+        {
+          "id": "GH-1.08",
+          "file": "checks/github/GH-1.08-repo-creation.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "GH-2.01",
+          "file": "checks/github/GH-2.01-secret-scanning.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-2.02",
+          "file": "checks/github/GH-2.02-dependabot.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-2.03",
+          "file": "checks/github/GH-2.03-org-rulesets.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "GH-2.04",
+          "file": "checks/github/GH-2.04-commit-signing.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "GH-2.05",
+          "file": "checks/github/GH-2.05-branch-protection.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "GH-2.06",
+          "file": "checks/github/GH-2.06-vulnerability-reporting.check.yaml",
+          "section": "2.8"
+        },
+        {
+          "id": "GH-2.07",
+          "file": "checks/github/GH-2.07-dependency-graph.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-3.01",
+          "file": "checks/github/GH-3.01-actions-allowed.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "GH-3.02",
+          "file": "checks/github/GH-3.02-workflow-permissions.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "GH-3.03",
+          "file": "checks/github/GH-3.03-code-scanning.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-3.04",
+          "file": "checks/github/GH-3.04-runner-config.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "GH-3.05",
+          "file": "checks/github/GH-3.05-environment-protection.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "GH-3.06",
+          "file": "checks/github/GH-3.06-oidc-config.check.yaml",
+          "section": "3.6"
+        },
+        {
+          "id": "GH-3.07",
+          "file": "checks/github/GH-3.07-codeowners.check.yaml",
+          "section": "3.11"
+        },
+        {
+          "id": "GH-4.01",
+          "file": "checks/github/GH-4.01-oauth-apps.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "GH-4.02",
+          "file": "checks/github/GH-4.02-installed-apps.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "GH-4.03",
+          "file": "checks/github/GH-4.03-vulnerability-alerts.check.yaml",
+          "section": "6.1"
+        },
+        {
+          "id": "GH-5.01",
+          "file": "checks/github/GH-5.01-org-webhooks.check.yaml",
+          "section": "none"
+        },
+        {
+          "id": "GH-5.02",
+          "file": "checks/github/GH-5.02-outside-collaborators.check.yaml",
+          "section": "5.8"
+        },
+        {
+          "id": "GH-5.03",
+          "file": "checks/github/GH-5.03-custom-secret-patterns.check.yaml",
+          "section": "5.4"
+        },
+        {
+          "id": "GH-5.06",
+          "file": "checks/github/GH-5.06-repo-custom-properties.check.yaml",
+          "section": "5.6"
+        },
+        {
+          "id": "GH-6.05",
+          "file": "checks/github/GH-6.05-dependency-review-ruleset.check.yaml",
+          "section": "6.5"
+        },
+        {
+          "id": "GH-7.01",
+          "file": "checks/github/GH-7.01-copilot-governance.check.yaml",
+          "section": "7.1"
+        },
+        {
+          "id": "GH-7.02",
+          "file": "checks/github/GH-7.02-custom-repository-roles.check.yaml",
+          "section": "7.2"
+        },
+        {
+          "id": "GH-7.03",
+          "file": "checks/github/GH-7.03-required-workflow-rulesets.check.yaml",
+          "section": "7.3"
+        },
+        {
+          "id": "GH-8.01",
+          "file": "checks/github/GH-8.01-audit-log-streaming.check.yaml",
+          "section": "8.1"
+        },
+        {
+          "id": "GH-8.02",
+          "file": "checks/github/GH-8.02-security-overview-dashboard.check.yaml",
+          "section": "8.2"
+        },
+        {
+          "id": "GH-8.03",
+          "file": "checks/github/GH-8.03-security-config.check.yaml",
+          "section": "8.3"
+        },
+        {
+          "id": "GH-TEST-01",
+          "file": "checks/github/GH-TEST-01-secret-push.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-TEST-02",
+          "file": "checks/github/GH-TEST-02-branch-bypass.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "GH-TEST-03",
+          "file": "checks/github/GH-TEST-03-action-pin-audit.check.yaml",
+          "section": "3.10"
+        },
+        {
+          "id": "GH-TEST-04",
+          "file": "checks/github/GH-TEST-04-unsigned-commit.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "GH-TEST-05",
+          "file": "checks/github/GH-TEST-05-workflow-injection.check.yaml",
+          "section": "3.13"
+        },
+        {
+          "id": "GH-1.01",
+          "file": "checks/github/GH-1.01-org-mfa.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "GH-1.02",
+          "file": "checks/github/GH-1.02-org-base-permissions.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "GH-1.03",
+          "file": "checks/github/GH-1.03-saml-sso.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "GH-1.04",
+          "file": "checks/github/GH-1.04-admin-audit.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "GH-1.05",
+          "file": "checks/github/GH-1.05-ip-allow-list.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "GH-1.07",
+          "file": "checks/github/GH-1.07-pat-policy.check.yaml",
+          "section": "1.7"
+        },
+        {
+          "id": "GH-1.08",
+          "file": "checks/github/GH-1.08-repo-creation.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "GH-2.01",
+          "file": "checks/github/GH-2.01-secret-scanning.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-2.02",
+          "file": "checks/github/GH-2.02-dependabot.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-2.03",
+          "file": "checks/github/GH-2.03-org-rulesets.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "GH-2.04",
+          "file": "checks/github/GH-2.04-commit-signing.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "GH-2.05",
+          "file": "checks/github/GH-2.05-branch-protection.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "GH-2.06",
+          "file": "checks/github/GH-2.06-vulnerability-reporting.check.yaml",
+          "section": "2.8"
+        },
+        {
+          "id": "GH-2.07",
+          "file": "checks/github/GH-2.07-dependency-graph.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-3.01",
+          "file": "checks/github/GH-3.01-actions-allowed.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "GH-3.02",
+          "file": "checks/github/GH-3.02-workflow-permissions.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "GH-3.03",
+          "file": "checks/github/GH-3.03-code-scanning.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-3.04",
+          "file": "checks/github/GH-3.04-runner-config.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "GH-3.05",
+          "file": "checks/github/GH-3.05-environment-protection.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "GH-3.06",
+          "file": "checks/github/GH-3.06-oidc-config.check.yaml",
+          "section": "3.6"
+        },
+        {
+          "id": "GH-3.07",
+          "file": "checks/github/GH-3.07-codeowners.check.yaml",
+          "section": "3.11"
+        },
+        {
+          "id": "GH-4.01",
+          "file": "checks/github/GH-4.01-oauth-apps.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "GH-4.02",
+          "file": "checks/github/GH-4.02-installed-apps.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "GH-4.03",
+          "file": "checks/github/GH-4.03-vulnerability-alerts.check.yaml",
+          "section": "6.1"
+        },
+        {
+          "id": "GH-5.01",
+          "file": "checks/github/GH-5.01-org-webhooks.check.yaml",
+          "section": "none"
+        },
+        {
+          "id": "GH-5.02",
+          "file": "checks/github/GH-5.02-outside-collaborators.check.yaml",
+          "section": "5.8"
+        },
+        {
+          "id": "GH-5.03",
+          "file": "checks/github/GH-5.03-custom-secret-patterns.check.yaml",
+          "section": "5.4"
+        },
+        {
+          "id": "GH-5.06",
+          "file": "checks/github/GH-5.06-repo-custom-properties.check.yaml",
+          "section": "5.6"
+        },
+        {
+          "id": "GH-6.05",
+          "file": "checks/github/GH-6.05-dependency-review-ruleset.check.yaml",
+          "section": "6.5"
+        },
+        {
+          "id": "GH-7.01",
+          "file": "checks/github/GH-7.01-copilot-governance.check.yaml",
+          "section": "7.1"
+        },
+        {
+          "id": "GH-7.02",
+          "file": "checks/github/GH-7.02-custom-repository-roles.check.yaml",
+          "section": "7.2"
+        },
+        {
+          "id": "GH-7.03",
+          "file": "checks/github/GH-7.03-required-workflow-rulesets.check.yaml",
+          "section": "7.3"
+        },
+        {
+          "id": "GH-8.01",
+          "file": "checks/github/GH-8.01-audit-log-streaming.check.yaml",
+          "section": "8.1"
+        },
+        {
+          "id": "GH-8.02",
+          "file": "checks/github/GH-8.02-security-overview-dashboard.check.yaml",
+          "section": "8.2"
+        },
+        {
+          "id": "GH-8.03",
+          "file": "checks/github/GH-8.03-security-config.check.yaml",
+          "section": "8.3"
+        },
+        {
+          "id": "GH-TEST-01",
+          "file": "checks/github/GH-TEST-01-secret-push.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "GH-TEST-02",
+          "file": "checks/github/GH-TEST-02-branch-bypass.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "GH-TEST-03",
+          "file": "checks/github/GH-TEST-03-action-pin-audit.check.yaml",
+          "section": "3.10"
+        },
+        {
+          "id": "GH-TEST-04",
+          "file": "checks/github/GH-TEST-04-unsigned-commit.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "GH-TEST-05",
+          "file": "checks/github/GH-TEST-05-workflow-injection.check.yaml",
+          "section": "3.13"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.7",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.8",
+        "3.1",
+        "3.2",
+        "3.4",
+        "3.6",
+        "3.10",
+        "3.11",
+        "3.13",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.4",
+        "5.6",
+        "5.8",
+        "6.1",
+        "6.5",
+        "7.1",
+        "7.2",
+        "7.3",
+        "8.1",
+        "8.2",
+        "8.3"
+      ]
+    },
+    {
+      "vendor": "gitlab",
+      "status": "partial",
+      "guide_controls": 19,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "6.1",
+        "7.1",
+        "7.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "config"
+        ],
+        "1.3": [
+          "api",
+          "sigma"
+        ],
+        "2.1": [
+          "api",
+          "config"
+        ],
+        "2.3": [
+          "config"
+        ],
+        "3.1": [
+          "cli"
+        ],
+        "3.2": [
+          "cli"
+        ],
+        "4.1": [
+          "api",
+          "config",
+          "sigma"
+        ],
+        "4.2": [
+          "cli"
+        ],
+        "5.1": [
+          "config"
+        ],
+        "6.1": [
+          "api",
+          "sigma"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "GITLAB-1.03",
+          "file": "checks/gitlab/GITLAB-1.03-pat-policy.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "GITLAB-2.01",
+          "file": "checks/gitlab/GITLAB-2.01-protect-cicd-variables.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "GITLAB-4.01",
+          "file": "checks/gitlab/GITLAB-4.01-push-rules.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "GITLAB-6.01",
+          "file": "checks/gitlab/GITLAB-6.01-audit-events.check.yaml",
+          "section": "6.1"
+        }
+      ],
+      "controls_covered": [
+        "1.3",
+        "2.1",
+        "4.1",
+        "6.1"
+      ]
+    },
+    {
+      "vendor": "gmail",
+      "status": "missing",
+      "guide_controls": 18,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "gong",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "google-chat",
+      "status": "missing",
+      "guide_controls": 12,
+      "controls": [
+        "1.1",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "db",
+          "terraform"
+        ],
+        "2.1": [
+          "api",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "db",
+          "sdk"
+        ],
+        "2.6": [
+          "cli"
+        ],
+        "2.7": [
+          "api"
+        ],
+        "3.1": [
+          "api",
+          "cli",
+          "db",
+          "sdk"
+        ],
+        "3.3": [
+          "api"
+        ],
+        "3.4": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "google-drive",
+      "status": "missing",
+      "guide_controls": 12,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "3.1",
+        "4.1",
+        "4.2",
+        "5.1",
+        "6.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "google-workspace",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "3.1",
+        "3.2",
+        "4.2",
+        "4.3",
+        "5.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "sdk",
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "terraform"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "3.1": [
+          "api",
+          "sdk",
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ],
+        "5.1": [
+          "api",
+          "db",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "gusto",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "harness",
+      "status": "missing",
+      "guide_controls": 12,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "1.2": [
+          "terraform"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "hashicorp-vault",
+      "status": "missing",
+      "guide_controls": 19,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "6.1",
+        "6.2",
+        "6.3",
+        "7.1",
+        "7.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "cli",
+          "sigma",
+          "terraform"
+        ],
+        "1.2": [
+          "cli",
+          "terraform"
+        ],
+        "1.3": [
+          "cli"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "cli"
+        ],
+        "2.3": [
+          "cli"
+        ],
+        "3.1": [
+          "cli"
+        ],
+        "4.1": [
+          "api",
+          "cli",
+          "sigma",
+          "terraform"
+        ],
+        "4.2": [
+          "sdk"
+        ],
+        "5.1": [
+          "cli",
+          "sdk"
+        ],
+        "5.2": [
+          "cli"
+        ],
+        "6.1": [
+          "cli"
+        ],
+        "6.2": [
+          "cli"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "heap",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "hubspot",
+      "status": "missing",
+      "guide_controls": 12,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "intercom",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "jamf",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "terraform"
+        ],
+        "2.4": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "jenkins",
+      "status": "missing",
+      "guide_controls": 18,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "jfrog",
+      "status": "missing",
+      "guide_controls": 12,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "terraform"
+        ],
+        "1.3": [
+          "cli",
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "cli",
+          "terraform"
+        ],
+        "3.1": [
+          "cli",
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.2": [
+          "cli"
+        ],
+        "5.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "jira-cloud",
+      "status": "missing",
+      "guide_controls": 6,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "jumpcloud",
+      "status": "partial",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "sigma"
+        ],
+        "2.1": [
+          "api",
+          "sigma"
+        ],
+        "3.1": [
+          "api"
+        ],
+        "4.1": [
+          "api"
+        ],
+        "5.1": [
+          "api",
+          "sigma"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "JC-1.01",
+          "file": "checks/jumpcloud/JC-1.01-admin-portal-mfa-required.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "JC-2.01",
+          "file": "checks/jumpcloud/JC-2.01-user-portal-mfa-enrollment-audit.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "JC-4.01",
+          "file": "checks/jumpcloud/JC-4.01-device-policy-inventory.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "JC-5.01",
+          "file": "checks/jumpcloud/JC-5.01-directory-insights-enabled.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "2.1",
+        "4.1",
+        "5.1"
+      ]
+    },
+    {
+      "vendor": "keeper",
+      "status": "missing",
+      "guide_controls": 18,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {
+        "2.2": [
+          "cli"
+        ],
+        "2.5": [
+          "cli"
+        ],
+        "5.1": [
+          "cli"
+        ],
+        "5.2": [
+          "cli"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "kernel",
+      "status": "missing",
+      "guide_controls": 19,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "cli"
+        ],
+        "1.2": [
+          "api"
+        ],
+        "1.3": [
+          "cli"
+        ],
+        "1.4": [
+          "api"
+        ],
+        "1.5": [
+          "config"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "api"
+        ],
+        "3.1": [
+          "cli"
+        ],
+        "3.2": [
+          "sdk"
+        ],
+        "3.4": [
+          "sdk"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "cli"
+        ],
+        "4.3": [
+          "api"
+        ],
+        "4.5": [
+          "cli"
+        ],
+        "5.1": [
+          "cli"
+        ],
+        "5.2": [
+          "cli"
+        ],
+        "5.3": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "klaviyo",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "knowbe4",
+      "status": "missing",
+      "guide_controls": 7,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "langchain",
+      "status": "missing",
+      "guide_controls": 23,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "5.1",
+        "5.2",
+        "5.3",
+        "6.1",
+        "6.2",
+        "6.3",
+        "7.1",
+        "7.2"
+      ],
+      "pack_sections": {
+        "1.2": [
+          "api"
+        ],
+        "1.3": [
+          "api"
+        ],
+        "2.1": [
+          "cli",
+          "config"
+        ],
+        "3.2": [
+          "config"
+        ],
+        "3.3": [
+          "sdk"
+        ],
+        "3.5": [
+          "sdk"
+        ],
+        "4.1": [
+          "sdk"
+        ],
+        "4.2": [
+          "sdk"
+        ],
+        "5.1": [
+          "sdk"
+        ],
+        "6.1": [
+          "config"
+        ],
+        "6.2": [
+          "api"
+        ],
+        "7.1": [
+          "cli"
+        ],
+        "7.2": [
+          "cli"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "lastpass",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "launchdarkly",
+      "status": "full",
+      "guide_controls": 7,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api"
+        ],
+        "1.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.1": [
+          "api"
+        ],
+        "2.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "terraform"
+        ],
+        "4.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "LD-1.01",
+          "file": "checks/launchdarkly/LD-1.01-member-mfa-audit.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "LD-1.02",
+          "file": "checks/launchdarkly/LD-1.02-admin-role-count.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "LD-2.01",
+          "file": "checks/launchdarkly/LD-2.01-environment-secure-mode.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "LD-2.02",
+          "file": "checks/launchdarkly/LD-2.02-api-token-admin-role.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "LD-3.01",
+          "file": "checks/launchdarkly/LD-3.01-production-environment-hardened.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "LD-3.02",
+          "file": "checks/launchdarkly/LD-3.02-flag-lifecycle-hygiene.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "LD-4.01",
+          "file": "checks/launchdarkly/LD-4.01-audit-log-webhook-active.check.yaml",
+          "section": "4.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ]
+    },
+    {
+      "vendor": "linear",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "looker",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "lovable",
+      "status": "missing",
+      "guide_controls": 25,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "6.1",
+        "6.2",
+        "6.3",
+        "7.1",
+        "7.2"
+      ],
+      "pack_sections": {
+        "1.3": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "mailchimp",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "marketo",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "microsoft-365",
+      "status": "missing",
+      "guide_controls": 16,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "8.1",
+        "8.2",
+        "8.3",
+        "9.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "cli",
+          "siem",
+          "terraform"
+        ],
+        "1.2": [
+          "cli",
+          "terraform"
+        ],
+        "1.3": [
+          "cli"
+        ],
+        "1.4": [
+          "cli",
+          "terraform"
+        ],
+        "2.1": [
+          "cli",
+          "terraform"
+        ],
+        "3.1": [
+          "cli"
+        ],
+        "3.2": [
+          "cli"
+        ],
+        "4.2": [
+          "cli",
+          "terraform"
+        ],
+        "5.1": [
+          "cli",
+          "terraform"
+        ],
+        "5.2": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "microsoft-entra-id",
+      "status": "partial",
+      "guide_controls": 16,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "cli"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "cli",
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "cli",
+          "terraform"
+        ],
+        "2.4": [
+          "terraform"
+        ],
+        "3.1": [
+          "cli",
+          "terraform"
+        ],
+        "4.1": [
+          "cli"
+        ],
+        "4.2": [
+          "terraform"
+        ],
+        "5.1": [
+          "terraform"
+        ],
+        "5.3": [
+          "siem"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "AZURE-AAD-1.01",
+          "file": "checks/azure/AZURE-AAD-1.01-security-defaults.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "AZURE-AAD-2.01",
+          "file": "checks/azure/AZURE-AAD-2.01-legacy-auth.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "AZURE-AAD-3.01",
+          "file": "checks/azure/AZURE-AAD-3.01-privileged-roles.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "AZURE-APP-4.01",
+          "file": "checks/azure/AZURE-APP-4.01-restrict-user-consent.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "AZURE-APP-4.03",
+          "file": "checks/azure/AZURE-APP-4.03-retire-azure-ad-graph.check.yaml",
+          "section": "4.3"
+        },
+        {
+          "id": "AZURE-CA-1.01",
+          "file": "checks/azure/AZURE-CA-1.01-conditional-access.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "AZURE-CA-1.02",
+          "file": "checks/azure/AZURE-CA-1.02-emergency-access-exclusion.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "AZURE-CA-2.03",
+          "file": "checks/azure/AZURE-CA-2.03-compliant-device-admins.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "AZURE-CA-2.04",
+          "file": "checks/azure/AZURE-CA-2.04-block-high-risk-signins.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "AZURE-CA-2.06",
+          "file": "checks/azure/AZURE-CA-2.06-block-device-code-flow.check.yaml",
+          "section": "2.6"
+        },
+        {
+          "id": "AZURE-KV-1.01",
+          "file": "checks/azure/AZURE-KV-1.01-soft-delete.check.yaml",
+          "section": "1.01"
+        },
+        {
+          "id": "AZURE-LOG-1.01",
+          "file": "checks/azure/AZURE-LOG-1.01-diagnostic-settings.check.yaml",
+          "section": "1.01"
+        },
+        {
+          "id": "AZURE-MFA-1.01",
+          "file": "checks/azure/AZURE-MFA-1.01-mfa-bypass.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "AZURE-MON-5.01",
+          "file": "checks/azure/AZURE-MON-5.01-export-signin-audit-logs.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "AZURE-MON-5.02",
+          "file": "checks/azure/AZURE-MON-5.02-identity-secure-score.check.yaml",
+          "section": "5.2"
+        },
+        {
+          "id": "AZURE-NSG-1.01",
+          "file": "checks/azure/AZURE-NSG-1.01-unrestricted-inbound.check.yaml",
+          "section": "1.01"
+        },
+        {
+          "id": "AZURE-PIM-3.02",
+          "file": "checks/azure/AZURE-PIM-3.02-access-reviews.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "AZURE-PIM-3.03",
+          "file": "checks/azure/AZURE-PIM-3.03-restricted-management-au.check.yaml",
+          "section": "3.3"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.3",
+        "5.1",
+        "5.2"
+      ]
+    },
+    {
+      "vendor": "microsoft-intune",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "6.1",
+        "6.2",
+        "7.1",
+        "7.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "cli"
+        ],
+        "1.2": [
+          "cli"
+        ],
+        "2.1": [
+          "cli"
+        ],
+        "3.1": [
+          "cli"
+        ],
+        "3.2": [
+          "cli"
+        ],
+        "4.1": [
+          "cli"
+        ],
+        "5.1": [
+          "cli"
+        ],
+        "5.2": [
+          "siem"
+        ],
+        "6.1": [
+          "cli"
+        ],
+        "6.2": [
+          "cli"
+        ],
+        "7.1": [
+          "cli"
+        ],
+        "7.2": [
+          "siem"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "mimecast",
+      "status": "missing",
+      "guide_controls": 17,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "miro",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "mixpanel",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "monday",
+      "status": "missing",
+      "guide_controls": 19,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "mongodb-atlas",
+      "status": "missing",
+      "guide_controls": 14,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.1": [
+          "api",
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "netskope",
+      "status": "missing",
+      "guide_controls": 17,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "6.1",
+        "8.1",
+        "8.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "netsuite",
+      "status": "missing",
+      "guide_controls": 14,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "5.1"
+      ],
+      "pack_sections": {
+        "3.2": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "new-relic",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "notion",
+      "status": "partial",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "3.6",
+        "3.7",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {
+        "2.1": [
+          "api"
+        ],
+        "3.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "NOTION-2.01",
+          "file": "checks/notion/NOTION-2.01-workspace-access-audit.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "NOTION-3.01",
+          "file": "checks/notion/NOTION-3.01-public-page-audit.check.yaml",
+          "section": "3.1"
+        }
+      ],
+      "controls_covered": [
+        "2.1",
+        "3.1"
+      ]
+    },
+    {
+      "vendor": "okta",
+      "status": "partial",
+      "guide_controls": 36,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7",
+        "1.8",
+        "1.9",
+        "1.10",
+        "1.11",
+        "1.12",
+        "1.13",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "5.5",
+        "5.6",
+        "5.7",
+        "7.1",
+        "7.2",
+        "7.3",
+        "7.4",
+        "7.5"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.2": [
+          "api"
+        ],
+        "1.4": [
+          "api"
+        ],
+        "1.5": [
+          "api"
+        ],
+        "1.9": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.10": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.11": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.1": [
+          "api",
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "3.1": [
+          "api"
+        ],
+        "3.2": [
+          "sigma"
+        ],
+        "3.3": [
+          "api",
+          "sigma"
+        ],
+        "3.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "4.1": [
+          "api",
+          "terraform"
+        ],
+        "4.2": [
+          "api",
+          "terraform"
+        ],
+        "4.3": [
+          "api",
+          "sigma"
+        ],
+        "5.1": [
+          "api",
+          "sigma"
+        ],
+        "5.2": [
+          "api",
+          "terraform"
+        ],
+        "5.3": [
+          "sigma"
+        ],
+        "5.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "5.5": [
+          "api",
+          "sigma"
+        ],
+        "6.1": [
+          "api"
+        ],
+        "6.2": [
+          "api"
+        ],
+        "7.1": [
+          "config"
+        ],
+        "7.3": [
+          "api"
+        ],
+        "7.4": [
+          "sigma"
+        ],
+        "7.5": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "OKTA-1.02",
+          "file": "checks/okta/OKTA-1.02-admin-roles.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "OKTA-1.03",
+          "file": "checks/okta/OKTA-1.03-hardware-bound-tokens.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "OKTA-1.05",
+          "file": "checks/okta/OKTA-1.05-account-lockout.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "OKTA-1.07",
+          "file": "checks/okta/OKTA-1.07-authenticators.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "OKTA-1.08",
+          "file": "checks/okta/OKTA-1.08-inactive-admins.check.yaml",
+          "section": "1.6"
+        },
+        {
+          "id": "OKTA-1.09",
+          "file": "checks/okta/OKTA-1.09-super-admin-count.check.yaml",
+          "section": "7.3"
+        },
+        {
+          "id": "OKTA-1.11",
+          "file": "checks/okta/OKTA-1.11-security-notifications.check.yaml",
+          "section": "1.11"
+        },
+        {
+          "id": "OKTA-1.70",
+          "file": "checks/okta/OKTA-1.70-piv-cac-smartcard.check.yaml",
+          "section": "1.7"
+        },
+        {
+          "id": "OKTA-1.80",
+          "file": "checks/okta/OKTA-1.80-fips-authenticators.check.yaml",
+          "section": "1.8"
+        },
+        {
+          "id": "OKTA-1.90",
+          "file": "checks/okta/OKTA-1.90-default-auth-policy.check.yaml",
+          "section": "1.9"
+        },
+        {
+          "id": "OKTA-2.01",
+          "file": "checks/okta/OKTA-2.01-network-zones.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "OKTA-2.03",
+          "file": "checks/okta/OKTA-2.03-anonymizer-blocking.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "OKTA-3.01",
+          "file": "checks/okta/OKTA-3.01-oauth-app-policy.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "OKTA-3.02",
+          "file": "checks/okta/OKTA-3.02-scim-inventory.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "OKTA-3.03",
+          "file": "checks/okta/OKTA-3.03-oauth-app-allowlisting.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "OKTA-4.01",
+          "file": "checks/okta/OKTA-4.01-api-token-rotation.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "OKTA-4.02",
+          "file": "checks/okta/OKTA-4.02-session-persistence.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "OKTA-4.03",
+          "file": "checks/okta/OKTA-4.03-admin-session-security.check.yaml",
+          "section": "4.3"
+        },
+        {
+          "id": "OKTA-5.01",
+          "file": "checks/okta/OKTA-5.01-log-streaming.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "OKTA-5.02",
+          "file": "checks/okta/OKTA-5.02-threat-insight.check.yaml",
+          "section": "5.2"
+        },
+        {
+          "id": "OKTA-5.04",
+          "file": "checks/okta/OKTA-5.04-behavior-detection.check.yaml",
+          "section": "5.4"
+        },
+        {
+          "id": "OKTA-5.05",
+          "file": "checks/okta/OKTA-5.05-cross-tenant-impersonation.check.yaml",
+          "section": "5.5"
+        },
+        {
+          "id": "OKTA-6.01",
+          "file": "checks/okta/OKTA-6.01-password-policy.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "OKTA-6.02",
+          "file": "checks/okta/OKTA-6.02-recovery-policy.check.yaml",
+          "section": "1.10"
+        },
+        {
+          "id": "OKTA-6.03",
+          "file": "checks/okta/OKTA-6.03-session-policy.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "OKTA-7.01",
+          "file": "checks/okta/OKTA-7.01-mfa-enrollment.check.yaml",
+          "section": "5.6"
+        },
+        {
+          "id": "OKTA-7.04",
+          "file": "checks/okta/OKTA-7.04-change-management.check.yaml",
+          "section": "7.4"
+        },
+        {
+          "id": "OKTA-8.01",
+          "file": "checks/okta/OKTA-8.01-threat-insight-block.check.yaml",
+          "section": "5.2"
+        },
+        {
+          "id": "OKTA-1.02",
+          "file": "checks/okta/OKTA-1.02-admin-roles.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "OKTA-1.03",
+          "file": "checks/okta/OKTA-1.03-hardware-bound-tokens.check.yaml",
+          "section": "1.3"
+        },
+        {
+          "id": "OKTA-1.05",
+          "file": "checks/okta/OKTA-1.05-account-lockout.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "OKTA-1.07",
+          "file": "checks/okta/OKTA-1.07-authenticators.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "OKTA-1.08",
+          "file": "checks/okta/OKTA-1.08-inactive-admins.check.yaml",
+          "section": "1.6"
+        },
+        {
+          "id": "OKTA-1.09",
+          "file": "checks/okta/OKTA-1.09-super-admin-count.check.yaml",
+          "section": "7.3"
+        },
+        {
+          "id": "OKTA-1.11",
+          "file": "checks/okta/OKTA-1.11-security-notifications.check.yaml",
+          "section": "1.11"
+        },
+        {
+          "id": "OKTA-1.70",
+          "file": "checks/okta/OKTA-1.70-piv-cac-smartcard.check.yaml",
+          "section": "1.7"
+        },
+        {
+          "id": "OKTA-1.80",
+          "file": "checks/okta/OKTA-1.80-fips-authenticators.check.yaml",
+          "section": "1.8"
+        },
+        {
+          "id": "OKTA-1.90",
+          "file": "checks/okta/OKTA-1.90-default-auth-policy.check.yaml",
+          "section": "1.9"
+        },
+        {
+          "id": "OKTA-2.01",
+          "file": "checks/okta/OKTA-2.01-network-zones.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "OKTA-2.03",
+          "file": "checks/okta/OKTA-2.03-anonymizer-blocking.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "OKTA-3.01",
+          "file": "checks/okta/OKTA-3.01-oauth-app-policy.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "OKTA-3.02",
+          "file": "checks/okta/OKTA-3.02-scim-inventory.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "OKTA-3.03",
+          "file": "checks/okta/OKTA-3.03-oauth-app-allowlisting.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "OKTA-4.01",
+          "file": "checks/okta/OKTA-4.01-api-token-rotation.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "OKTA-4.02",
+          "file": "checks/okta/OKTA-4.02-session-persistence.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "OKTA-4.03",
+          "file": "checks/okta/OKTA-4.03-admin-session-security.check.yaml",
+          "section": "4.3"
+        },
+        {
+          "id": "OKTA-5.01",
+          "file": "checks/okta/OKTA-5.01-log-streaming.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "OKTA-5.02",
+          "file": "checks/okta/OKTA-5.02-threat-insight.check.yaml",
+          "section": "5.2"
+        },
+        {
+          "id": "OKTA-5.04",
+          "file": "checks/okta/OKTA-5.04-behavior-detection.check.yaml",
+          "section": "5.4"
+        },
+        {
+          "id": "OKTA-5.05",
+          "file": "checks/okta/OKTA-5.05-cross-tenant-impersonation.check.yaml",
+          "section": "5.5"
+        },
+        {
+          "id": "OKTA-6.01",
+          "file": "checks/okta/OKTA-6.01-password-policy.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "OKTA-6.02",
+          "file": "checks/okta/OKTA-6.02-recovery-policy.check.yaml",
+          "section": "1.10"
+        },
+        {
+          "id": "OKTA-6.03",
+          "file": "checks/okta/OKTA-6.03-session-policy.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "OKTA-7.01",
+          "file": "checks/okta/OKTA-7.01-mfa-enrollment.check.yaml",
+          "section": "5.6"
+        },
+        {
+          "id": "OKTA-7.04",
+          "file": "checks/okta/OKTA-7.04-change-management.check.yaml",
+          "section": "7.4"
+        },
+        {
+          "id": "OKTA-8.01",
+          "file": "checks/okta/OKTA-8.01-threat-insight-block.check.yaml",
+          "section": "5.2"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7",
+        "1.8",
+        "1.9",
+        "1.10",
+        "1.11",
+        "2.1",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "5.4",
+        "5.5",
+        "5.6",
+        "7.3",
+        "7.4"
+      ]
+    },
+    {
+      "vendor": "ona",
+      "status": "partial",
+      "guide_controls": 22,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "6.1",
+        "6.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.3": [
+          "api",
+          "terraform"
+        ],
+        "1.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.5": [
+          "api"
+        ],
+        "2.1": [
+          "api",
+          "cli",
+          "config",
+          "sigma",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "config",
+          "terraform"
+        ],
+        "2.4": [
+          "api",
+          "terraform"
+        ],
+        "2.6": [
+          "api"
+        ],
+        "3.1": [
+          "api",
+          "cli",
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "terraform"
+        ],
+        "3.3": [
+          "api",
+          "terraform"
+        ],
+        "3.4": [
+          "api",
+          "terraform"
+        ],
+        "4.1": [
+          "api",
+          "sigma"
+        ],
+        "4.2": [
+          "api",
+          "cli",
+          "terraform"
+        ],
+        "4.3": [
+          "api",
+          "terraform"
+        ],
+        "5.1": [
+          "api",
+          "terraform"
+        ],
+        "6.1": [
+          "api",
+          "cli"
+        ],
+        "6.2": [
+          "api",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "ONA-1.01",
+          "file": "checks/ona/ONA-1.01-sso-configured.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ONA-1.01b",
+          "file": "checks/ona/ONA-1.01b-domain-verified.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ONA-1.02",
+          "file": "checks/ona/ONA-1.02-scim-required.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ONA-1.02b",
+          "file": "checks/ona/ONA-1.02b-scim-enabled.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ONA-1.04",
+          "file": "checks/ona/ONA-1.04-service-account-expiry.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "ONA-1.04b",
+          "file": "checks/ona/ONA-1.04b-pat-read-only.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "ONA-1.05",
+          "file": "checks/ona/ONA-1.05-no-invite-domains.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "ONA-2.01",
+          "file": "checks/ona/ONA-2.01-security-policy-assigned.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ONA-2.01b",
+          "file": "checks/ona/ONA-2.01b-veto-rules-defined.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ONA-2.02",
+          "file": "checks/ona/ONA-2.02-command-deny-list.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "ONA-2.03",
+          "file": "checks/ona/ONA-2.03-mcp-disabled.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "ONA-2.04",
+          "file": "checks/ona/ONA-2.04-scm-tools-scoped.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "ONA-3.01",
+          "file": "checks/ona/ONA-3.01-port-admission-capped.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "ONA-3.02",
+          "file": "checks/ona/ONA-3.02-web-browser-disabled.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "ONA-3.03",
+          "file": "checks/ona/ONA-3.03-lifetime-enforced.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "ONA-3.04",
+          "file": "checks/ona/ONA-3.04-from-scratch-restricted.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "ONA-4.02",
+          "file": "checks/ona/ONA-4.02-oidc-v3-scoped.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "ONA-5.01",
+          "file": "checks/ona/ONA-5.01-local-runners-blocked.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.2",
+        "5.1"
+      ]
+    },
+    {
+      "vendor": "onelogin",
+      "status": "partial",
+      "guide_controls": 18,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {
+        "3.3": [
+          "api"
+        ],
+        "3.4": [
+          "api"
+        ],
+        "5.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "OL-3.03",
+          "file": "checks/onelogin/OL-3.03-privileged-role-inventory.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "OL-3.04",
+          "file": "checks/onelogin/OL-3.04-inactive-users.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "OL-5.01",
+          "file": "checks/onelogin/OL-5.01-audit-logging-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "3.3",
+        "3.4",
+        "5.1"
+      ]
+    },
+    {
+      "vendor": "oracle-hcm",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "orca",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "outreach",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "pagerduty",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "paylocity",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "pendo",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "ping-identity",
+      "status": "missing",
+      "guide_controls": 18,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3",
+        "6.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.3": [
+          "terraform"
+        ],
+        "3.1": [
+          "api",
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "3.3": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ],
+        "5.1": [
+          "terraform"
+        ],
+        "6.1": [
+          "terraform"
+        ],
+        "6.2": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "postman",
+      "status": "partial",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "2.4": [
+          "api"
+        ],
+        "3.4": [
+          "api"
+        ],
+        "4.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "PM-2.04",
+          "file": "checks/postman/PM-2.04-public-workspace-audit.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "PM-3.04",
+          "file": "checks/postman/PM-3.04-secret-scanner-findings.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "PM-4.01",
+          "file": "checks/postman/PM-4.01-audit-logs.check.yaml",
+          "section": "4.1"
+        }
+      ],
+      "controls_covered": [
+        "2.4",
+        "3.4",
+        "4.1"
+      ]
+    },
+    {
+      "vendor": "power-bi",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {
+        "3.2": [
+          "db"
+        ],
+        "4.1": [
+          "siem"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "proofpoint",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "qualys",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "1.3": [
+          "api",
+          "sigma"
+        ],
+        "2.1": [
+          "sigma"
+        ],
+        "2.2": [
+          "api"
+        ],
+        "4.1": [
+          "api"
+        ],
+        "4.2": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "rapid7",
+      "status": "partial",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "3.1": [
+          "api"
+        ],
+        "3.2": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "R7-3.01",
+          "file": "checks/rapid7/R7-3.01-rbac-role-audit.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "R7-3.02",
+          "file": "checks/rapid7/R7-3.02-admin-account-ceiling.check.yaml",
+          "section": "3.2"
+        }
+      ],
+      "controls_covered": [
+        "3.1",
+        "3.2"
+      ]
+    },
+    {
+      "vendor": "replit",
+      "status": "missing",
+      "guide_controls": 20,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "5.1",
+        "5.2",
+        "5.3",
+        "6.1",
+        "7.1",
+        "7.2",
+        "7.3"
+      ],
+      "pack_sections": {
+        "4.3": [
+          "api"
+        ],
+        "4.4": [
+          "config"
+        ],
+        "5.3": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "rippling",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "sailpoint",
+      "status": "partial",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "2.2",
+        "3.1",
+        "4.1"
+      ],
+      "pack_sections": {
+        "2.2": [
+          "api"
+        ],
+        "4.1": [
+          "cli"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "SAIL-2.02",
+          "file": "checks/sailpoint/SAIL-2.02-pat-never-expiring.check.yaml",
+          "section": "2.2"
+        }
+      ],
+      "controls_covered": [
+        "2.2"
+      ]
+    },
+    {
+      "vendor": "salesforce",
+      "status": "partial",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "5.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api"
+        ],
+        "2.1": [
+          "api",
+          "db",
+          "sigma"
+        ],
+        "3.1": [
+          "api",
+          "sigma"
+        ],
+        "5.1": [
+          "api",
+          "sigma"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "SFDC-1.01",
+          "file": "checks/salesforce/SFDC-1.01-mfa-prompt-disabled-audit.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "SFDC-2.01",
+          "file": "checks/salesforce/SFDC-2.01-login-ip-ranges-configured.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "SFDC-3.01",
+          "file": "checks/salesforce/SFDC-3.01-connected-app-scopes-audit.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "SFDC-5.01",
+          "file": "checks/salesforce/SFDC-5.01-event-monitoring-active.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "2.1",
+        "3.1",
+        "5.1"
+      ]
+    },
+    {
+      "vendor": "sap-successfactors",
+      "status": "missing",
+      "guide_controls": 16,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "5.5",
+        "5.6",
+        "5.7"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "segment",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "sendgrid",
+      "status": "partial",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "1.4": [
+          "api"
+        ],
+        "2.3": [
+          "api"
+        ],
+        "3.2": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "SG-1.04",
+          "file": "checks/sendgrid/SG-1.04-ip-access-management.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "SG-3.02",
+          "file": "checks/sendgrid/SG-3.02-teammate-permissions-audit.check.yaml",
+          "section": "3.2"
+        }
+      ],
+      "controls_covered": [
+        "1.4",
+        "3.2"
+      ]
+    },
+    {
+      "vendor": "sentinelone",
+      "status": "missing",
+      "guide_controls": 14,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "sentry",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1"
+      ],
+      "pack_sections": {
+        "2.3": [
+          "api"
+        ],
+        "3.2": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "servicenow",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api"
+        ],
+        "2.2": [
+          "api",
+          "sigma"
+        ],
+        "3.2": [
+          "api",
+          "sigma"
+        ],
+        "4.1": [
+          "api",
+          "sigma"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "shopify",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "slack",
+      "status": "partial",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "5.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "sdk"
+        ],
+        "3.1": [
+          "api"
+        ],
+        "4.1": [
+          "config"
+        ],
+        "5.1": [
+          "sdk",
+          "siem"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "SLACK-1.02",
+          "file": "checks/slack/SLACK-1.02-scim-provisioning.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "SLACK-3.01",
+          "file": "checks/slack/SLACK-3.01-app-approval.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "SLACK-5.01",
+          "file": "checks/slack/SLACK-5.01-audit-logging.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "3.1",
+        "5.1"
+      ]
+    },
+    {
+      "vendor": "smartsheet",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "snowflake",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "db",
+          "sigma"
+        ],
+        "1.2": [
+          "cli",
+          "db",
+          "sdk"
+        ],
+        "1.3": [
+          "api"
+        ],
+        "2.1": [
+          "api",
+          "db",
+          "sigma",
+          "terraform"
+        ],
+        "2.2": [
+          "db"
+        ],
+        "3.1": [
+          "api",
+          "db",
+          "terraform"
+        ],
+        "3.2": [
+          "db"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "db"
+        ],
+        "4.3": [
+          "db"
+        ],
+        "5.1": [
+          "api",
+          "sigma"
+        ],
+        "5.2": [
+          "db"
+        ],
+        "6.2": [
+          "db"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "snyk",
+      "status": "missing",
+      "guide_controls": 7,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {
+        "2.1": [
+          "api"
+        ],
+        "3.2": [
+          "cli"
+        ],
+        "4.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "splunk",
+      "status": "missing",
+      "guide_controls": 10,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "square",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "stripe",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1"
+      ],
+      "pack_sections": {
+        "3.1": [
+          "api",
+          "sigma"
+        ],
+        "3.2": [
+          "api"
+        ],
+        "3.3": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "tableau",
+      "status": "missing",
+      "guide_controls": 9,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {
+        "1.2": [
+          "api"
+        ],
+        "3.1": [
+          "api"
+        ],
+        "3.2": [
+          "api"
+        ],
+        "4.2": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "tenable",
+      "status": "partial",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {
+        "1.2": [
+          "api"
+        ],
+        "1.3": [
+          "api"
+        ],
+        "3.4": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "TEN-1.02",
+          "file": "checks/tenable/TEN-1.02-admin-account-ceiling.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "TEN-1.03",
+          "file": "checks/tenable/TEN-1.03-audit-log-active.check.yaml",
+          "section": "1.3"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "1.3"
+      ]
+    },
+    {
+      "vendor": "terraform-cloud",
+      "status": "missing",
+      "guide_controls": 11,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {
+        "1.2": [
+          "api",
+          "terraform"
+        ],
+        "2.1": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ],
+        "5.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "twilio",
+      "status": "missing",
+      "guide_controls": 14,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {
+        "3.1": [
+          "cli"
+        ],
+        "3.2": [
+          "sdk"
+        ],
+        "4.1": [
+          "api"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "ukg",
+      "status": "missing",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "4.1",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "vanta",
+      "status": "missing",
+      "guide_controls": 17,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "vercel",
+      "status": "partial",
+      "guide_controls": 33,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1",
+        "4.2",
+        "5.1",
+        "6.1",
+        "6.2",
+        "6.3",
+        "6.4",
+        "7.1",
+        "7.2",
+        "8.1",
+        "8.2",
+        "8.3",
+        "8.4",
+        "9.1",
+        "10.1",
+        "10.2",
+        "10.3",
+        "10.4"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "api"
+        ],
+        "1.3": [
+          "terraform"
+        ],
+        "1.4": [
+          "cli"
+        ],
+        "1.5": [
+          "api"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "api"
+        ],
+        "2.4": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "3.3": [
+          "api"
+        ],
+        "3.4": [
+          "api"
+        ],
+        "3.5": [
+          "sdk"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "terraform"
+        ],
+        "5.1": [
+          "cli"
+        ],
+        "6.1": [
+          "terraform"
+        ],
+        "6.2": [
+          "terraform"
+        ],
+        "6.3": [
+          "cli"
+        ],
+        "6.4": [
+          "cli"
+        ],
+        "7.1": [
+          "cli"
+        ],
+        "7.2": [
+          "cli"
+        ],
+        "8.1": [
+          "terraform"
+        ],
+        "8.2": [
+          "api"
+        ],
+        "8.3": [
+          "cli"
+        ],
+        "8.4": [
+          "cli"
+        ],
+        "9.1": [
+          "api"
+        ],
+        "10.1": [
+          "cli"
+        ],
+        "10.2": [
+          "cli"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "VERCEL-1.02",
+          "file": "checks/vercel/VERCEL-1.02-directory-sync-owner-minimization.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "VERCEL-1.05",
+          "file": "checks/vercel/VERCEL-1.05-fork-protection-audit.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "VERCEL-2.03",
+          "file": "checks/vercel/VERCEL-2.03-rolling-releases-skew-protection.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "VERCEL-3.03",
+          "file": "checks/vercel/VERCEL-3.03-firewall-persistent-actions.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "VERCEL-3.04",
+          "file": "checks/vercel/VERCEL-3.04-ai-bots-managed-ruleset.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "VERCEL-8.02",
+          "file": "checks/vercel/VERCEL-8.02-audit-log-drain-siem-streaming.check.yaml",
+          "section": "8.2"
+        },
+        {
+          "id": "VERCEL-9.01",
+          "file": "checks/vercel/VERCEL-9.01-nextjs-middleware-header-strip.check.yaml",
+          "section": "9.1"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "1.5",
+        "2.3",
+        "3.3",
+        "3.4",
+        "8.2",
+        "9.1"
+      ]
+    },
+    {
+      "vendor": "webex",
+      "status": "missing",
+      "guide_controls": 17,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "2.7",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "windows-11",
+      "status": "missing",
+      "guide_controls": 19,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "6.1",
+        "6.2",
+        "6.3",
+        "7.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "sdk"
+        ],
+        "1.2": [
+          "sdk"
+        ],
+        "1.3": [
+          "sdk"
+        ],
+        "2.1": [
+          "sdk"
+        ],
+        "2.2": [
+          "sdk"
+        ],
+        "3.1": [
+          "sdk"
+        ],
+        "3.2": [
+          "sdk"
+        ],
+        "3.3": [
+          "sdk"
+        ],
+        "4.1": [
+          "sdk"
+        ],
+        "4.2": [
+          "sdk"
+        ],
+        "5.1": [
+          "sdk"
+        ],
+        "5.2": [
+          "config"
+        ],
+        "5.3": [
+          "sdk"
+        ],
+        "5.4": [
+          "sdk"
+        ],
+        "6.1": [
+          "sdk"
+        ],
+        "6.2": [
+          "sdk"
+        ],
+        "6.3": [
+          "sdk"
+        ],
+        "7.1": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "wiz",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1",
+        "5.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "terraform"
+        ],
+        "1.2": [
+          "terraform"
+        ],
+        "2.1": [
+          "config",
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "terraform"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "5.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "workato",
+      "status": "partial",
+      "guide_controls": 39,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.6",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "4.6",
+        "5.1",
+        "5.2",
+        "5.3",
+        "6.1",
+        "6.2",
+        "7.1",
+        "7.2",
+        "7.3",
+        "8.1",
+        "8.2",
+        "8.3",
+        "8.4",
+        "9.1",
+        "9.2",
+        "9.3",
+        "10.1",
+        "10.2"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "api"
+        ],
+        "1.5": [
+          "api"
+        ],
+        "2.1": [
+          "api"
+        ],
+        "2.4": [
+          "api"
+        ],
+        "2.5": [
+          "api"
+        ],
+        "2.6": [
+          "api"
+        ],
+        "3.1": [
+          "api",
+          "terraform"
+        ],
+        "3.4": [
+          "api"
+        ],
+        "4.1": [
+          "api"
+        ],
+        "4.3": [
+          "config"
+        ],
+        "5.1": [
+          "api"
+        ],
+        "6.1": [
+          "api",
+          "terraform"
+        ],
+        "7.2": [
+          "api"
+        ],
+        "7.3": [
+          "api",
+          "cli"
+        ],
+        "8.1": [
+          "api"
+        ],
+        "8.3": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "WKTO-1.05",
+          "file": "checks/workato/WKTO-1.05-scim-provisioning-coverage.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "WKTO-2.01",
+          "file": "checks/workato/WKTO-2.01-custom-roles-inventory.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "WKTO-2.05",
+          "file": "checks/workato/WKTO-2.05-limit-admin-access.check.yaml",
+          "section": "2.5"
+        },
+        {
+          "id": "WKTO-3.04",
+          "file": "checks/workato/WKTO-3.04-sensitive-property-flagging.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "WKTO-4.01",
+          "file": "checks/workato/WKTO-4.01-connection-authorization-audit.check.yaml",
+          "section": "4.1"
+        },
+        {
+          "id": "WKTO-5.01",
+          "file": "checks/workato/WKTO-5.01-api-clients-scoped.check.yaml",
+          "section": "5.1"
+        },
+        {
+          "id": "WKTO-7.02",
+          "file": "checks/workato/WKTO-7.02-deployment-inventory.check.yaml",
+          "section": "7.2"
+        },
+        {
+          "id": "WKTO-7.03",
+          "file": "checks/workato/WKTO-7.03-cicd-recipe-inventory.check.yaml",
+          "section": "7.3"
+        },
+        {
+          "id": "WKTO-8.01",
+          "file": "checks/workato/WKTO-8.01-activity-audit-log-active.check.yaml",
+          "section": "8.1"
+        },
+        {
+          "id": "WKTO-8.03",
+          "file": "checks/workato/WKTO-8.03-recipe-error-monitoring.check.yaml",
+          "section": "8.3"
+        }
+      ],
+      "controls_covered": [
+        "1.5",
+        "2.1",
+        "2.5",
+        "3.4",
+        "4.1",
+        "5.1",
+        "7.2",
+        "7.3",
+        "8.1",
+        "8.3"
+      ]
+    },
+    {
+      "vendor": "workday",
+      "status": "missing",
+      "guide_controls": 15,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "zendesk",
+      "status": "missing",
+      "guide_controls": 8,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "4.1"
+      ],
+      "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "zoom",
+      "status": "partial",
+      "guide_controls": 13,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1"
+      ],
+      "pack_sections": {
+        "2.1": [
+          "api"
+        ],
+        "4.2": [
+          "api"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "ZOOM-2.01",
+          "file": "checks/zoom/ZOOM-2.01-meeting-security-settings-audit.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ZOOM-4.02",
+          "file": "checks/zoom/ZOOM-4.02-recording-security-settings-audit.check.yaml",
+          "section": "4.2"
+        }
+      ],
+      "controls_covered": [
+        "2.1",
+        "4.2"
+      ]
+    },
+    {
+      "vendor": "zscaler",
+      "status": "missing",
+      "guide_controls": 14,
+      "controls": [
+        "1.1",
+        "1.2",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "5.1",
+        "5.2",
+        "6.1"
+      ],
+      "pack_sections": {
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "terraform"
+        ],
+        "2.3": [
+          "terraform"
+        ],
+        "3.1": [
+          "terraform"
+        ],
+        "3.2": [
+          "terraform"
+        ],
+        "3.3": [
+          "terraform"
+        ],
+        "5.1": [
+          "terraform"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    }
+  ],
+  "ocean_only": {
+    "aws": [
+      {
+        "id": "AWS-CT-1.01",
+        "file": "checks/aws/AWS-CT-1.01-cloudtrail-enabled.check.yaml",
+        "section": "1.01"
+      },
+      {
+        "id": "AWS-CT-2.01",
+        "file": "checks/aws/AWS-CT-2.01-cloudtrail-validation.check.yaml",
+        "section": "2.01"
+      },
+      {
+        "id": "AWS-IAM-1.01",
+        "file": "checks/aws/AWS-IAM-1.01-root-account.check.yaml",
+        "section": "1.01"
+      },
+      {
+        "id": "AWS-IAM-2.01",
+        "file": "checks/aws/AWS-IAM-2.01-root-mfa.check.yaml",
+        "section": "2.01"
+      },
+      {
+        "id": "AWS-IAM-3.01",
+        "file": "checks/aws/AWS-IAM-3.01-password-policy.check.yaml",
+        "section": "3.01"
+      },
+      {
+        "id": "AWS-IAM-4.01",
+        "file": "checks/aws/AWS-IAM-4.01-unused-credentials.check.yaml",
+        "section": "4.01"
+      },
+      {
+        "id": "AWS-KMS-1.01",
+        "file": "checks/aws/AWS-KMS-1.01-key-rotation.check.yaml",
+        "section": "1.01"
+      },
+      {
+        "id": "AWS-S3-1.01",
+        "file": "checks/aws/AWS-S3-1.01-public-access.check.yaml",
+        "section": "1.01"
+      },
+      {
+        "id": "AWS-S3-2.01",
+        "file": "checks/aws/AWS-S3-2.01-bucket-encryption.check.yaml",
+        "section": "2.01"
+      },
+      {
+        "id": "AWS-S3-3.01",
+        "file": "checks/aws/AWS-S3-3.01-bucket-logging.check.yaml",
+        "section": "3.01"
+      }
+    ],
+    "_unmapped/test": [
+      {
+        "id": "TEST-1",
+        "file": "checks/test.check.yaml",
+        "section": null
+      }
+    ]
+  }
+}

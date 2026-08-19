@@ -72,7 +72,7 @@ impl Observer for SecurityConfigObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/code-security/configurations", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -140,7 +140,10 @@ impl Observer for SecurityConfigObserver {
 
         let status_msg = match status_id {
             StatusId::Effective => {
-                format!("Security configurations are defined for organization {}", org)
+                format!(
+                    "Security configurations are defined for organization {}",
+                    org
+                )
             }
             StatusId::Ineffective => {
                 format!("No security configurations found for organization {}", org)

@@ -83,7 +83,7 @@ impl Observer for SecretScanningAlertsObserver {
             "/repos/{}/{}/secret-scanning/alerts?state=open&per_page=1",
             owner, repo
         );
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -125,10 +125,7 @@ impl Observer for SecretScanningAlertsObserver {
                     },
                 ],
                 status_id: StatusId::Unknown,
-                status: format!(
-                    "Secret scanning is not enabled on {}/{}",
-                    owner, repo
-                ),
+                status: format!("Secret scanning is not enabled on {}/{}", owner, repo),
                 raw_data: body,
                 findings: vec![Finding {
                     title: "Secret Scanning Not Enabled".to_string(),
@@ -328,7 +325,10 @@ mod tests {
     #[test]
     fn secret_scanning_connection_refused_errors() {
         let mut cfg = test_config("placeholder");
-        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        cfg.insert(
+            "GITHUB_API_URL".to_string(),
+            "http://127.0.0.1:1".to_string(),
+        );
         let result = SecretScanningAlertsObserver.observe(&cfg);
         assert!(result.is_err());
     }

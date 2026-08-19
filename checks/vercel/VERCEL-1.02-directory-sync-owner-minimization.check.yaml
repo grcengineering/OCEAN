@@ -1,0 +1,94 @@
+id: VERCEL-1.02
+name: Configure Directory Sync (SCIM) and Minimize Owner-Role Membership
+description: |
+  Verifies that team-level SAML/SCIM directory sync is configured and that
+  the OWNER role — Vercel's most privileged team role — is held by a
+  minimal set of accounts. Directory sync ensures team membership is
+  automatically deprovisioned when a user leaves the identity provider;
+  without it, offboarding depends entirely on someone remembering to
+  remove the Vercel account by hand.
+author: grc-engineering
+version: "1.0"
+source: vercel
+profile: L2
+tags: [sso, scim, provisioning, rbac]
+
+references:
+  nist: ["AC-2", "IA-5(1)"]
+  soc2: CC6.2
+  hth: "vercel:1.2"
+
+credentials:
+  VERCEL_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  vercel_team_id:
+    description: Vercel team ID (starts with "team_")
+    env: VERCEL_TEAM_ID
+    required: true
+
+steps:
+  - id: get_team
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.vercel.com/v2/teams/{{vercel_team_id}}"
+      headers:
+        Authorization: "Bearer {{VERCEL_TOKEN}}"
+    extract:
+      saml: "$.saml"
+
+  - id: get_members
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.vercel.com/v2/teams/{{vercel_team_id}}/members?limit=100"
+      headers:
+        Authorization: "Bearer {{VERCEL_TOKEN}}"
+    extract:
+      members: "$.members"
+
+assertions:
+  - id: directory_sync_configured
+    expr: "saml != null"
+    severity: high
+    title: SAML/SCIM Directory Sync Is Configured
+    pass_message: "The team has a SAML/SCIM configuration on record"
+    fail_message: "The team has no SAML/SCIM configuration — directory sync is not configured"
+    finding:
+      description: |
+        The team object's saml field is empty, meaning directory sync is not
+        configured. Without SCIM-based provisioning, team membership is
+        managed by hand: an employee who leaves the identity provider stays
+        an active Vercel team member until someone remembers to remove them,
+        creating orphaned accounts with persistent access to production
+        deployments and environment variables.
+
+  - id: owner_role_minimized
+    expr: "size(members.filter(m, m.role == \"OWNER\")) <= 3"
+    severity: medium
+    title: OWNER Role Membership Is Minimized
+    pass_message: "3 or fewer team members hold the OWNER role"
+    fail_message: "More than 3 team members hold the OWNER role"
+    finding:
+      description: |
+        More than 3 team members hold the OWNER role, which grants full
+        control over billing, security settings, and every project. OWNER
+        should be held by the smallest possible set of accounts, with
+        day-to-day work delegated to Member, Developer, Security, or
+        Contributor roles per Vercel's least-privilege role model.
+
+remediation:
+  description: |
+    Enable SCIM directory sync from the identity provider and downgrade
+    excess OWNER accounts to a least-privilege role.
+  steps:
+    - "Navigate to Team Settings -> Security -> Directory Sync"
+    - "Generate the SCIM endpoint URL and bearer token, then configure the identity provider (Okta, Entra ID, etc.) with them"
+    - "Create IdP groups matching Vercel roles (vercel-role-owner, vercel-role-member, vercel-role-developer, vercel-role-security, vercel-role-billing) and map them"
+    - "Navigate to Team Settings -> Members and downgrade any OWNER account that does not need full administrative control"
+  manual:
+    - "Add a test user in the IdP and confirm they appear in the Vercel team within the sync interval, then remove them from the IdP group and confirm they lose Vercel access"
+    - "Review OWNER membership quarterly and keep it to the smallest set of accounts that need full administrative control"

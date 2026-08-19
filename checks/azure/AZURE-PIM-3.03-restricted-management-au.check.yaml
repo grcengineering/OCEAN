@@ -1,0 +1,87 @@
+id: AZURE-PIM-3.03
+name: Protect High-Value Accounts with Restricted Management AUs
+description: |
+  Verifies at least one Restricted Management Administrative Unit exists.
+  Tenant-wide helpdesk and user-management roles can reset any user's
+  password or MFA methods by default — a socially engineered helpdesk
+  agent becomes a path to the CEO's mailbox. Restricted Management AUs
+  govern which accounts a role holder's rights can touch, complementing
+  PIM and access reviews, which govern who holds the roles.
+source: azure
+profile: L2
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: ["5.4", "6.8"]
+  nist: ["AC-6(1)", "AC-2(11)"]
+  hth: "microsoft-entra-id:3.3"
+
+steps:
+  - id: get_administrative_units
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/directory/administrativeUnits"
+    extract:
+      admin_units: "$.value"
+
+assertions:
+  - id: restricted_management_au_exists
+    expr: >-
+      admin_units.exists(au, has(au.isMemberManagementRestricted) &&
+        au.isMemberManagementRestricted == true)
+    severity: high
+    title: Restricted Management Administrative Unit Exists
+    pass_message: "At least one Restricted Management Administrative Unit protects high-value accounts"
+    fail_message: "No Restricted Management Administrative Unit was found"
+    finding:
+      description: |
+        No administrative unit with isMemberManagementRestricted set to
+        true was found. Without a Restricted Management AU, tenant-wide
+        role holders — including Helpdesk Administrators and even
+        unscoped Global Administrator role assignments — can reset the
+        password or change the MFA methods of executive, break-glass, and
+        other high-value accounts. Requires a Microsoft Entra ID P1
+        license.
+
+remediation:
+  description: |
+    Create a Restricted Management Administrative Unit, add the
+    executive, break-glass, and other high-value accounts as members, and
+    scope management rights to a small named set of admins.
+  steps:
+    - "Navigate to Identity > Roles & admins > Admin units > + Add"
+    - "Name the unit (e.g., 'Protected Accounts')"
+    - "Set Restricted management administrative unit to Yes"
+    - "Create, then add the high-value users and groups as members"
+    - "In the AU, open Roles and administrators and assign the minimum roles (e.g., Privileged Authentication Administrator) scoped to this AU, to a small named set of admins"
+  api:
+    url: https://graph.microsoft.com/v1.0/directory/administrativeUnits
+    method: POST
+    body:
+      displayName: "Protected Accounts"
+      description: "Restricted management AU for executive and break-glass accounts"
+      isMemberManagementRestricted: true
+
+tags:
+  - governance
+  - administrative-units
+  - privileged-access
+  - azure

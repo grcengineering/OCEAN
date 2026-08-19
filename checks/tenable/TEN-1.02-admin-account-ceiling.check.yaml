@@ -1,0 +1,64 @@
+id: TEN-1.02
+name: Enforce Administrator Account Ceiling
+description: |
+  Verifies that the number of enabled Administrator [64]-permission accounts
+  in Tenable Vulnerability Management does not exceed the organization's
+  documented ceiling. HTH recommends limiting Administrator to 2-3 accounts
+  for redundancy; this check applies a ceiling of 3.
+author: grc-engineering
+version: "1.0"
+source: tenable
+profile: L1
+tags: [rbac, admin, least-privilege]
+
+references:
+  cis: "5.4"
+  nist: "AC-6(1)"
+  hth: "tenable:1.2"
+
+credentials:
+  TENABLE_API_KEYS:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_users_with_roles
+    action: api_call
+    request:
+      method: GET
+      url: "https://cloud.tenable.com/users?withRoles=true"
+      headers:
+        X-ApiKeys: "{{TENABLE_API_KEYS}}"
+        Accept: application/json
+    extract:
+      users: "$.users"
+
+assertions:
+  - id: admin_account_ceiling
+    expr: "size(users.filter(u, u.permissions == 64 && u.enabled == true)) <= 3"
+    severity: high
+    title: Administrator Accounts Within Ceiling
+    pass_message: "Enabled Administrator [64] account count is within the 3-account ceiling"
+    fail_message: "Enabled Administrator [64] account count exceeds the 3-account ceiling"
+    finding:
+      description: |
+        More than 3 enabled Tenable Vulnerability Management accounts hold
+        the Administrator [64] permissions tier. Administrator accounts have
+        full access, including the ability to modify scan policies, delete
+        findings, and create new accounts. Every additional Administrator
+        account is another target whose compromise exposes the organization's
+        complete vulnerability posture. Move accounts that do not require
+        full administrative access onto a scoped VM Custom Role (see
+        tenable:1.2).
+
+remediation:
+  description: |
+    Reduce Administrator membership to 2-3 accounts and migrate remaining
+    users onto scoped VM Custom Roles.
+  steps:
+    - "Navigate to Settings -> Access Control"
+    - "Filter users by the Administrator role"
+    - "For every account beyond the documented 2-3 administrators, create a VM Custom Role scoped to that user's actual job function and reassign them"
+    - "Set Exposure Management export to No Access on non-administrator custom roles unless the role has a documented need to export"
+  manual:
+    - "Re-review role assignments quarterly against the VM Custom Role permission set"

@@ -1,0 +1,88 @@
+id: AZURE-CA-1.02
+name: Maintain the Emergency Access Exclusion Group
+description: |
+  Verifies every enabled Conditional Access policy excludes at least one
+  group, the pattern the emergency access (break-glass) exclusion depends
+  on. The most common way to lock every administrator out of a tenant is a
+  Conditional Access policy authored without a break-glass exclusion — and
+  the person who can fix it is the person who just got locked out.
+source: azure
+profile: L1
+severity: critical
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: "5.1"
+  nist: AC-2
+  hth: "microsoft-entra-id:1.2"
+
+steps:
+  - id: get_conditional_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+    extract:
+      policies: "$.value"
+
+assertions:
+  - id: all_enabled_policies_exclude_a_group
+    expr: >-
+      policies.all(p, p.state != "enabled" ||
+        (has(p.conditions) && has(p.conditions.users) &&
+         has(p.conditions.users.excludeGroups) &&
+         size(p.conditions.users.excludeGroups) > 0))
+    severity: critical
+    title: All Enabled Policies Exclude a Group
+    pass_message: "Every enabled Conditional Access policy excludes at least one group"
+    fail_message: "One or more enabled Conditional Access policies exclude no group"
+    finding:
+      description: |
+        One or more enabled Conditional Access policies do not exclude any
+        group from their user conditions. The emergency access (break-glass)
+        accounts must be placed in a dedicated group and that group excluded
+        from every policy — Microsoft-managed policies auto-enable on a
+        45-day timer whether or not anyone remembered the exclusion. A
+        missing exclusion on any single policy can lock out every
+        administrator with no recovery path.
+
+remediation:
+  description: |
+    Place the emergency access accounts in a dedicated security group and
+    exclude that group from every Conditional Access policy in the tenant,
+    including every policy labeled "Created by: Microsoft".
+  steps:
+    - "Navigate to Groups > All groups > + New group; create a Security group for emergency access accounts"
+    - "Add both emergency access accounts as direct members (not dynamic membership)"
+    - "Navigate to Protection > Conditional Access > Policies"
+    - "Edit each policy — including every policy labeled 'Created by: Microsoft' — and add the emergency access group under Users > Exclude"
+  api:
+    url: https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/{policyId}
+    method: PATCH
+    body:
+      conditions:
+        users:
+          excludeGroups:
+            - "{{emergency_access_group_id}}"
+
+tags:
+  - identity
+  - emergency-access
+  - conditional-access
+  - azure

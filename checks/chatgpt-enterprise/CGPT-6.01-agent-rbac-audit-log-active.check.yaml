@@ -1,0 +1,79 @@
+id: CGPT-6.01
+name: Audit Sample for Workspace Agent RBAC Governance Review
+description: |
+  Pulls a sample of USER_LOG events from the Compliance Logs Platform
+  (GET /v1/compliance/{scope}/{principal_id}/logs?event_type=USER_LOG)
+  to confirm the compliance log feed is active before the operator
+  cross-references authenticated users against the agent-builder role
+  membership exported from the Global Admin Console. There is no
+  Compliance API endpoint that lists "who can build agents" directly —
+  that data lives in the console — so this check verifies the log feed
+  the manual review depends on is actually producing records.
+author: grc-engineering
+version: "1.0"
+source: chatgpt-enterprise
+profile: L1
+tags: [rbac, agents, audit-logging]
+
+references:
+  nist: [AC-2, AC-6]
+  soc2: CC6.1
+  hth: "chatgpt-enterprise:6.1"
+
+credentials:
+  COMPLIANCE_API_KEY:
+    type: api_token
+    required: true
+
+inputs:
+  openai_principal_id:
+    description: Workspace ID (UUID) or organization ID (org-...) to query the Compliance API for
+    env: OPENAI_PRINCIPAL_ID
+    required: true
+  compliance_scope:
+    description: URL path segment for the principal type — "workspaces" or "organizations"
+    env: OPENAI_COMPLIANCE_SCOPE
+    default: "workspaces"
+    required: false
+  after:
+    description: ISO 8601 timestamp to list USER_LOG events from (e.g. 30 days ago)
+    env: OPENAI_COMPLIANCE_AFTER
+    required: true
+
+steps:
+  - id: list_user_logs
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.chatgpt.com/v1/compliance/{{compliance_scope}}/{{openai_principal_id}}/logs?event_type=USER_LOG&after={{after}}&limit=100"
+      headers:
+        Authorization: "Bearer {{COMPLIANCE_API_KEY}}"
+    extract:
+      logs: "$.data"
+
+assertions:
+  - id: user_log_feed_active
+    expr: "size(logs) > 0"
+    severity: medium
+    title: USER_LOG Compliance Feed Is Producing Records
+    pass_message: "USER_LOG events were retrieved — cross-reference authenticated users against the agent-builder role membership exported from the Global Admin Console"
+    fail_message: "The Compliance API returned zero USER_LOG events for the queried window"
+    finding:
+      description: |
+        The Compliance Logs Platform returned no USER_LOG events for the
+        queried window. Without an active USER_LOG feed, the manual
+        cross-reference between authenticated users and the agent-builder
+        role membership (Workspace settings -> Members -> Roles) cannot
+        be performed reliably — verify the principal scope and
+        event_type spelling, and confirm the compliance key has
+        USER_LOG read access.
+
+remediation:
+  description: |
+    Confirm the Compliance API key has the required scope and that
+    USER_LOG events are being generated, then perform the manual RBAC
+    cross-reference in the Global Admin Console.
+  manual:
+    - "Global Admin Console -> Agents: confirm the agent-builder group matches authorized owners"
+    - "Global Admin Console -> Workspace settings -> Members -> Roles: export role membership and reconcile against USER_LOG activity"
+    - "Provision or scope-correct COMPLIANCE_API_KEY if the feed returns zero events despite known recent logins"

@@ -294,12 +294,10 @@ mod tests {
         let cfg = base_config(&url);
         let ev = AuthenticatorsObserver.observe(&cfg).unwrap();
         assert_eq!(ev[0].status_id, StatusId::Ineffective);
-        assert!(
-            ev[0]
-                .findings
-                .iter()
-                .any(|f| f.title.contains("FIDO2/WebAuthn") && f.severity_id == 4)
-        );
+        assert!(ev[0]
+            .findings
+            .iter()
+            .any(|f| f.title.contains("FIDO2/WebAuthn") && f.severity_id == 4));
     }
 
     #[test]
@@ -349,9 +347,7 @@ mod tests {
 
     #[test]
     fn missing_token_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let result = AuthenticatorsObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
@@ -359,9 +355,7 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_API_TOKEN".to_string(), "test".to_string())]);
         let result = AuthenticatorsObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
@@ -369,7 +363,10 @@ mod tests {
 
     #[test]
     fn api_returns_403_errors() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#,
+        );
         let result = AuthenticatorsObserver.observe(&base_config(&srv));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();

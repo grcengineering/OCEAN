@@ -1,0 +1,66 @@
+id: SFDC-2.01
+name: Verify Login IP Ranges Are Configured
+description: |
+  Runs the pack's SOQL query against LoginIpRange and verifies at least
+  one profile-level IP range is configured. Without any Login IP Ranges,
+  API and UI access is not restricted by source network at the profile
+  level, so a stolen session or credential can be used from anywhere.
+author: grc-engineering
+version: "1.0"
+source: salesforce
+profile: L1
+tags: [network-security, ip-allowlisting, api]
+
+references:
+  cis: ["13.3", "13.6"]
+  nist: ["AC-3", "SC-7"]
+  hth: "salesforce:2.1"
+
+credentials:
+  SF_ACCESS_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  sf_instance_url:
+    description: Salesforce instance base URL (e.g. https://your-instance.my.salesforce.com)
+    env: SF_INSTANCE_URL
+    required: true
+
+steps:
+  - id: query_login_ip_ranges
+    action: api_call
+    request:
+      method: GET
+      url: "{{sf_instance_url}}/services/data/v59.0/query?q=SELECT%20Id%2C%20ProfileId%2C%20Profile.Name%2C%20StartAddress%2C%20EndAddress%2C%20Description%20FROM%20LoginIpRange%20ORDER%20BY%20Profile.Name"
+      headers:
+        Authorization: "Bearer {{SF_ACCESS_TOKEN}}"
+    extract:
+      total_size: "$.totalSize"
+
+assertions:
+  - id: login_ip_ranges_configured
+    expr: "total_size > 0"
+    severity: medium
+    title: At Least One Login IP Range Is Configured
+    pass_message: "{{total_size}} Login IP Range(s) are configured"
+    fail_message: "No Login IP Ranges are configured — API and UI access is unrestricted by source IP"
+    finding:
+      description: |
+        No LoginIpRange records exist on any profile, meaning API and UI
+        access is not restricted by source network at the profile level. A
+        stolen session token or leaked credential can be used from any
+        network in the world instead of being blocked outside the
+        organization's trusted ranges, which is the network-boundary
+        protection NIST SC-7 calls for.
+
+remediation:
+  description: |
+    Configure Login IP Ranges on every profile that should be
+    network-restricted, and configure org-wide Trusted IP Ranges for
+    relaxed identity verification within the corporate network.
+  steps:
+    - "Navigate to Setup -> Profiles, open the target profile, and add Login IP Ranges under 'Login IP Ranges'"
+    - "Navigate to Setup -> Network Access and add the organization's trusted corporate network ranges"
+  manual:
+    - "Audit recent LoginHistory source IPs (SourceIp field) to confirm no legitimate login source falls outside the configured ranges before enforcing"

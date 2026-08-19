@@ -1,0 +1,101 @@
+id: AZURE-CA-2.04
+name: Block High-Risk Sign-Ins
+description: |
+  Verifies an enabled Conditional Access policy blocks sign-ins that
+  Microsoft Entra ID Protection classifies as high risk, using machine
+  learning detection of signals such as leaked credentials, anonymous IP
+  usage, and impossible-travel patterns.
+source: azure
+profile: L2
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: "6.4"
+  nist: SI-4
+  hth: "microsoft-entra-id:2.4"
+
+steps:
+  - id: get_conditional_access_policies
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+    extract:
+      policies: "$.value"
+
+assertions:
+  - id: high_risk_signins_blocked
+    expr: >-
+      policies.exists(p, p.state == "enabled" &&
+        has(p.conditions) && has(p.conditions.signInRiskLevels) &&
+        "high" in p.conditions.signInRiskLevels &&
+        has(p.grantControls) && has(p.grantControls.builtInControls) &&
+        "block" in p.grantControls.builtInControls)
+    severity: high
+    title: High-Risk Sign-Ins Blocked
+    pass_message: "An enabled Conditional Access policy blocks high-risk sign-ins"
+    fail_message: "No enabled Conditional Access policy blocks high-risk sign-ins"
+    finding:
+      description: |
+        No enabled Conditional Access policy blocks sign-ins Entra ID
+        Protection classifies as high risk. High-risk sign-ins reflect
+        signals such as leaked credentials, anonymous IP usage, and
+        impossible-travel patterns that indicate active compromise;
+        automated real-time blocking responds faster than human analysts
+        can triage and act on alerts. Requires a Microsoft Entra ID P2
+        license.
+
+remediation:
+  description: |
+    Author a Conditional Access policy targeting sign-in risk level High
+    with a Block grant, and a second policy for Medium risk requiring MFA
+    and a forced password change.
+  steps:
+    - "Navigate to Protection > Conditional Access > Policies > + New policy"
+    - "Name: Block high-risk sign-ins"
+    - "Users: All users (exclude emergency accounts)"
+    - "Conditions > Sign-in risk: High"
+    - "Grant: Block access"
+    - "Enable the policy, then repeat for Medium risk with Grant: Require MFA + Require password change"
+  api:
+    url: https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies
+    method: POST
+    body:
+      displayName: "HTH: Block high-risk sign-ins"
+      state: "enabled"
+      conditions:
+        applications:
+          includeApplications:
+            - "All"
+        users:
+          includeUsers:
+            - "All"
+        signInRiskLevels:
+          - "high"
+      grantControls:
+        operator: "OR"
+        builtInControls:
+          - "block"
+
+tags:
+  - conditional-access
+  - risk-based
+  - identity-protection
+  - azure

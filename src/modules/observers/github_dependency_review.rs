@@ -81,7 +81,7 @@ impl Observer for DependencyReviewObserver {
 
         let now = Utc::now();
         let path = format!("/repos/{}/{}", owner, repo);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -278,7 +278,10 @@ mod tests {
     #[test]
     fn dependency_review_connection_refused_errors() {
         let mut cfg = test_config("placeholder");
-        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        cfg.insert(
+            "GITHUB_API_URL".to_string(),
+            "http://127.0.0.1:1".to_string(),
+        );
         let result = DependencyReviewObserver.observe(&cfg);
         assert!(result.is_err());
     }

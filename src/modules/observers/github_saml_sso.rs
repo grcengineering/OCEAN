@@ -73,7 +73,7 @@ impl Observer for SamlSsoObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (_body, status) = github_get(token, base_url, &path)?;
 
@@ -193,7 +193,10 @@ mod tests {
     #[test]
     fn saml_connection_refused_errors() {
         let mut cfg = test_config_with_org("placeholder");
-        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        cfg.insert(
+            "GITHUB_API_URL".to_string(),
+            "http://127.0.0.1:1".to_string(),
+        );
         let result = SamlSsoObserver.observe(&cfg);
         assert!(result.is_err());
     }

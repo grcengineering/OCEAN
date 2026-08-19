@@ -140,10 +140,7 @@ fn classify_user_factors(factors: &[Value]) -> UserCompliance {
             .get("factorType")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let status = factor
-            .get("status")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let status = factor.get("status").and_then(|v| v.as_str()).unwrap_or("");
 
         if status != "ACTIVE" {
             continue;
@@ -203,10 +200,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
             let (resp, status) = okta_get(token, &url)?;
 
             if status != 200 {
-                bail!(
-                    "Okta API returned status {} querying users",
-                    status
-                );
+                bail!("Okta API returned status {} querying users", status);
             }
 
             let page_users = resp
@@ -224,11 +218,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
                     if next.starts_with("http") {
                         next_url = Some(next);
                     } else {
-                        next_url = Some(format!(
-                            "{}{}",
-                            base_url.trim_end_matches('/'),
-                            next
-                        ));
+                        next_url = Some(format!("{}{}", base_url.trim_end_matches('/'), next));
                     }
                 }
             }
@@ -245,10 +235,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
         let mut non_compliant_ids: Vec<String> = Vec::new();
 
         for user in &all_users {
-            let user_id = user
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let user_id = user.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
             if user_id.is_empty() {
                 continue;
@@ -295,17 +282,16 @@ impl Observer for MfaEnrollmentPopulationObserver {
         };
 
         // Step 4: Build evidence
-        let (status_id, status_text) =
-            if coverage_pct >= 99.0 && partially_compliant_count == 0 {
-                (
-                    StatusId::Effective,
-                    format!(
-                        "{}/{} users have PR-only MFA ({:.1}% coverage)",
-                        compliant_count, total_users, coverage_pct
-                    ),
-                )
-            } else {
-                (
+        let (status_id, status_text) = if coverage_pct >= 99.0 && partially_compliant_count == 0 {
+            (
+                StatusId::Effective,
+                format!(
+                    "{}/{} users have PR-only MFA ({:.1}% coverage)",
+                    compliant_count, total_users, coverage_pct
+                ),
+            )
+        } else {
+            (
                     StatusId::Ineffective,
                     format!(
                         "{}/{} compliant, {} partially compliant, {} non-compliant ({:.1}% PR-only coverage)",
@@ -313,7 +299,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
                         non_compliant_count, coverage_pct
                     ),
                 )
-            };
+        };
 
         let findings = if status_id == StatusId::Ineffective {
             vec![Finding {
@@ -502,9 +488,7 @@ mod tests {
         assert_eq!(observer.id(), "okta.mfa_enrollment_population");
         assert_eq!(observer.evidence_types(), &[1001]);
 
-        let srv = multi_mock_server(vec![
-            ("/api/v1/users", 200, EMPTY_USERS.to_string()),
-        ]);
+        let srv = multi_mock_server(vec![("/api/v1/users", 200, EMPTY_USERS.to_string())]);
         let ev = &observer.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.class_uid, 1001);
         assert_eq!(ev.activity_id, 7);
@@ -569,9 +553,7 @@ mod tests {
 
     #[test]
     fn empty_user_list_returns_effective() {
-        let srv = multi_mock_server(vec![
-            ("/api/v1/users", 200, EMPTY_USERS.to_string()),
-        ]);
+        let srv = multi_mock_server(vec![("/api/v1/users", 200, EMPTY_USERS.to_string())]);
         let ev = &MfaEnrollmentPopulationObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
@@ -590,9 +572,7 @@ mod tests {
         let ev = &MfaEnrollmentPopulationObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
-        let non_compliant = ev.raw_data["iam_auth"]["non_compliant"]
-            .as_array()
-            .unwrap();
+        let non_compliant = ev.raw_data["iam_auth"]["non_compliant"].as_array().unwrap();
         let ids: Vec<&str> = non_compliant.iter().map(|v| v.as_str().unwrap()).collect();
         assert!(ids.contains(&"u3"), "u3 should be non-compliant");
     }
@@ -625,9 +605,11 @@ mod tests {
 
     #[test]
     fn api_returns_403_errors() {
-        let srv = multi_mock_server(vec![
-            ("/api/v1/users", 403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#.to_string()),
-        ]);
+        let srv = multi_mock_server(vec![(
+            "/api/v1/users",
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#.to_string(),
+        )]);
         let result = MfaEnrollmentPopulationObserver.observe(&base_config(&srv));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
@@ -645,16 +627,18 @@ mod tests {
     fn user_factors_api_error_counts_as_non_compliant() {
         // Users list succeeds, but factors API for u1 returns 403 → u1 is non-compliant
         let srv = multi_mock_server(vec![
-            ("/api/v1/users?", 200, r#"[{"id":"u1","login":"a@x.com"}]"#.to_string()),
+            (
+                "/api/v1/users?",
+                200,
+                r#"[{"id":"u1","login":"a@x.com"}]"#.to_string(),
+            ),
             ("u1/factors", 403, r#"{"errorCode":"E0000006"}"#.to_string()),
         ]);
         let ev = &MfaEnrollmentPopulationObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
-        let non_compliant = ev.raw_data["iam_auth"]["non_compliant"]
-            .as_array()
-            .unwrap();
+        let non_compliant = ev.raw_data["iam_auth"]["non_compliant"].as_array().unwrap();
         assert!(
             non_compliant.iter().any(|v| v.as_str() == Some("u1")),
             "u1 should be counted as non-compliant due to factors API error"
@@ -664,9 +648,11 @@ mod tests {
     #[test]
     fn user_with_empty_id_is_skipped() {
         // User without an id field is skipped — doesn't panic
-        let srv = multi_mock_server(vec![
-            ("/api/v1/users?", 200, r#"[{"login":"noId@x.com"}]"#.to_string()),
-        ]);
+        let srv = multi_mock_server(vec![(
+            "/api/v1/users?",
+            200,
+            r#"[{"login":"noId@x.com"}]"#.to_string(),
+        )]);
         let ev = &MfaEnrollmentPopulationObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
@@ -771,7 +757,9 @@ mod tests {
     fn observer_credential_requirements() {
         let reqs = MfaEnrollmentPopulationObserver.credential_requirements();
         assert_eq!(reqs.len(), 2);
-        assert!(reqs.iter().any(|r| r.name == "OKTA_API_TOKEN" && r.required));
+        assert!(reqs
+            .iter()
+            .any(|r| r.name == "OKTA_API_TOKEN" && r.required));
         assert!(reqs.iter().any(|r| r.name == "OKTA_DOMAIN" && r.required));
     }
 
@@ -796,20 +784,33 @@ mod tests {
     fn classify_missing_factor_type_field() {
         // Factor with no factorType → empty string → unknown → ignored
         let factors = vec![json!({"status": "ACTIVE"})];
-        assert_eq!(classify_user_factors(&factors), UserCompliance::NonCompliant);
+        assert_eq!(
+            classify_user_factors(&factors),
+            UserCompliance::NonCompliant
+        );
     }
 
     #[test]
     fn classify_missing_status_field() {
         // Factor with no status → empty string → not "ACTIVE" → skipped
         let factors = vec![json!({"factorType": "webauthn"})];
-        assert_eq!(classify_user_factors(&factors), UserCompliance::NonCompliant);
+        assert_eq!(
+            classify_user_factors(&factors),
+            UserCompliance::NonCompliant
+        );
     }
 
     #[test]
     fn classify_all_phishable_types() {
         // Test each phishable factor type
-        for ft in &["token:software:totp", "push", "sms", "call", "email", "token:hotp"] {
+        for ft in &[
+            "token:software:totp",
+            "push",
+            "sms",
+            "call",
+            "email",
+            "token:hotp",
+        ] {
             let factors = vec![json!({"factorType": ft, "status": "ACTIVE"})];
             assert_eq!(
                 classify_user_factors(&factors),
@@ -837,9 +838,11 @@ mod tests {
 
     #[test]
     fn okta_get_error_status_returns_body() {
-        let srv = multi_mock_server(vec![
-            ("/test", 500, r#"{"errorCode":"E0000500"}"#.to_string()),
-        ]);
+        let srv = multi_mock_server(vec![(
+            "/test",
+            500,
+            r#"{"errorCode":"E0000500"}"#.to_string(),
+        )]);
         let (body, status) = okta_get("token", &format!("{}/test", srv)).unwrap();
         assert_eq!(status, 500);
         assert_eq!(body["errorCode"].as_str(), Some("E0000500"));
@@ -867,10 +870,10 @@ mod tests {
 
     #[test]
     fn evidence_has_correct_control_id_and_category() {
-        let srv = multi_mock_server(vec![
-            ("/api/v1/users", 200, EMPTY_USERS.to_string()),
-        ]);
-        let ev = &MfaEnrollmentPopulationObserver.observe(&base_config(&srv)).unwrap()[0];
+        let srv = multi_mock_server(vec![("/api/v1/users", 200, EMPTY_USERS.to_string())]);
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&srv))
+            .unwrap()[0];
         assert_eq!(ev.control_id, "mfa.enrollment_coverage");
         assert_eq!(ev.category_uid, 1);
         assert_eq!(ev.activity_id, 7);
@@ -1000,7 +1003,9 @@ mod tests {
             }
         });
 
-        let ev = &MfaEnrollmentPopulationObserver.observe(&base_config(&base)).unwrap()[0];
+        let ev = &MfaEnrollmentPopulationObserver
+            .observe(&base_config(&base))
+            .unwrap()[0];
         assert_eq!(ev.raw_data["total_users"].as_u64(), Some(2));
         assert_eq!(ev.raw_data["compliant_users"].as_u64(), Some(2));
         assert_eq!(ev.status_id, StatusId::Effective);

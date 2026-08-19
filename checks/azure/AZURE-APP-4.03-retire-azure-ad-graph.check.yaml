@@ -1,0 +1,85 @@
+id: AZURE-APP-4.03
+name: Retire Azure AD Graph API Usage
+description: |
+  Verifies no recent sign-ins to the deprecated Azure AD Graph API
+  (resource application ID 00000002-0000-0000-c000-000000000000,
+  graph.windows.net) appear in the sign-in logs. CVE-2025-55241 (CVSS
+  10.0) chained undocumented internal Actor tokens with a tenant-validation
+  failure in Azure AD Graph to let an attacker impersonate any user —
+  including Global Admins — in any tenant, leaving no sign-in log trail.
+  Microsoft patched the validation flaw and blocked apps from requesting
+  Actor tokens against Azure AD Graph in 2025; anything still calling the
+  deprecated API is riding an unmaintained, incident-prone surface.
+source: azure
+profile: L1
+severity: high
+
+credentials:
+  AZURE_CLIENT_ID:
+    type: api_token
+    required: true
+  AZURE_CLIENT_SECRET:
+    type: api_token
+    required: true
+  AZURE_TENANT_ID:
+    type: api_token
+    required: true
+
+inputs:
+  azure_tenant_id:
+    description: Azure AD tenant ID
+    required: true
+    env: AZURE_TENANT_ID
+
+references:
+  cis: ["2.2", "16.13"]
+  nist: ["SA-22", "SI-2"]
+  hth: "microsoft-entra-id:4.3"
+
+steps:
+  - id: get_legacy_graph_signins
+    action: api_call
+    request:
+      method: GET
+      url: "https://graph.microsoft.com/v1.0/auditLogs/signIns?$filter=appId eq '00000002-0000-0000-c000-000000000000'&$top=1"
+    extract:
+      legacy_graph_signins: "$.value"
+
+assertions:
+  - id: no_azure_ad_graph_signins
+    expr: "size(legacy_graph_signins) == 0"
+    severity: high
+    title: No Azure AD Graph API Sign-Ins Found
+    pass_message: "No sign-ins to the deprecated Azure AD Graph API were found in the retained sign-in log window"
+    fail_message: "One or more sign-ins to the deprecated Azure AD Graph API were found"
+    finding:
+      description: |
+        Sign-in log entries show at least one application or service
+        principal still authenticating to the deprecated Azure AD Graph
+        API (graph.windows.net). Azure AD Graph carried CVE-2025-55241
+        (CVSS 10.0), a cross-tenant impersonation flaw exploitable via
+        undocumented Actor tokens with no sign-in log trail for the
+        impersonation itself. Note: Entra's default sign-in log retention
+        is short (7-30 days depending on license), so a clean result here
+        only covers the retained window — export sign-in logs per
+        Microsoft Entra ID §5.1 for durable evidence.
+
+remediation:
+  description: |
+    Inventory every application still calling Azure AD Graph, migrate its
+    calls to the equivalent Microsoft Graph endpoints, and remove the
+    Azure AD Graph permissions from its app registration once migrated.
+  steps:
+    - "Navigate to Monitoring > Sign-in logs > Service principal sign-ins"
+    - "Filter by Resource = Windows Azure Active Directory (graph.windows.net)"
+    - "List every application still calling the legacy API"
+    - "For each caller, migrate API calls to Microsoft Graph (graph.microsoft.com) equivalents"
+    - "Remove Azure AD Graph permissions from the app registrations once migrated"
+  manual:
+    - "In your SIEM, alert on directory audit events where the initiating actor pairs a first-party service display name (Exchange, SharePoint) with a user UPN — the CVE-2025-55241 signature"
+
+tags:
+  - application-security
+  - deprecated-api
+  - cve-2025-55241
+  - azure

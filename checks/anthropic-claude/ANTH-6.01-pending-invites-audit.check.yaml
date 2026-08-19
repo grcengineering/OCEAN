@@ -1,0 +1,66 @@
+id: ANTH-6.01
+name: Audit and Clean Up Pending Organization Invites
+description: |
+  Lists organization invites via the Admin API
+  (GET /v1/organizations/invites) and flags any invite still in the
+  pending state. Stale pending invites are unauthorized-access risk —
+  an invite sent to the wrong address, or one that lingers long after
+  the intended recipient no longer needs access, can still be accepted
+  at any time before it expires.
+author: grc-engineering
+version: "1.0"
+source: anthropic-claude
+profile: L1
+tags: [provisioning, invites, access-control]
+
+references:
+  nist: "AC-2(3)"
+  soc2: CC6.2
+  hth: "anthropic-claude:2.1"
+
+credentials:
+  ANTHROPIC_ADMIN_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_invites
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.anthropic.com/v1/organizations/invites?limit=100"
+      headers:
+        x-api-key: "{{ANTHROPIC_ADMIN_KEY}}"
+        anthropic-version: "2023-06-01"
+    extract:
+      invites: "$.data"
+
+assertions:
+  - id: no_pending_invites
+    expr: 'size(invites.filter(i, i.status == "pending")) == 0'
+    severity: low
+    title: No Pending Organization Invites
+    pass_message: "There are no pending organization invites"
+    fail_message: "One or more organization invites are pending"
+    finding:
+      description: |
+        One or more organization invites are still in the pending state.
+        Every pending invite is a standing, acceptable-at-any-time grant
+        of organization access. Review each pending invite for business
+        justification and revoke any that are stale or sent in error.
+
+remediation:
+  description: |
+    Review every pending invite and revoke any that lack a current
+    business justification.
+  steps:
+    - "Navigate to console.anthropic.com -> Settings -> Members -> Pending Invites"
+    - "Confirm each pending invite is still expected; revoke any that are stale or unauthorized"
+  api:
+    method: DELETE
+    url: "https://api.anthropic.com/v1/organizations/invites/{{invite_id}}"
+    headers:
+      x-api-key: "{{ANTHROPIC_ADMIN_KEY}}"
+      anthropic-version: "2023-06-01"
+  manual:
+    - "Review pending invites on a recurring cadence rather than only at audit time"

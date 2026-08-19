@@ -82,7 +82,7 @@ impl Observer for EnvironmentProtectionObserver {
 
         let now = Utc::now();
         let path = format!("/repos/{}/{}/environments", owner, repo);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -403,7 +403,10 @@ mod tests {
     #[test]
     fn env_protection_connection_refused_errors() {
         let mut cfg = test_config("placeholder");
-        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        cfg.insert(
+            "GITHUB_API_URL".to_string(),
+            "http://127.0.0.1:1".to_string(),
+        );
         let result = EnvironmentProtectionObserver.observe(&cfg);
         assert!(result.is_err());
     }

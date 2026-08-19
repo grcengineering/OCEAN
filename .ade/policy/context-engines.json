@@ -1,0 +1,44 @@
+{
+  "engines": {
+    "codebaseWiki": {
+      "autoRefresh": "regenerates from git diffs on re-run; enable continuous updates via OpenWiki's scheduled GitHub Action (openwiki-update.yml — daily update PR)",
+      "enabled": true,
+      "install": "install OpenWiki (`npm install -g openwiki`) for an auto-maintained, navigable codebase wiki — MIT-licensed, BYO model key; init with `openwiki --init`",
+      "present": true,
+      "role": "auto-maintained navigable codebase wiki (prose + Mermaid); read FIRST for architecture understanding",
+      "tool": "openwiki",
+      "wikiDir": "openwiki/"
+    },
+    "personalBrain": {
+      "activation": "to enable OpenWiki Personal Brain, set modules.context.options.enableBrain = true in ade.json, then run `ade apply`; initialise with `openwiki personal --init`",
+      "enabled": false,
+      "install": "install OpenWiki (`npm install -g openwiki`) for an auto-maintained, navigable codebase wiki — MIT-licensed, BYO model key; init with `openwiki --init`",
+      "optIn": false,
+      "present": true,
+      "role": "general-purpose agent memory synthesised from external sources (email, notes, web); complementary to the codebase wiki, NOT the same thing",
+      "subCapabilityOf": "openwiki",
+      "tool": "openwiki"
+    },
+    "semanticIndex": {
+      "enabled": true,
+      "install": "install CocoIndex for AST-based semantic code search — `pip install cocoindex` (framework) or the `cocoindex-code` CLI (github.com/cocoindex-io/cocoindex-code); Apache-2.0",
+      "present": true,
+      "role": "AST-based semantic code search / natural-language retrieval; use instead of whole-tree grep",
+      "tool": "cocoindex",
+      "version": "cocoindex version 1.0.19"
+    },
+    "semanticRetrieval": {
+      "enabled": true,
+      "install": "install Serena for semantic (LSP-based) code retrieval and editing — `uv tool install --from git+https://github.com/oraios/serena serena-agent` (installs the `serena` CLI); MCP-native, free & open-source",
+      "mcpActivation": "to register the Serena MCP server with Claude Code, set modules.context.options.enableSerenaMcp = true in ade.json, then run `ade apply`",
+      "mcpEnabled": true,
+      "mcpOptIn": true,
+      "present": true,
+      "role": "LSP-based semantic code retrieval and editing (symbol-level find/edit, MCP-native); use instead of whole-file reads and rewrites",
+      "tool": "serena",
+      "version": "Serena 1.6.2.dev0"
+    }
+  },
+  "fallback": ".ade/context/codemap.md",
+  "schemaVersion": 1
+}

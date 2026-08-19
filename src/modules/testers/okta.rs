@@ -648,7 +648,10 @@ mod tests {
         let config = base_config("http://127.0.0.1:1");
         let result = MfaBypassTester.test(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Okta authn request failed"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Okta authn request failed"));
     }
 
     // ── HTTP 403 with body parsing (Err::Status arm) ─────────────────────────

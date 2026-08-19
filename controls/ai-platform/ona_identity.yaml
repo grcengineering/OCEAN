@@ -1,0 +1,82 @@
+id: ai-platform.ona_identity
+name: Ona Identity and Account Provisioning Controls
+description: >
+  Verifies that sign-in to the Ona organization is federated to an identity
+  provider that the organization has proven it controls, that account creation
+  and lifecycle are driven by SCIM, and that no email domain auto-admits itself.
+  The four halves are checked separately because they fail separately: an ACTIVE
+  OIDC configuration is unusable without a verified domain, a SCIM restriction
+  without an enabled SCIM connection locks out every joiner, and Ona's own
+  built-in Google and GitHub providers are returned by ListSSOConfigurations as
+  ACTIVE SSO configurations on an organization with no federation at all — so a
+  naive "SSO exists" reading would attest to federation that is not there.
+  Ona documents NO organization-wide "SSO required" toggle, and a built-in
+  provider stays available alongside a configured IdP. Federation alone therefore
+  does not close the non-SSO join path; `restrictAccountCreationToScim` is what
+  does, which is why both are in this control rather than only the first.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Three parts of Ona's hardening surface are invisible to every control-plane
+  read. (1) Dotfiles: there is no organization policy AND no admin visibility —
+  `UserService/GetDotfilesConfiguration` carries no `userId` field, so it returns
+  only the caller's own repository, while a member's dotfiles auto-execute at
+  environment start. (2) Automation guardrails (HTH ona:2.5) have ZERO API
+  surface, verified across 45 organization, 18 environment-automation, 17
+  workflow and 16 project reference pages. (3) What actually runs inside an
+  environment — image contents, installed tooling, agent behaviour at runtime —
+  is not a control-plane fact at all. Audit logs (`EventService/ListAuditLogs`)
+  and webhooks (`WebhookService/ListWebhooks`) additionally answer HTTP 400
+  `failed_precondition` on non-Enterprise organizations, so the monitoring band
+  cannot be observed at every plan. A passing result is evidence about the
+  organization's DECLARED POLICY, not about environment runtime behaviour.
+  ABSTENTION — every ONA-* check pairs a compliance verdict with a readability
+  discriminator, and the verdict abstains (evaluates Effective, asserting
+  nothing) whenever the read failed. Control-level evaluation is not fooled by
+  that, because the readability assertion itself reports Ineffective on an
+  unreadable organization, so `ineffective_count == 0` still fails. Read an
+  individual check's rows as a pair; a lone passing verdict is not an
+  attestation.
+  INVOCATION — this control resolves under `--target '*'`, not `--target ona`.
+  Its observers are YAML checks registered under their own ids (ONA-*), and
+  target_matches_module splits a module_id on '.' and compares the first
+  segment, so "ONA-1" is never "ona". This is a property of the YAML-check
+  namespace, not of Ona: BK-*, GH-*, OKTA-*, SLACK-* and VERCEL-* behave
+  identically. The shipped controls that DO match a vendor target reference
+  native Rust modules (okta.mfa_policy, github.branch_protection), and no native
+  ona observer exists. Using dotted ona.* ids here would satisfy the target
+  filter while resolving to nothing, producing a control that looks wired and
+  can never return a finding — the worse failure. Closing this properly means
+  native Rust observers, or registering YAML checks under a vendor alias.
+
+threat_mitigated: >
+  Account takeover and unmanaged-identity persistence through sign-in paths that
+  bypass the organization's identity provider — self-provisioned accounts that no
+  joiner/mover/leaver process ever sees, accounts that survive offboarding
+  because SCIM never propagates the deprovision, and self-admission by anyone
+  holding an address at an auto-admitted email domain.
+framework_mappings:
+  - framework: soc2
+    control: CC6.1
+  - framework: soc2
+    control: CC6.2
+  - framework: iso27001
+    control: A.9.2.1
+  - framework: nist_csf
+    control: PR.AC-1
+  - framework: cis_controls
+    control: "6.7"
+evidence_requirements:
+  - ona_sso_configuration_state
+  - ona_domain_verification_state
+  - ona_scim_restriction_policy
+  - ona_scim_configuration_enabled
+  - ona_organization_invite_domains
+observers:
+  - module_id: ONA-1.01
+  - module_id: ONA-1.01b
+  - module_id: ONA-1.02
+  - module_id: ONA-1.02b
+  - module_id: ONA-1.05
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

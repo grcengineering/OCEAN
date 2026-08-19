@@ -1,0 +1,27 @@
+# sscsb approved-signers policy.
+#
+# Humans, CI, and AI agents must NEVER share keys or identities. Only signers
+# listed here can push to protected branches, and only `class = "human"`
+# signers satisfy the human-only protected-branch signing policy. AI agents
+# draft changes; they never sign, so no `class = "ai"` entry should ever carry
+# a key that is used for signing — the class exists so an AI-associated
+# identity can be explicitly DENIED signing rights.
+#
+[[signer]]
+principal = "10093271+p4gs@users.noreply.github.com"  # matches allowed_signers + git user.email
+class = "human"
+hardware_backed = false  # 1Password-vaulted SSH key (software-backed)
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxEAReKc/G/sUxY/UbXprOccUKaxhd+sr/7Gbb40u9w GitHub Signing Key (p4gs)"
+#
+# AI agents may sign ONLY when the `agent-signing` control is enabled, and their
+# signatures are ALWAYS rejected on protected branches regardless of any other
+# field — humans, CI, and AI never share identities. When agent-signing is on:
+#
+# [[signer]]
+# principal = "agent@ci.example.com"     # a DISTINCT identity, never a human's
+# class = "ai"                           # only emitted into allowed_signers when agent-signing is on
+# backend = "github-app"                 # tpm | fido2 | kms | github-app | piv | software
+# hardware_backed = true                 # self-asserted; see attestation_file to back it up
+# # attestation_file = ".sscsb/policy/attestations/agent.bin"  # out-of-band hardware proof
+# # expires = "2027-01-01"               # reported by `sscsb verify`; rotate before this
+# ssh_public_key = "ssh-ed25519 AAAA... agent@ci.example.com"

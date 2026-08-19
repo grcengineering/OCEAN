@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use cel_interpreter::{Context as CelContext, Program, Value as CelValue};
+use cel::{Context as CelContext, Program, Value as CelValue};
 
 use super::presets;
 use crate::control::EvaluationLogic;

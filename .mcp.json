@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "serena": {
+      "args": [
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "C:\\Users\\justi\\Code\\grcengineering\\ocean"
+      ],
+      "command": "serena",
+      "env": {}
+    }
+  }
+}

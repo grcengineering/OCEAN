@@ -1,0 +1,74 @@
+id: SG-1.04
+name: Verify SendGrid IP Access Management Allowlist Is Configured
+description: |
+  Verifies that the SendGrid IP Access Management allowlist
+  (/v3/access_settings/whitelist) contains at least one entry. The
+  allowlist governs all three access paths — the web interface, the API,
+  and the SMTP relay — so an empty allowlist means account access is not
+  restricted by network location on any of them.
+author: grc-engineering
+version: "1.0"
+source: sendgrid
+profile: L2
+tags: [network-access, ip-allowlist]
+
+references:
+  cis: "13.5"
+  nist: AC-17
+  soc2: CC6.6
+  hth: "sendgrid:1.4"
+
+credentials:
+  SENDGRID_API_KEY:
+    type: api_token
+    scopes: ["access_settings.whitelist.read"]
+    required: true
+
+steps:
+  - id: get_whitelist
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.sendgrid.com/v3/access_settings/whitelist"
+      headers:
+        Authorization: "Bearer {{SENDGRID_API_KEY}}"
+    extract:
+      allowed_ips: "$.result"
+
+assertions:
+  - id: ip_allowlist_populated
+    expr: "size(allowed_ips) > 0"
+    severity: high
+    title: SendGrid IP Access Management Allowlist Is Populated
+    pass_message: "The IP Access Management allowlist contains at least one entry"
+    fail_message: "The IP Access Management allowlist is empty"
+    finding:
+      description: |
+        The /v3/access_settings/whitelist endpoint returned zero allowed
+        IP entries. With no entries configured, SendGrid does not restrict
+        the web console, API, or SMTP relay by network location, so a
+        compromised password or leaked API key can be used from anywhere.
+        Add every legitimate office, VPN egress, and CI/CD sending range
+        to the allowlist before enabling enforcement, then confirm known
+        integrations still authenticate successfully.
+
+remediation:
+  description: |
+    Populate the IP Access Management allowlist with every network the
+    account, API, and SMTP relay are legitimately accessed from.
+  steps:
+    - "Navigate to Settings -> IP Access Management"
+    - "Inventory every sending system's egress range: office IPs, VPN endpoints, CI/CD systems, application servers"
+    - "Add each approved IP address or CIDR block to the allowlist before enabling enforcement"
+    - "Test from an approved location and confirm a known integration still sends successfully"
+  api:
+    method: POST
+    url: "https://api.sendgrid.com/v3/access_settings/whitelist"
+    headers:
+      Authorization: "Bearer {{SENDGRID_API_KEY}}"
+      Content-Type: application/json
+    body:
+      ips:
+        - ip: "203.0.113.10"
+  manual:
+    - "Review the allowlist quarterly and remove ranges for decommissioned integrations"

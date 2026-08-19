@@ -81,7 +81,7 @@ impl Observer for DependabotAlertsObserver {
             "/repos/{}/{}/dependabot/alerts?state=open&severity=critical&per_page=1",
             owner, repo
         );
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -123,10 +123,7 @@ impl Observer for DependabotAlertsObserver {
                     },
                 ],
                 status_id: StatusId::Unknown,
-                status: format!(
-                    "Dependabot alerts not enabled on {}/{}",
-                    owner, repo
-                ),
+                status: format!("Dependabot alerts not enabled on {}/{}", owner, repo),
                 raw_data: body,
                 findings: vec![Finding {
                     title: "Dependabot Alerts Not Enabled".to_string(),
@@ -154,10 +151,7 @@ impl Observer for DependabotAlertsObserver {
         let (status_id, status_msg, findings) = if alert_count == 0 {
             (
                 StatusId::Effective,
-                format!(
-                    "No critical open Dependabot alerts on {}/{}",
-                    owner, repo
-                ),
+                format!("No critical open Dependabot alerts on {}/{}", owner, repo),
                 vec![Finding {
                     title: "No Critical Dependabot Alerts".to_string(),
                     description: format!(
@@ -273,7 +267,9 @@ mod tests {
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
         assert_eq!(ev.findings[0].title, "Dependabot Alerts Not Enabled");
-        assert!(ev.findings[0].description.contains("Dependabot alerts not enabled"));
+        assert!(ev.findings[0]
+            .description
+            .contains("Dependabot alerts not enabled"));
     }
 
     #[test]
@@ -334,7 +330,10 @@ mod tests {
     fn dependabot_connection_refused_errors() {
         let mut cfg = test_config("http://127.0.0.1:1");
         cfg.remove("GITHUB_API_URL");
-        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        cfg.insert(
+            "GITHUB_API_URL".to_string(),
+            "http://127.0.0.1:1".to_string(),
+        );
         let result = DependabotAlertsObserver.observe(&cfg);
         assert!(result.is_err());
     }

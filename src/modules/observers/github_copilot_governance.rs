@@ -71,7 +71,7 @@ impl Observer for CopilotGovernanceObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/copilot/billing", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -147,15 +147,18 @@ impl Observer for CopilotGovernanceObserver {
 
         let status_msg = match status_id {
             StatusId::Effective => {
-                format!("Copilot access is governed by seat selection for organization {}", org)
+                format!(
+                    "Copilot access is governed by seat selection for organization {}",
+                    org
+                )
             }
             StatusId::Ineffective => {
-                format!("Copilot access is ungoverned (assign_all) for organization {}", org)
+                format!(
+                    "Copilot access is ungoverned (assign_all) for organization {}",
+                    org
+                )
             }
-            _ => format!(
-                "Copilot governance status unknown for organization {}",
-                org
-            ),
+            _ => format!("Copilot governance status unknown for organization {}", org),
         };
 
         Ok(vec![Evidence {
@@ -249,18 +252,12 @@ mod tests {
             .observe(&test_config_with_org(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
-        assert!(ev
-            .findings
-            .iter()
-            .any(|f| f.title == "Copilot Not Enabled"));
+        assert!(ev.findings.iter().any(|f| f.title == "Copilot Not Enabled"));
     }
 
     #[test]
     fn copilot_unrecognized_setting_is_unknown() {
-        let srv = mock_server(
-            200,
-            r#"{"seat_management_setting":"disabled"}"#,
-        );
+        let srv = mock_server(200, r#"{"seat_management_setting":"disabled"}"#);
         let ev = &CopilotGovernanceObserver
             .observe(&test_config_with_org(&srv))
             .unwrap()[0];

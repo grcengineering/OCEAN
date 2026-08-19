@@ -72,7 +72,7 @@ impl Observer for InstalledAppsObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/installations", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -224,9 +224,10 @@ mod tests {
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["total_apps"], 2);
-        assert!(ev.observables.iter().any(|o| o.obs_type == "count"
-            && o.name == "installed_apps"
-            && o.value == "2"));
+        assert!(ev
+            .observables
+            .iter()
+            .any(|o| o.obs_type == "count" && o.name == "installed_apps" && o.value == "2"));
     }
 
     #[test]
@@ -269,10 +270,7 @@ mod tests {
             .observe(&test_config_with_org(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
-        assert!(ev
-            .findings
-            .iter()
-            .any(|f| f.title == "Moderate App Count"));
+        assert!(ev.findings.iter().any(|f| f.title == "Moderate App Count"));
     }
 
     #[test]

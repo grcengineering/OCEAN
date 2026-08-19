@@ -1,0 +1,12 @@
+{
+  "branchNaming": "type/short-kebab-description (feat/fix/chore/docs)",
+  "commitStyle": "conventional",
+  "forcePushToProtected": "deny",
+  "historyRewriteOfPushed": "deny",
+  "protectedBranches": [
+    "main",
+    "master"
+  ],
+  "requirePrForProtected": true,
+  "schemaVersion": 1
+}

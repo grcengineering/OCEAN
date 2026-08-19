@@ -1,6 +1,5 @@
 /// GRC-17 §5.1 — Multi-module pipeline tests
 /// GRC-17 §5.6 — Error handling
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -12,11 +11,11 @@ use ocean::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
 };
 use ocean::module::{CredentialReq, Executor, Module, Observer, Registry};
+use ocean::scheduler::runner::execute_schedule;
 use ocean::scheduler::{
     Schedule, MODULE_STATUS_FAILURE, MODULE_STATUS_SUCCESS, RUN_STATUS_FAILURE,
     RUN_STATUS_PARTIAL_FAILURE, RUN_STATUS_SUCCESS,
 };
-use ocean::scheduler::runner::execute_schedule;
 use ocean::storage::{EvidenceQuery, SqliteStore, Store};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -71,12 +70,24 @@ struct PipelineObserver {
 }
 
 impl Module for PipelineObserver {
-    fn id(&self) -> &str { self.id }
-    fn name(&self) -> &str { "Pipeline Mock Observer" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn source_system(&self) -> &str { self.source }
-    fn evidence_types(&self) -> &[i32] { &[1001] }
-    fn credential_requirements(&self) -> Vec<CredentialReq> { vec![] }
+    fn id(&self) -> &str {
+        self.id
+    }
+    fn name(&self) -> &str {
+        "Pipeline Mock Observer"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
+    fn source_system(&self) -> &str {
+        self.source
+    }
+    fn evidence_types(&self) -> &[i32] {
+        &[1001]
+    }
+    fn credential_requirements(&self) -> Vec<CredentialReq> {
+        vec![]
+    }
 }
 
 impl Observer for PipelineObserver {
@@ -141,15 +152,23 @@ fn pipeline_multi_module_collect_and_store() {
 
     assert_eq!(run.status, RUN_STATUS_SUCCESS);
     assert_eq!(run.module_results.len(), 3);
-    assert!(run.module_results.iter().all(|r| r.status == MODULE_STATUS_SUCCESS));
+    assert!(run
+        .module_results
+        .iter()
+        .all(|r| r.status == MODULE_STATUS_SUCCESS));
 
     let query = EvidenceQuery {
         control_id: Some("MFA-1".to_string()),
         ..Default::default()
     };
     let stored = store.query_evidence(&query).unwrap();
-    assert_eq!(stored.len(), 3, "all three modules' evidence must be stored");
-    let sources: Vec<&str> = stored.iter()
+    assert_eq!(
+        stored.len(),
+        3,
+        "all three modules' evidence must be stored"
+    );
+    let sources: Vec<&str> = stored
+        .iter()
         .map(|e| e.metadata.source.system.as_str())
         .collect();
     assert!(sources.contains(&"github"));
@@ -195,8 +214,16 @@ fn pipeline_mixed_pass_fail_evidence_stored() {
         run.status
     );
 
-    let successes = run.module_results.iter().filter(|r| r.status == MODULE_STATUS_SUCCESS).count();
-    let failures = run.module_results.iter().filter(|r| r.status == MODULE_STATUS_FAILURE).count();
+    let successes = run
+        .module_results
+        .iter()
+        .filter(|r| r.status == MODULE_STATUS_SUCCESS)
+        .count();
+    let failures = run
+        .module_results
+        .iter()
+        .filter(|r| r.status == MODULE_STATUS_FAILURE)
+        .count();
     assert_eq!(successes, 2);
     assert_eq!(failures, 1);
 
@@ -206,7 +233,11 @@ fn pipeline_mixed_pass_fail_evidence_stored() {
         ..Default::default()
     };
     let stored = store.query_evidence(&query).unwrap();
-    assert_eq!(stored.len(), 2, "2 successful modules should have stored evidence");
+    assert_eq!(
+        stored.len(),
+        2,
+        "2 successful modules should have stored evidence"
+    );
 }
 
 /// Direct executor: two observers registered; execute_observer for each returns evidence.
@@ -227,8 +258,12 @@ fn pipeline_executor_collects_from_multiple_modules() {
     }));
 
     let executor = Executor::new(Arc::clone(&registry));
-    let ev1 = executor.execute_observer("exec.mod1", &HashMap::new()).unwrap();
-    let ev2 = executor.execute_observer("exec.mod2", &HashMap::new()).unwrap();
+    let ev1 = executor
+        .execute_observer("exec.mod1", &HashMap::new())
+        .unwrap();
+    let ev2 = executor
+        .execute_observer("exec.mod2", &HashMap::new())
+        .unwrap();
 
     assert!(!ev1.is_empty());
     assert!(!ev2.is_empty());
@@ -258,7 +293,10 @@ fn error_handling_module_error_captured_in_run() {
     assert_eq!(run.status, RUN_STATUS_FAILURE);
     assert_eq!(run.module_results.len(), 1);
     assert_eq!(run.module_results[0].status, MODULE_STATUS_FAILURE);
-    assert!(!run.module_results[0].error.is_empty(), "error message must be captured");
+    assert!(
+        !run.module_results[0].error.is_empty(),
+        "error message must be captured"
+    );
 }
 
 /// Unknown module ID results in a failure run with a descriptive error.
@@ -304,5 +342,9 @@ fn error_handling_partial_failure_does_not_lose_evidence() {
         ..Default::default()
     };
     let stored = store.query_evidence(&query).unwrap();
-    assert_eq!(stored.len(), 1, "evidence from the good module must survive partial failure");
+    assert_eq!(
+        stored.len(),
+        1,
+        "evidence from the good module must survive partial failure"
+    );
 }

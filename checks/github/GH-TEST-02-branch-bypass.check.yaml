@@ -22,6 +22,7 @@ pre_flight:
 references:
   cis: "2.1"
   nist: ["CM-3", "CM-5"]
+  hth: "github:2.1"
 
 credentials:
   GITHUB_TOKEN:

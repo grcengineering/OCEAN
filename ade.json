@@ -1,0 +1,70 @@
+{
+  "harnesses": [
+    "claude-code"
+  ],
+  "modules": {
+    "approval-gates": {
+      "enabled": true,
+      "options": {}
+    },
+    "config-governance": {
+      "enabled": true,
+      "options": {}
+    },
+    "context": {
+      "enabled": true,
+      "options": {
+        "enableSerenaMcp": true
+      }
+    },
+    "cost-governance": {
+      "enabled": true,
+      "options": {}
+    },
+    "git-hygiene": {
+      "enabled": true,
+      "options": {}
+    },
+    "guardrails": {
+      "enabled": true,
+      "options": {}
+    },
+    "injection-defense": {
+      "enabled": true,
+      "options": {}
+    },
+    "memory": {
+      "enabled": true,
+      "options": {}
+    },
+    "observability": {
+      "enabled": true,
+      "options": {}
+    },
+    "reproducibility": {
+      "enabled": true,
+      "options": {}
+    },
+    "sandbox": {
+      "enabled": true,
+      "options": {}
+    },
+    "scaffolding": {
+      "enabled": true,
+      "options": {}
+    },
+    "secrets": {
+      "enabled": true,
+      "options": {}
+    },
+    "supply-chain": {
+      "enabled": true,
+      "options": {}
+    },
+    "token-efficiency": {
+      "enabled": true,
+      "options": {}
+    }
+  },
+  "schemaVersion": 1
+}

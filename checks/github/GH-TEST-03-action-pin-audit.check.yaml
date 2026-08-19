@@ -20,6 +20,7 @@ references:
   cis: "3.1"
   nist: SA-12
   soc2: CC9.2
+  hth: "github:3.10"
 
 credentials:
   GITHUB_TOKEN:

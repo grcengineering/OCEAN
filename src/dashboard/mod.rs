@@ -151,10 +151,7 @@ mod tests {
     #[test]
     fn next_wraps_around() {
         let mut app = App::new();
-        app.controls = vec![
-            data::ControlRow::empty("a"),
-            data::ControlRow::empty("b"),
-        ];
+        app.controls = vec![data::ControlRow::empty("a"), data::ControlRow::empty("b")];
         app.next();
         assert_eq!(app.selected, 1);
         app.next();
@@ -164,10 +161,7 @@ mod tests {
     #[test]
     fn previous_wraps_around() {
         let mut app = App::new();
-        app.controls = vec![
-            data::ControlRow::empty("a"),
-            data::ControlRow::empty("b"),
-        ];
+        app.controls = vec![data::ControlRow::empty("a"), data::ControlRow::empty("b")];
         app.previous();
         assert_eq!(app.selected, 1); // wrapped from 0
     }
@@ -246,10 +240,7 @@ mod tests {
     #[test]
     fn handle_key_jk_navigate() {
         let mut app = App::new();
-        app.controls = vec![
-            data::ControlRow::empty("a"),
-            data::ControlRow::empty("b"),
-        ];
+        app.controls = vec![data::ControlRow::empty("a"), data::ControlRow::empty("b")];
         app.handle_key(key(KeyCode::Char('j')));
         assert_eq!(app.selected, 1);
         app.handle_key(key(KeyCode::Char('k')));

@@ -14,14 +14,14 @@ pub mod evidence;
 pub mod fleet;
 pub mod harden;
 pub mod module;
-pub mod report;
 pub mod modules;
+pub mod report;
 pub mod scheduler;
 pub mod secrets;
 pub mod storage;
 
 pub use evidence::{ConfidenceLevel, Evidence, StatusId};
-pub use module::{Observer, Module, Registry, Tester};
+pub use module::{Module, Observer, Registry, Tester};
 
 #[cfg(test)]
 pub mod testutil;

@@ -120,6 +120,9 @@ pub struct CheckReferences {
     pub pci_dss: StringOrVec,
     #[serde(default)]
     pub disa_stig: StringOrVec,
+    /// HTH guide control this check derives from, as "vendor-slug:N.N" (e.g. "slack:1.2").
+    #[serde(default)]
+    pub hth: String,
 }
 
 /// Accepts either a single string or a list of strings in YAML.
@@ -209,6 +212,11 @@ pub struct RequestDef {
     pub headers: HashMap<String, String>,
     #[serde(default)]
     pub body: Option<serde_json::Value>,
+    /// Form-urlencoded body (key/value pairs, templated like everything else).
+    /// Mutually exclusive with `body` — OAuth token endpoints (SailPoint,
+    /// OneLogin, Zoom S2S) are form-only and reject JSON bodies.
+    #[serde(default)]
+    pub body_form: Option<HashMap<String, String>>,
     /// When true, follow GitHub-style `Link: <url>; rel="next"` pagination.
     #[serde(default)]
     pub paginate: bool,
@@ -366,7 +374,10 @@ assertions:
         assert_eq!(step.id, "get_org_settings");
         assert_eq!(step.request.method, "GET");
         assert!(step.extract.contains_key("mfa_enforced"));
-        assert_eq!(step.extract["mfa_enforced"], "$.two_factor_requirement_enabled");
+        assert_eq!(
+            step.extract["mfa_enforced"],
+            "$.two_factor_requirement_enabled"
+        );
     }
 
     #[test]
@@ -784,7 +795,13 @@ remediation:
           two_factor_requirement_enabled: true
 "#;
         let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
-        let tf = def.remediation.as_ref().unwrap().terraform.as_ref().unwrap();
+        let tf = def
+            .remediation
+            .as_ref()
+            .unwrap()
+            .terraform
+            .as_ref()
+            .unwrap();
         assert_eq!(tf.resources.len(), 1);
     }
 

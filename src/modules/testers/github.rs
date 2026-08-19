@@ -643,7 +643,11 @@ mod tests {
         let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev.findings.iter().any(|f| f.title == "Cleanup Failed"));
-        let cleanup_finding = ev.findings.iter().find(|f| f.title == "Cleanup Failed").unwrap();
+        let cleanup_finding = ev
+            .findings
+            .iter()
+            .find(|f| f.title == "Cleanup Failed")
+            .unwrap();
         assert_eq!(cleanup_finding.severity_id, 2);
     }
 
@@ -651,10 +655,7 @@ mod tests {
 
     #[test]
     fn push_201_delete_204_is_cleanup_success() {
-        let srv = mock_server(vec![
-            (201, CREATED_BODY),
-            (204, r#"{}"#),
-        ]);
+        let srv = mock_server(vec![(201, CREATED_BODY), (204, r#"{}"#)]);
         let ev = &SecretPushTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         // No cleanup failure finding
@@ -670,7 +671,10 @@ mod tests {
         assert_eq!(ev.metadata.module.name, "github.secret_push");
         assert_eq!(ev.metadata.source.system, "github");
         assert_eq!(ev.metadata.source.api_version, "v3");
-        assert_eq!(ev.metadata.safety_classification.as_deref(), Some("observable"));
+        assert_eq!(
+            ev.metadata.safety_classification.as_deref(),
+            Some("observable")
+        );
     }
 
     // ── Connection refused (non-HTTP error) ─────────────────────────────────
@@ -680,7 +684,10 @@ mod tests {
         let config = base_config("http://127.0.0.1:1");
         let result = SecretPushTester.test(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("GitHub API request failed"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("GitHub API request failed"));
     }
 
     #[test]

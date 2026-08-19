@@ -70,7 +70,7 @@ impl Observer for OrgBasePermissionsObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 

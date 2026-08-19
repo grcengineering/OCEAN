@@ -821,27 +821,6 @@ mod tests {
         format!("http://127.0.0.1:{}/", addr.port())
     }
 
-    fn fresh_keys_xml() -> String {
-        let recent = (Utc::now() - chrono::Duration::days(10))
-            .format("%Y-%m-%dT%H:%M:%SZ")
-            .to_string();
-        format!(
-            r#"<ListAccessKeysResponse>
-  <ListAccessKeysResult>
-    <AccessKeyMetadata>
-      <member>
-        <AccessKeyId>FRESHKEY</AccessKeyId>
-        <Status>Active</Status>
-        <CreateDate>{}</CreateDate>
-        <UserName>alice</UserName>
-      </member>
-    </AccessKeyMetadata>
-  </ListAccessKeysResult>
-</ListAccessKeysResponse>"#,
-            recent
-        )
-    }
-
     fn base_config(base_url: &str) -> HashMap<String, String> {
         HashMap::from([
             ("AWS_ACCESS_KEY_ID".to_string(), "AKID".to_string()),
@@ -862,6 +841,17 @@ mod tests {
         assert!(ev.test_transcript.is_none());
     }
 
+    /// KEYS_FRESH with a CreateDate always 10 days before the wall clock the
+    /// observer reads — the static fixture's pinned date aged past the 90-day
+    /// max in April 2026 and turned this test into a time bomb. The parser
+    /// test keeps the static fixture because it pins `now` explicitly.
+    fn keys_fresh_dynamic() -> String {
+        let create_date = (Utc::now() - chrono::Duration::days(10))
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        KEYS_FRESH.replace("2026-01-01T00:00:00Z", &create_date)
+    }
+
     #[test]
     fn iam_observer_with_session_token_compliant() {
         // Drives the Some(session_token) branch in sigv4_get (L96-98, L132-134).
@@ -879,7 +869,7 @@ mod tests {
         let srv = mock_server(vec![
             ONE_USER.to_string(),
             MFA_ONE.to_string(),
-            fresh_keys_xml(),
+            keys_fresh_dynamic(),
         ]);
         let ev = &IamObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
@@ -929,7 +919,7 @@ mod tests {
         let srv = mock_server(vec![
             TWO_USERS.to_string(),
             MFA_ONE.to_string(),    // alice mfa
-            fresh_keys_xml(),       // alice keys
+            keys_fresh_dynamic(),   // alice keys
             MFA_NONE.to_string(),   // bob mfa (none)
             KEYS_STALE.to_string(), // bob keys (stale)
         ]);

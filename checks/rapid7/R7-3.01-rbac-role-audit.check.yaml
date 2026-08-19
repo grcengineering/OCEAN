@@ -1,0 +1,71 @@
+id: R7-3.01
+name: Audit Roles Granting All-Permissions Privilege
+description: |
+  Enumerates every role defined on the InsightVM Security Console and flags
+  how many carry the "all-permissions" privilege, which is functionally
+  equivalent to Global Administrator. Any role beyond the single built-in
+  Global Administrator role that carries all-permissions is an over-granted
+  custom role and a least-privilege violation.
+author: grc-engineering
+version: "1.0"
+source: rapid7
+profile: L1
+tags: [rbac, least-privilege, roles]
+
+references:
+  cis: "5.4"
+  nist: AC-6
+  hth: "rapid7:3.1"
+
+credentials:
+  RAPID7_BASIC_AUTH:
+    type: api_token
+    required: true
+
+inputs:
+  console_url:
+    description: InsightVM Security Console base URL (e.g. https://console.example.com:3780)
+    env: CONSOLE_URL
+    required: true
+
+steps:
+  - id: get_roles
+    action: api_call
+    request:
+      method: GET
+      url: "{{console_url}}/api/3/roles"
+      headers:
+        Authorization: "Basic {{RAPID7_BASIC_AUTH}}"
+        Accept: application/json
+    extract:
+      roles: "$.resources"
+
+assertions:
+  - id: all_permissions_role_ceiling
+    expr: "size(roles.filter(r, r.privileges.exists(p, p == 'all-permissions'))) <= 1"
+    severity: high
+    title: At Most One Role Grants All-Permissions
+    pass_message: "At most one role on the console grants the all-permissions privilege"
+    fail_message: "More than one role grants the all-permissions privilege"
+    finding:
+      description: |
+        More than one role defined on the InsightVM Security Console carries
+        the "all-permissions" privilege, which is functionally equivalent to
+        Global Administrator. Custom roles should never carry all-permissions
+        — only the platform's single built-in Global Administrator role
+        should. Every additional role granting it is an unnecessary
+        over-provisioning of full platform control that expands the blast
+        radius of any compromised or insider account holding it.
+
+remediation:
+  description: |
+    Replace over-granted custom roles with narrowly-scoped roles limited to
+    the site access, scan management, and report access each function
+    actually needs.
+  steps:
+    - "Navigate to Administration -> Roles"
+    - "Review every role flagged as carrying all-permissions"
+    - "For each non-Global-Administrator role, remove all-permissions and grant only the specific site, scan, and report permissions the role's users require"
+    - "Reserve the built-in Global Administrator role, limited to 2-3 accounts, as the only all-permissions holder (see rapid7:3.2)"
+  manual:
+    - "Document the business justification for every role assignment during quarterly access review"

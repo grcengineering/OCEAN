@@ -1,0 +1,95 @@
+id: SLACK-3.01
+name: Audit Approved App Scopes for Excessive Permissions
+description: |
+  Enumerates apps approved and restricted for the Slack workspace via the
+  admin.apps.approved.list and admin.apps.restricted.list APIs, and flags
+  any approved app holding an "admin" OAuth scope. Slack wraps every Web
+  API response in an {"ok": true/false} envelope, so the API-success
+  assertion is evaluated before any assertion that inspects the payload.
+author: grc-engineering
+version: "1.0"
+source: slack
+profile: L1
+tags: [oauth, apps, audit]
+
+references:
+  cis: "2.5"
+  nist: [AC-3, CM-7]
+  soc2: CC6.1
+  hth: "slack:3.1"
+
+credentials:
+  SLACK_ADMIN_TOKEN:
+    type: api_token
+    scopes: ["admin.apps:read"]
+    required: true
+
+steps:
+  - id: get_approved_apps
+    action: api_call
+    request:
+      method: GET
+      url: "https://slack.com/api/admin.apps.approved.list"
+      headers:
+        Authorization: "Bearer {{SLACK_ADMIN_TOKEN}}"
+        Content-Type: application/json
+    extract:
+      approved_ok: "$.ok"
+      approved_apps: "$.approved_apps"
+
+  - id: get_restricted_apps
+    action: api_call
+    request:
+      method: GET
+      url: "https://slack.com/api/admin.apps.restricted.list"
+      headers:
+        Authorization: "Bearer {{SLACK_ADMIN_TOKEN}}"
+        Content-Type: application/json
+    extract:
+      restricted_ok: "$.ok"
+      restricted_apps: "$.restricted_apps"
+
+assertions:
+  - id: approved_apps_api_reachable
+    expr: "approved_ok == true"
+    severity: medium
+    title: Admin App Approval API Reachable
+    pass_message: "admin.apps.approved.list returned successfully"
+    fail_message: "admin.apps.approved.list call failed — app approval governance cannot be verified"
+    finding:
+      description: |
+        The admin.apps.approved.list call did not return ok: true. This API
+        requires an Enterprise Grid plan and a token with the
+        admin.apps:read scope. Without a successful call, app installation
+        governance cannot be audited, and the workspace may have no visible
+        record of which apps have been reviewed and approved.
+
+  - id: no_excessive_scope_approved_apps
+    expr: "approved_apps.all(a, !('admin' in a.scopes))"
+    severity: high
+    title: No Approved App Holds Admin-Level OAuth Scope
+    pass_message: "No approved app was found holding an admin OAuth scope"
+    fail_message: "One or more approved apps hold an admin OAuth scope"
+    finding:
+      description: |
+        At least one app in the workspace's approved-apps list holds an
+        "admin" OAuth scope, granting it broad administrative reach over
+        the workspace (user management, security settings, and more). Apps
+        can access messages, files, and user data, and a compromised or
+        malicious app with admin scope has a far larger blast radius than
+        one limited to specific channel or message scopes. Review the
+        app's requested permissions and reduce its scope to the minimum
+        required, or remove the app if the admin scope cannot be justified.
+
+remediation:
+  description: |
+    Restrict which apps can be installed, require admin approval for new
+    installs, and review the scopes held by every currently-approved app.
+  steps:
+    - "Navigate to Slack Admin -> Manage apps -> App Management Settings"
+    - "Set 'Who can install apps' to Admins only, and require admin approval for all new app installs"
+    - "Review each approved app's requested scopes in Manage apps"
+    - "Remove or restrict any approved app holding an admin-level scope that cannot be justified by its business purpose"
+  manual:
+    - "Review the approved-apps list quarterly as part of access recertification"
+    - "Document business justification for any app retaining an admin-level scope"

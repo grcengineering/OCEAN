@@ -206,9 +206,15 @@ mod tests {
 
         // Restore.
         std::env::remove_var("USERPROFILE");
-        if let Some(v) = saved_userprofile { std::env::set_var("USERPROFILE", v); }
-        if let Some(v) = saved_home { std::env::set_var("HOME", v); }
-        if let Some(v) = saved_ocean { std::env::set_var("OCEAN_CONFIG", v); }
+        if let Some(v) = saved_userprofile {
+            std::env::set_var("USERPROFILE", v);
+        }
+        if let Some(v) = saved_home {
+            std::env::set_var("HOME", v);
+        }
+        if let Some(v) = saved_ocean {
+            std::env::set_var("OCEAN_CONFIG", v);
+        }
     }
 
     #[test]
@@ -225,15 +231,22 @@ mod tests {
 
         let _ = load(None);
 
-        if let Some(v) = saved_userprofile { std::env::set_var("USERPROFILE", v); }
-        if let Some(v) = saved_home { std::env::set_var("HOME", v); }
-        if let Some(v) = saved_ocean { std::env::set_var("OCEAN_CONFIG", v); }
+        if let Some(v) = saved_userprofile {
+            std::env::set_var("USERPROFILE", v);
+        }
+        if let Some(v) = saved_home {
+            std::env::set_var("HOME", v);
+        }
+        if let Some(v) = saved_ocean {
+            std::env::set_var("OCEAN_CONFIG", v);
+        }
     }
 
     #[test]
     fn load_parses_yaml_file() {
-        let dir = std::env::temp_dir();
-        let path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp
+            .path()
             .join(format!("ocean_cfg_test_{}.yaml", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -258,8 +271,6 @@ server:
         assert_eq!(cfg.output_format, "yaml");
         assert_eq!(cfg.server.port, 9090);
         assert_eq!(cfg.server.auth_token, "secret");
-
-        let _ = std::fs::remove_file(path);
     }
 
     #[test]

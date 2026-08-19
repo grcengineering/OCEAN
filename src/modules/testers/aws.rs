@@ -575,10 +575,7 @@ mod tests {
         let srv = mock_server(403, "AccessDenied");
         let config = HashMap::from([("AWS_TEST_BUCKET".to_string(), srv)]);
         let ev = &S3PublicAccessTester.test(&config).unwrap()[0];
-        assert_eq!(
-            ev.raw_data["test_result"].as_str(),
-            Some("blocked_403")
-        );
+        assert_eq!(ev.raw_data["test_result"].as_str(), Some("blocked_403"));
         assert_eq!(ev.raw_data["http_status"].as_u64(), Some(403));
     }
 
@@ -587,10 +584,7 @@ mod tests {
         let srv = mock_server(404, "NoSuchBucket");
         let config = HashMap::from([("AWS_TEST_BUCKET".to_string(), srv)]);
         let ev = &S3PublicAccessTester.test(&config).unwrap()[0];
-        assert_eq!(
-            ev.raw_data["test_result"].as_str(),
-            Some("blocked_404")
-        );
+        assert_eq!(ev.raw_data["test_result"].as_str(), Some("blocked_404"));
     }
 
     #[test]

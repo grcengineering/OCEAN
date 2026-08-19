@@ -1,0 +1,91 @@
+id: SFDC-3.01
+name: Audit Connected App Admin Pre-Authorization and Stale OAuth Tokens
+description: |
+  Runs the pack's two SOQL/Tooling queries — Connected App OAuth policy
+  and active OAuth token last-used dates — to flag Connected Apps that do
+  not require admin pre-authorization and OAuth tokens unused for 90+
+  days, both of which are documented over-permissioning and residual-access
+  risks for third-party integrations.
+author: grc-engineering
+version: "1.0"
+source: salesforce
+profile: L1
+tags: [oauth, connected-apps, credential-hygiene]
+
+references:
+  cis: "6.2"
+  nist: "AC-6"
+  hth: "salesforce:3.1"
+
+credentials:
+  SF_ACCESS_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  sf_instance_url:
+    description: Salesforce instance base URL (e.g. https://your-instance.my.salesforce.com)
+    env: SF_INSTANCE_URL
+    required: true
+
+steps:
+  - id: query_connected_app_policies
+    action: api_call
+    request:
+      method: GET
+      url: "{{sf_instance_url}}/services/data/v59.0/tooling/query?q=SELECT%20Id%2C%20Name%2C%20OptionsAllowAdminApprovedUsersOnly%2C%20OptionsRefreshTokenValidityMetric%20FROM%20ConnectedApplication"
+      headers:
+        Authorization: "Bearer {{SF_ACCESS_TOKEN}}"
+    extract:
+      apps: "$.records"
+      app_total: "$.totalSize"
+
+  - id: query_stale_oauth_tokens
+    action: api_call
+    request:
+      method: GET
+      url: "{{sf_instance_url}}/services/data/v59.0/query?q=SELECT%20Id%2C%20AppName%2C%20UserId%2C%20CreatedDate%2C%20LastUsedDate%20FROM%20OAuthToken%20WHERE%20LastUsedDate%20%3C%20LAST_N_DAYS%3A90"
+      headers:
+        Authorization: "Bearer {{SF_ACCESS_TOKEN}}"
+    extract:
+      stale_tokens: "$.records"
+      stale_total: "$.totalSize"
+
+assertions:
+  - id: connected_apps_require_admin_preauth
+    expr: "size(apps.filter(a, a.OptionsAllowAdminApprovedUsersOnly != true)) == 0"
+    severity: high
+    title: All Connected Apps Require Admin Pre-Authorization
+    pass_message: "All {{app_total}} Connected App(s) require admin pre-authorization"
+    fail_message: "One or more Connected Apps do not require admin pre-authorization"
+    finding:
+      description: |
+        At least one Connected App has OptionsAllowAdminApprovedUsersOnly
+        set to false (or unset). Without 'Admin approved users are
+        pre-authorized', any user in the org can self-authorize the app and
+        grant it its full requested OAuth scope, bypassing administrative
+        review of what the integration can access.
+
+  - id: no_stale_oauth_tokens
+    expr: "stale_total == 0"
+    severity: medium
+    title: No OAuth Tokens Unused for 90+ Days
+    pass_message: "No active OAuth tokens have gone unused for 90 or more days"
+    fail_message: "One or more active OAuth tokens have not been used in 90 or more days"
+    finding:
+      description: |
+        One or more OAuthToken records have a LastUsedDate more than 90
+        days in the past but have not been revoked. A stale token is
+        residual, unmonitored access — if the integration that issued it is
+        deprecated or compromised, the token remains a live credential with
+        whatever scope was originally granted.
+
+remediation:
+  description: |
+    Require admin pre-authorization on every Connected App and revoke
+    OAuth tokens that have gone stale.
+  steps:
+    - "Navigate to Setup -> Connected Apps -> Manage Connected Apps, open each flagged app, and set OAuth Policies -> Permitted Users to 'Admin approved users are pre-authorized'"
+    - "Navigate to Setup -> Connected Apps OAuth Usage, identify tokens unused for 90+ days, and revoke them"
+  manual:
+    - "Maintain an inventory of Connected Apps with their business owner and re-certify quarterly"

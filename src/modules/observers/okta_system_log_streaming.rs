@@ -290,18 +290,15 @@ mod tests {
 
     #[test]
     fn okta_system_log_streaming_all_inactive_is_ineffective() {
-        let body =
-            r#"[{"id":"ls1","type":"splunk_cloud_logstreaming","status":"INACTIVE"},{"id":"ls2","type":"aws_eventbridge","status":"INACTIVE"}]"#;
+        let body = r#"[{"id":"ls1","type":"splunk_cloud_logstreaming","status":"INACTIVE"},{"id":"ls2","type":"aws_eventbridge","status":"INACTIVE"}]"#;
         let url = mock_server(200, body);
         let cfg = base_config(&url);
         let ev = SystemLogStreamingObserver.observe(&cfg).unwrap();
         assert_eq!(ev[0].status_id, StatusId::Ineffective);
-        assert!(
-            ev[0]
-                .findings
-                .iter()
-                .any(|f| f.title.contains("All Log Streams Inactive"))
-        );
+        assert!(ev[0]
+            .findings
+            .iter()
+            .any(|f| f.title.contains("All Log Streams Inactive")));
     }
 
     #[test]
@@ -331,9 +328,7 @@ mod tests {
 
     #[test]
     fn missing_token_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let result = SystemLogStreamingObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
@@ -341,9 +336,7 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_API_TOKEN".to_string(), "test".to_string())]);
         let result = SystemLogStreamingObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
@@ -351,7 +344,10 @@ mod tests {
 
     #[test]
     fn api_returns_403_errors() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#,
+        );
         let result = SystemLogStreamingObserver.observe(&base_config(&srv));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();

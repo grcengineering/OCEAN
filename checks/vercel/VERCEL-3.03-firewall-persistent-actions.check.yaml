@@ -1,0 +1,85 @@
+id: VERCEL-3.03
+name: Configure Firewall Persistent Actions Against Repeat Abuse
+description: |
+  Verifies that the project's active Firewall configuration includes at
+  least one custom rule with a Persistent Action mitigation. Persistent
+  Actions block a source IP at the edge — before the request reaches the
+  CDN — for a configured duration after a single match, which caps both
+  the security exposure and the billing exposure of repeat-abuse traffic
+  such as vulnerability scanning and brute-force attempts.
+author: grc-engineering
+version: "1.0"
+source: vercel
+profile: L2
+tags: [waf, firewall, rate-limiting, availability]
+
+references:
+  nist: ["SC-5", "SI-4"]
+  hth: "vercel:3.3"
+
+credentials:
+  VERCEL_TOKEN:
+    type: api_token
+    required: true
+
+inputs:
+  vercel_team_id:
+    description: Vercel team ID (starts with "team_")
+    env: VERCEL_TEAM_ID
+    required: true
+  vercel_project_id:
+    description: Vercel project ID or name
+    env: VERCEL_PROJECT_ID
+    required: true
+
+steps:
+  - id: get_firewall_config
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.vercel.com/v1/security/firewall/config/active?projectId={{vercel_project_id}}&teamId={{vercel_team_id}}"
+      headers:
+        Authorization: "Bearer {{VERCEL_TOKEN}}"
+    extract:
+      rules: "$.rules"
+
+assertions:
+  - id: persistent_action_rule_configured
+    expr: "rules.exists(r, r.action.mitigate.persistentAction == true)"
+    severity: medium
+    title: At Least One Firewall Rule Uses a Persistent Action
+    pass_message: "A custom firewall rule with a Persistent Action mitigation is configured"
+    fail_message: "No custom firewall rule uses a Persistent Action mitigation"
+    finding:
+      description: |
+        No active firewall rule has persistentAction enabled. Without a
+        Persistent Action, every retry from a scanning or brute-force source
+        is evaluated and processed individually rather than being blocked
+        outright at the edge for a cool-down period after the first match,
+        so repeat abuse keeps incurring CDN processing (and, per Vercel's
+        Shared Responsibility Model, billing) on every subsequent request.
+
+remediation:
+  description: |
+    Deploy a persistent-action rule for common scanner paths and a
+    rate-limited persistent ban on authentication endpoints.
+  steps:
+    - "Navigate to Project -> Firewall -> Custom Rules"
+    - "Create a rule matching common probe paths (/.env, /.git, /wp-admin) with a Deny mitigation, a 24-hour action duration, and Persistent Action enabled"
+    - "Create a rate-limit rule on authentication endpoints (e.g. path prefix /api/auth) that denies after the configured threshold with a 1-hour Persistent Action ban"
+  api:
+    method: PUT
+    url: "https://api.vercel.com/v1/security/firewall/config?projectId={{vercel_project_id}}&teamId={{vercel_team_id}}"
+    body:
+      action: rules.insert
+      id: null
+      value:
+        name: hth-persistent-block-scanners
+        active: true
+        action:
+          mitigate:
+            action: deny
+            actionDuration: 24h
+            persistentAction: true
+  manual:
+    - "Review the Firewall observability dashboard after deployment to confirm the persistent-action rules are matching and not blocking legitimate traffic"

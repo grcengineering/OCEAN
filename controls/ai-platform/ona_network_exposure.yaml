@@ -1,0 +1,79 @@
+id: ai-platform.ona_network_exposure
+name: Ona Environment Network Exposure Controls
+description: >
+  Verifies that the organization caps how widely a member may share a port from a
+  development environment, read from `portSharingDisabled` and
+  `maxPortAdmissionLevel`.
+  The uncapped state is the vendor's own default and it is documented plainly:
+  `maxPortAdmissionLevel` "UNSPECIFIED means no cap (any AdmissionLevel value is
+  allowed)", and `ADMISSION_LEVEL_EVERYONE` requires no login at all. A live
+  free-tier console showed the current value as "Anyone (no login required)".
+  Two hardened states are accepted and neither is ranked: `portSharingDisabled:
+  true`, which the vendor says "takes precedence and blocks all user-initiated
+  port sharing", or a cap at CREATOR_ONLY or ORGANIZATION.
+  A deprecated value is accepted knowingly. `ADMISSION_LEVEL_OWNER_ONLY` is
+  marked "Deprecated. … Use ADMISSION_LEVEL_CREATOR_ONLY instead" in the vendor's
+  enum table while being the value used in the vendor's own CreateSecurityPolicy
+  cURL example, so it is genuinely in the wild. It enforces the same boundary as
+  creator-only and passes; the finding text names it for migration rather than
+  silently normalising it.
+  Scope: this is the ORGANIZATION ceiling only. The coexisting
+  `SecurityPolicy.spec.ports.maxAdmissionLevel` surface and the per-environment
+  effective `admission` value are not read, so a pass means the ceiling is set,
+  not that every running environment sits under it. System ports (VS Code
+  Browser, agents) are exempt from the cap by design.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Three parts of Ona's hardening surface are invisible to every control-plane
+  read. (1) Dotfiles: there is no organization policy AND no admin visibility —
+  `UserService/GetDotfilesConfiguration` carries no `userId` field, so it returns
+  only the caller's own repository, while a member's dotfiles auto-execute at
+  environment start. (2) Automation guardrails (HTH ona:2.5) have ZERO API
+  surface, verified across 45 organization, 18 environment-automation, 17
+  workflow and 16 project reference pages. (3) What actually runs inside an
+  environment — image contents, installed tooling, agent behaviour at runtime —
+  is not a control-plane fact at all. Audit logs (`EventService/ListAuditLogs`)
+  and webhooks (`WebhookService/ListWebhooks`) additionally answer HTTP 400
+  `failed_precondition` on non-Enterprise organizations, so the monitoring band
+  cannot be observed at every plan. A passing result is evidence about the
+  organization's DECLARED POLICY, not about environment runtime behaviour.
+  ABSTENTION — every ONA-* check pairs a compliance verdict with a readability
+  discriminator, and the verdict abstains (evaluates Effective, asserting
+  nothing) whenever the read failed. Control-level evaluation is not fooled by
+  that, because the readability assertion itself reports Ineffective on an
+  unreadable organization, so `ineffective_count == 0` still fails. Read an
+  individual check's rows as a pair; a lone passing verdict is not an
+  attestation.
+  INVOCATION — this control resolves under `--target '*'`, not `--target ona`.
+  Its observers are YAML checks registered under their own ids (ONA-*), and
+  target_matches_module splits a module_id on '.' and compares the first
+  segment, so "ONA-1" is never "ona". This is a property of the YAML-check
+  namespace, not of Ona: BK-*, GH-*, OKTA-*, SLACK-* and VERCEL-* behave
+  identically. The shipped controls that DO match a vendor target reference
+  native Rust modules (okta.mfa_policy, github.branch_protection), and no native
+  ona observer exists. Using dotted ona.* ids here would satisfy the target
+  filter while resolving to nothing, producing a control that looks wired and
+  can never return a finding — the worse failure. Closing this properly means
+  native Rust observers, or registering YAML checks under a vendor alias.
+
+threat_mitigated: >
+  Public exposure of services running inside a development environment — an
+  unauthenticated dev server, a database console, an agent debug endpoint, or a
+  service holding real data pulled in for testing — to anyone on the internet
+  with no login required.
+framework_mappings:
+  - framework: soc2
+    control: CC6.6
+  - framework: iso27001
+    control: A.13.1.3
+  - framework: nist_csf
+    control: PR.AC-5
+  - framework: cis_controls
+    control: "4.1"
+evidence_requirements:
+  - ona_port_admission_ceiling
+observers:
+  - module_id: ONA-3.01
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

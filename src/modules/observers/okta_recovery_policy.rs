@@ -180,8 +180,8 @@ impl Observer for RecoveryPolicyObserver {
         if findings.is_empty() {
             findings.push(Finding {
                 title: "Recovery Policy Compliant".to_string(),
-                description:
-                    "Account recovery uses secure factors only (no SMS); OKTA-1.10 met".to_string(),
+                description: "Account recovery uses secure factors only (no SMS); OKTA-1.10 met"
+                    .to_string(),
                 severity_id: 0,
             });
         }
@@ -356,9 +356,7 @@ mod tests {
 
     #[test]
     fn missing_token_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let result = RecoveryPolicyObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
@@ -366,9 +364,7 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_API_TOKEN".to_string(), "test".to_string())]);
         let result = RecoveryPolicyObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
@@ -376,7 +372,10 @@ mod tests {
 
     #[test]
     fn api_returns_403_errors() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#,
+        );
         let result = RecoveryPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();

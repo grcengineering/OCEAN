@@ -12,6 +12,7 @@ tags: [codeowners, code-review, repository]
 references:
   nist: CM-5
   soc2: CC8.1
+  hth: "github:3.11"
 
 credentials:
   GITHUB_TOKEN:

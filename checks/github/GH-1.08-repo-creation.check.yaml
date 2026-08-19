@@ -13,6 +13,7 @@ tags: [access-control, repository, organization]
 references:
   nist: AC-6
   soc2: CC6.2
+  hth: "github:1.2"
 
 credentials:
   GITHUB_TOKEN:

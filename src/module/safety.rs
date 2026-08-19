@@ -196,12 +196,7 @@ impl Authorizer for AutoAuthorizer {
 pub struct ConfirmAuthorizer;
 
 impl Authorizer for ConfirmAuthorizer {
-    fn authorize(
-        &self,
-        _: &str,
-        _: SafetyClassification,
-        _: AuthorizationLevel,
-    ) -> Result<bool> {
+    fn authorize(&self, _: &str, _: SafetyClassification, _: AuthorizationLevel) -> Result<bool> {
         Ok(true)
     }
 }
@@ -475,8 +470,14 @@ mod tests {
         for (class, level) in [
             (SafetyClassification::Safe, AuthorizationLevel::Auto),
             (SafetyClassification::Observable, AuthorizationLevel::Prompt),
-            (SafetyClassification::Reversible, AuthorizationLevel::Explicit),
-            (SafetyClassification::Destructive, AuthorizationLevel::Warning),
+            (
+                SafetyClassification::Reversible,
+                AuthorizationLevel::Explicit,
+            ),
+            (
+                SafetyClassification::Destructive,
+                AuthorizationLevel::Warning,
+            ),
         ] {
             assert!(
                 auth.authorize("t", class, level).unwrap(),

@@ -17,6 +17,7 @@ tags: [commit-signing, active-test]
 references:
   cis: "2.4"
   nist: SI-7
+  hth: "github:2.4"
 
 credentials:
   GITHUB_TOKEN:

@@ -158,7 +158,10 @@ impl Observer for ThreatInsightObserver {
                 });
                 (
                     StatusId::Ineffective,
-                    format!("ThreatInsight action is {:?}; blocking is not active", action),
+                    format!(
+                        "ThreatInsight action is {:?}; blocking is not active",
+                        action
+                    ),
                 )
             }
         };
@@ -327,9 +330,7 @@ mod tests {
 
     #[test]
     fn missing_token_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_DOMAIN".to_string(), "example.okta.com".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let result = ThreatInsightObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_API_TOKEN"));
@@ -337,9 +338,7 @@ mod tests {
 
     #[test]
     fn missing_domain_errors() {
-        let cfg = HashMap::from([
-            ("OKTA_API_TOKEN".to_string(), "test".to_string()),
-        ]);
+        let cfg = HashMap::from([("OKTA_API_TOKEN".to_string(), "test".to_string())]);
         let result = ThreatInsightObserver.observe(&cfg);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("OKTA_DOMAIN"));
@@ -347,7 +346,10 @@ mod tests {
 
     #[test]
     fn api_returns_403_errors() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"forbidden"}"#,
+        );
         let result = ThreatInsightObserver.observe(&base_config(&srv));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
@@ -384,7 +386,10 @@ mod tests {
         let ev = &ThreatInsightObserver.observe(&base_config(&url)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev.findings.iter().any(|f| f.title.contains("Audit Mode")));
-        assert!(ev.findings.iter().any(|f| f.title == "Excessive ThreatInsight Zone Exclusions"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "Excessive ThreatInsight Zone Exclusions"));
     }
 
     #[test]

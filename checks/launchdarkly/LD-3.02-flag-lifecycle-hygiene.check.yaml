@@ -1,0 +1,69 @@
+id: LD-3.02
+name: Audit Flag Ownership and Client-Side Exposure
+description: |
+  Audits project flags via the Feature Flags API and flags any flag
+  with neither an individual maintainer nor a maintainer team assigned,
+  mirroring the HTH pack's own audit logic. An unowned flag has no one
+  accountable for reviewing its targeting rules or retiring it once
+  stale.
+author: grc-engineering
+version: "1.0"
+source: launchdarkly
+profile: L2
+tags: [flags, ownership, hygiene]
+
+references:
+  nist: [CM-7]
+  hth: "launchdarkly:3.2"
+
+credentials:
+  LD_API_KEY:
+    type: api_token
+    scopes: ["reader"]
+    required: true
+
+inputs:
+  ld_project_key:
+    description: LaunchDarkly project key
+    env: LD_PROJECT_KEY
+    required: true
+
+steps:
+  - id: get_flags
+    action: api_call
+    request:
+      method: GET
+      url: "https://app.launchdarkly.com/api/v2/flags/{{ld_project_key}}?summary=true&limit=100"
+      headers:
+        Authorization: "{{LD_API_KEY}}"
+        LD-API-Version: "20240415"
+    extract:
+      flags: "$.items"
+
+assertions:
+  - id: all_flags_have_maintainer
+    expr: "size(flags.filter(f, !has(f._maintainer) && !has(f._maintainerTeam))) == 0"
+    severity: medium
+    title: Every Flag Has an Assigned Maintainer or Maintainer Team
+    pass_message: "All flags have an assigned maintainer or maintainer team"
+    fail_message: "One or more flags have no assigned maintainer or maintainer team"
+    finding:
+      description: |
+        At least one flag has neither an individual maintainer nor a
+        maintainer team assigned. An unowned flag has no one
+        accountable for reviewing its targeting rules, retiring it once
+        the rollout is complete, or investigating an unexpected change
+        — flags accumulate as permanent, unreviewed attack surface
+        rather than a temporary rollout mechanism.
+
+remediation:
+  description: |
+    Assign a maintainer or maintainer team to every flag, and review
+    client-side exposure for flags that gate sensitive logic.
+  steps:
+    - "Navigate to each project's Flags list and filter for flags with no maintainer"
+    - "Assign an individual maintainer or a maintainer team to every flag"
+    - "Review flags with clientSideAvailability enabled for targeting rules or variation values that should not be exposed to client-side SDKs"
+  manual:
+    - "Retire temporary flags once their rollout is complete rather than leaving them permanently in the codebase and targeting rules"
+    - "Review client-side-exposed flags for sensitive business logic in variation payloads or targeting rule structure"

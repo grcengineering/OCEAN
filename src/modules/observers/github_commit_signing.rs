@@ -87,7 +87,7 @@ impl Observer for CommitSigningObserver {
             "/repos/{}/{}/branches/{}/protection/required_signatures",
             owner, repo, branch
         );
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -184,10 +184,7 @@ impl Observer for CommitSigningObserver {
         }
 
         let status_msg = if signing_enabled {
-            format!(
-                "Commit signing required on {}/{}:{}",
-                owner, repo, branch
-            )
+            format!("Commit signing required on {}/{}:{}", owner, repo, branch)
         } else {
             format!(
                 "Commit signing not required on {}/{}:{}",
@@ -252,10 +249,11 @@ mod tests {
 
     #[test]
     fn commit_signing_enabled_is_effective() {
-        let srv = mock_server(200, r#"{"enabled":true,"url":"https://api.github.com/..."}"#);
-        let ev = &CommitSigningObserver
-            .observe(&test_config(&srv))
-            .unwrap()[0];
+        let srv = mock_server(
+            200,
+            r#"{"enabled":true,"url":"https://api.github.com/..."}"#,
+        );
+        let ev = &CommitSigningObserver.observe(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert!(ev.findings.is_empty());
         assert_eq!(ev.raw_data["required_signatures_enabled"], true);
@@ -264,9 +262,7 @@ mod tests {
     #[test]
     fn commit_signing_disabled_is_ineffective() {
         let srv = mock_server(200, r#"{"enabled":false}"#);
-        let ev = &CommitSigningObserver
-            .observe(&test_config(&srv))
-            .unwrap()[0];
+        let ev = &CommitSigningObserver.observe(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev
             .findings
@@ -277,9 +273,7 @@ mod tests {
     #[test]
     fn commit_signing_404_is_ineffective() {
         let srv = mock_server(404, r#"{"message":"Not Found"}"#);
-        let ev = &CommitSigningObserver
-            .observe(&test_config(&srv))
-            .unwrap()[0];
+        let ev = &CommitSigningObserver.observe(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev
             .findings
@@ -353,7 +347,10 @@ mod tests {
     #[test]
     fn commit_signing_connection_refused_errors() {
         let mut cfg = test_config("placeholder");
-        cfg.insert("GITHUB_API_URL".to_string(), "http://127.0.0.1:1".to_string());
+        cfg.insert(
+            "GITHUB_API_URL".to_string(),
+            "http://127.0.0.1:1".to_string(),
+        );
         let result = CommitSigningObserver.observe(&cfg);
         assert!(result.is_err());
     }

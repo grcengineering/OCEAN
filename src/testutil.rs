@@ -14,7 +14,7 @@ use crate::evidence::{
     SourceInfo, StatusId,
 };
 use crate::module::{
-    AuthorizationLevel, Authorizer, Observer, CredentialReq, EnvironmentScope, Module,
+    AuthorizationLevel, Authorizer, CredentialReq, EnvironmentScope, Module, Observer,
     SafetyClassification, Tester,
 };
 
@@ -425,25 +425,23 @@ impl MockHTTPServer {
         let addr = listener.local_addr().expect("local addr");
         let queue = Arc::new(Mutex::new(responses));
 
-        std::thread::spawn(move || {
-            loop {
-                let resp = {
-                    let mut q = queue.lock().unwrap();
-                    if q.is_empty() {
-                        break;
-                    }
-                    q.remove(0)
-                };
-                if let Ok((mut stream, _)) = listener.accept() {
-                    let mut buf = [0u8; 8192];
-                    let _ = stream.read(&mut buf);
-                    let (status, body) = resp;
-                    let raw = format!(
+        std::thread::spawn(move || loop {
+            let resp = {
+                let mut q = queue.lock().unwrap();
+                if q.is_empty() {
+                    break;
+                }
+                q.remove(0)
+            };
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let (status, body) = resp;
+                let raw = format!(
                         "HTTP/1.1 {status} OK\r\nContent-Length: {len}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}",
                         len = body.len()
                     );
-                    let _ = stream.write_all(raw.as_bytes());
-                }
+                let _ = stream.write_all(raw.as_bytes());
             }
         });
 
@@ -594,7 +592,10 @@ mod tests {
         let t = MockTester::safe("t.safe");
         assert_eq!(t.id, "t.safe");
         assert!(matches!(t.safety, SafetyClassification::Safe));
-        assert!(matches!(t.scope, crate::module::EnvironmentScope::Production));
+        assert!(matches!(
+            t.scope,
+            crate::module::EnvironmentScope::Production
+        ));
         assert!(!t.fail);
     }
 
@@ -659,7 +660,10 @@ mod tests {
     fn mock_tester_tester_trait_methods() {
         let t = MockTester::safe("t.tester");
         assert!(matches!(t.safety_class(), SafetyClassification::Safe));
-        assert!(matches!(t.environment_scope(), crate::module::EnvironmentScope::Production));
+        assert!(matches!(
+            t.environment_scope(),
+            crate::module::EnvironmentScope::Production
+        ));
         assert!(!t.pre_flight_checks().is_empty());
         assert!(!t.cleanup_procedures().is_empty());
     }
@@ -670,7 +674,10 @@ mod tests {
         let creds = HashMap::new();
         let result = t.test(&creds).unwrap();
         assert_eq!(result.len(), 1);
-        assert!(matches!(result[0].confidence_level, crate::evidence::ConfidenceLevel::ActiveVerification));
+        assert!(matches!(
+            result[0].confidence_level,
+            crate::evidence::ConfidenceLevel::ActiveVerification
+        ));
     }
 
     #[test]
@@ -684,7 +691,11 @@ mod tests {
 
     #[test]
     fn tester_bad_meta_module_trait_methods() {
-        let t = TesterBadMeta { id: "tbm.id", name: "", source: "mock" };
+        let t = TesterBadMeta {
+            id: "tbm.id",
+            name: "",
+            source: "mock",
+        };
         assert_eq!(t.id(), "tbm.id");
         assert_eq!(t.name(), "");
         assert_eq!(t.version(), "0.1.0");
@@ -695,16 +706,27 @@ mod tests {
 
     #[test]
     fn tester_bad_meta_tester_trait_methods() {
-        let t = TesterBadMeta { id: "tbm.tester", name: "bad", source: "mock" };
+        let t = TesterBadMeta {
+            id: "tbm.tester",
+            name: "bad",
+            source: "mock",
+        };
         assert!(matches!(t.safety_class(), SafetyClassification::Safe));
-        assert!(matches!(t.environment_scope(), crate::module::EnvironmentScope::Production));
+        assert!(matches!(
+            t.environment_scope(),
+            crate::module::EnvironmentScope::Production
+        ));
         assert!(t.pre_flight_checks().is_empty());
         assert!(t.cleanup_procedures().is_empty());
     }
 
     #[test]
     fn tester_bad_meta_test_returns_evidence() {
-        let t = TesterBadMeta { id: "tbm.test", name: "bad", source: "mock" };
+        let t = TesterBadMeta {
+            id: "tbm.test",
+            name: "bad",
+            source: "mock",
+        };
         let creds = HashMap::new();
         let result = t.test(&creds).unwrap();
         assert_eq!(result.len(), 1);
@@ -716,7 +738,11 @@ mod tests {
     fn deny_authorizer_always_returns_false() {
         let auth = DenyAuthorizer;
         let result = auth
-            .authorize("t.deny", SafetyClassification::Safe, AuthorizationLevel::Auto)
+            .authorize(
+                "t.deny",
+                SafetyClassification::Safe,
+                AuthorizationLevel::Auto,
+            )
             .unwrap();
         assert!(!result);
     }
@@ -730,7 +756,9 @@ mod tests {
             SafetyClassification::Reversible,
             SafetyClassification::Destructive,
         ] {
-            assert!(!auth.authorize("x", safety, AuthorizationLevel::Auto).unwrap());
+            assert!(!auth
+                .authorize("x", safety, AuthorizationLevel::Auto)
+                .unwrap());
         }
     }
 

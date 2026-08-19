@@ -9,7 +9,9 @@ use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
     TranscriptRecorder,
 };
-use crate::module::{tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification};
+use crate::module::{
+    tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
+};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
 
 // ─── ActionsRestrictionTester ─────────────────────────────────────────────────
@@ -44,8 +46,9 @@ impl Module for ActionsRestrictionTester {
             CredentialReq {
                 name: "GITHUB_TOKEN".to_string(),
                 cred_type: "api_token".to_string(),
-                description: "GitHub PAT with admin:org read access for reading actions permissions"
-                    .to_string(),
+                description:
+                    "GitHub PAT with admin:org read access for reading actions permissions"
+                        .to_string(),
                 required: true,
             },
             CredentialReq {
@@ -95,7 +98,7 @@ impl Tester for ActionsRestrictionTester {
         let safety_class = "observable".to_string();
 
         let path = format!("/orgs/{}/actions/permissions", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         recorder.record_action(
             "read organization actions permissions via GitHub API",
@@ -129,10 +132,8 @@ impl Tester for ActionsRestrictionTester {
             .unwrap_or("all");
 
         let (status_id, status_text, findings) = if allowed_actions == "all" {
-            recorder.record_observation(
-                "allowed_actions is 'all' — actions are unrestricted",
-                false,
-            );
+            recorder
+                .record_observation("allowed_actions is 'all' — actions are unrestricted", false);
             (
                 StatusId::Ineffective,
                 format!(
@@ -152,7 +153,10 @@ impl Tester for ActionsRestrictionTester {
             )
         } else {
             recorder.record_observation(
-                format!("allowed_actions is '{}' — actions are restricted", allowed_actions),
+                format!(
+                    "allowed_actions is '{}' — actions are restricted",
+                    allowed_actions
+                ),
                 true,
             );
             (

@@ -344,7 +344,11 @@ mod tests {
     use crate::storage::SqliteStore;
 
     fn make_state() -> AppState {
-        let dir = std::env::temp_dir();
+        // Leaked intentionally: `AppState` doesn't carry the `TempDir` guard,
+        // and this test fixture is (as before) never cleaned up — `.keep()`
+        // just swaps the insecure shared temp-dir base for a securely-created
+        // unique one without changing that lifetime behavior.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_api_{}.db", Uuid::new_v4()))
             .to_str()
@@ -517,8 +521,9 @@ mod tests {
 
     #[tokio::test]
     async fn auth_middleware_rejects_missing_token() {
-        let dir = std::env::temp_dir();
-        let path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp
+            .path()
             .join(format!("ocean_api_auth_{}.db", Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -718,8 +723,9 @@ mod tests {
 
     #[tokio::test]
     async fn auth_middleware_accepts_valid_token() {
-        let dir = std::env::temp_dir();
-        let path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp
+            .path()
             .join(format!("ocean_api_auth2_{}.db", Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -868,11 +874,7 @@ mod tests {
     async fn get_evidence_with_corrupted_returns_5xx_or_404() {
         let state = make_state_with_corrupted_evidence();
         // Query a known id — get_evidence hits scan_evidence.
-        let res = oneshot_get(
-            &format!("/api/v1/evidence/{}", Uuid::new_v4()),
-            state,
-        )
-        .await;
+        let res = oneshot_get(&format!("/api/v1/evidence/{}", Uuid::new_v4()), state).await;
         // Unknown UUID → "not found" → 404. Either way, the handler is exercised.
         assert!(
             res.status() == StatusCode::INTERNAL_SERVER_ERROR

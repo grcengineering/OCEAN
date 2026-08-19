@@ -1,0 +1,84 @@
+id: ANTH-2.01
+name: Scope API Keys to Workspaces With Descriptive Names
+description: |
+  Lists active API keys via the Admin API (GET /v1/organizations/api_keys)
+  and flags keys with no descriptive name and keys left in the default
+  workspace. Every standard API key is scoped to a single workspace, so
+  unnamed or unscoped keys are an auditability gap — no way to tell which
+  team or application holds a given key without cross-referencing usage.
+author: grc-engineering
+version: "1.0"
+source: anthropic-claude
+profile: L1
+tags: [api-keys, workspace-isolation, credential-hygiene]
+
+references:
+  nist: [AC-3, AC-6]
+  soc2: [CC6.1, CC6.3]
+  hth: "anthropic-api:1.1"
+
+credentials:
+  ANTHROPIC_ADMIN_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_api_keys
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.anthropic.com/v1/organizations/api_keys?status=active&limit=100"
+      headers:
+        x-api-key: "{{ANTHROPIC_ADMIN_KEY}}"
+        anthropic-version: "2023-06-01"
+    extract:
+      keys: "$.data"
+
+assertions:
+  - id: no_unnamed_keys
+    expr: 'size(keys.filter(k, !has(k.name) || k.name == "")) == 0'
+    severity: medium
+    title: All Active API Keys Have a Descriptive Name
+    pass_message: "All active API keys have a descriptive name"
+    fail_message: "One or more active API keys have no descriptive name"
+    finding:
+      description: |
+        At least one active API key has no name set. Unnamed keys cannot
+        be attributed to a team, application, or owner, which blocks
+        incident response and routine credential-hygiene review when a
+        key needs to be identified and revoked.
+
+  - id: no_default_workspace_keys
+    expr: "size(keys.filter(k, !has(k.workspace_id) || k.workspace_id == null)) == 0"
+    severity: medium
+    title: No Active API Keys Remain in the Default Workspace
+    pass_message: "All active API keys are scoped to a dedicated workspace"
+    fail_message: "One or more active API keys are in the default workspace"
+    finding:
+      description: |
+        At least one active API key has no workspace_id, meaning it is
+        scoped to the organization's default workspace rather than a
+        dedicated, purpose-specific workspace. Keys left in the default
+        workspace lose the workspace-boundary isolation that limits the
+        blast radius of a compromised key — for example, a leaked
+        development key cannot reach production resources only if it is
+        scoped to a development-only workspace.
+
+remediation:
+  description: |
+    Name every active API key descriptively and migrate keys out of the
+    default workspace into dedicated, purpose-specific workspaces.
+  steps:
+    - "Navigate to console.anthropic.com -> select workspace -> Settings -> API Keys"
+    - "Rename any unnamed key using the convention {team}-{environment}-{purpose}"
+    - "Create a dedicated workspace for each environment/team and reissue default-workspace keys scoped to it"
+  api:
+    method: POST
+    url: "https://api.anthropic.com/v1/organizations/api_keys/{{key_id}}"
+    headers:
+      x-api-key: "{{ANTHROPIC_ADMIN_KEY}}"
+      anthropic-version: "2023-06-01"
+    body:
+      status: "inactive"
+  manual:
+    - "Audit the API key inventory quarterly and confirm every key still has a documented owner and workspace"

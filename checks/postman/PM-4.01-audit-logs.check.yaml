@@ -1,0 +1,61 @@
+id: PM-4.01
+name: Verify Audit Logs Are Actively Capturing Events
+description: |
+  Verifies that the Postman Audit Logs API (GET /audit/logs) is enabled
+  and returning event entries, confirming audit logging is active and
+  available for SIEM export.
+author: grc-engineering
+version: "1.0"
+source: postman
+profile: L1
+tags: [audit-logs, monitoring, siem]
+
+references:
+  cis: "8.2"
+  nist: AU-2
+  soc2: CC7.2
+  hth: "postman:4.1"
+
+credentials:
+  POSTMAN_API_KEY:
+    type: api_token
+    required: true
+
+steps:
+  - id: get_audit_logs
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.getpostman.com/audit/logs"
+      headers:
+        X-API-Key: "{{POSTMAN_API_KEY}}"
+    extract:
+      trails: "$.trails"
+
+assertions:
+  - id: audit_logging_active
+    expr: "size(trails) > 0"
+    severity: high
+    title: Postman Audit Logs Capturing Events
+    pass_message: "Audit Logs API returned recent entries — audit logging is active"
+    fail_message: "Audit Logs API returned zero entries"
+    finding:
+      description: |
+        The Postman Audit Logs API (GET /audit/logs) returned zero
+        entries. This either means the organization's plan does not
+        include audit logs (Enterprise only), the API key lacks the
+        permissions needed to read them, or no auditable activity has
+        occurred. Without an active, populated audit trail, sign-ins,
+        role changes, API key events, and SSO configuration changes are
+        not visible for incident investigation or compliance evidence.
+
+remediation:
+  description: |
+    Confirm audit logging is enabled on the organization's plan and export
+    events to a SIEM for centralized alerting.
+  steps:
+    - "Navigate to Team Settings -> Audit logs and confirm events are being recorded"
+    - "Navigate to Integrations -> Audit Logs and configure export via the API"
+    - "Stream exported events to a SIEM and alert on failed logins, new public workspaces, and admin role changes"
+  manual:
+    - "Review audit logs on a recurring cadence even where SIEM alerting is configured, to catch gaps in alert coverage"

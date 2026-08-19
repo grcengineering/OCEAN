@@ -1,0 +1,71 @@
+id: OKTA-7.04
+name: Audit Change Management Log Visibility
+description: |
+  Verifies that policy configuration change events are visible via the
+  Okta System Log, as the auditable evidence base for a documented change
+  management process covering authentication policies, admin roles,
+  network zones, and integrations.
+author: grc-engineering
+version: "1.0"
+source: okta
+profile: L2
+tags: [change-management, governance, audit-trail]
+
+references:
+  nist: "CM-3"
+  soc2: "CC8.1"
+  hth: "okta:7.4"
+
+credentials:
+  OKTA_API_TOKEN:
+    type: api_token
+    scopes: [okta.logs.read]
+    required: true
+
+inputs:
+  okta_domain:
+    description: Okta organization domain (e.g., company.okta.com)
+    env: OKTA_DOMAIN
+    required: true
+
+steps:
+  - id: get_policy_change_events
+    action: api_call
+    request:
+      method: GET
+      url: "https://{{okta_domain}}/api/v1/logs?limit=20&filter=eventType+eq+%22policy.lifecycle.update%22"
+      headers:
+        Authorization: "SSWS {{OKTA_API_TOKEN}}"
+    extract:
+      policy_change_event_count: "$length"
+      policy_change_events: "$[*]"
+
+assertions:
+  - id: policy_change_log_accessible
+    expr: "policy_change_event_count >= 0"
+    severity: medium
+    title: Policy Change Events Are Queryable in the System Log
+    pass_message: "System Log returned {{policy_change_event_count}} recent policy.lifecycle.update event(s) — cross-reference against your change management records"
+    fail_message: "Unable to query policy.lifecycle.update events from the System Log"
+    finding:
+      description: |
+        The System Log did not return policy change events as expected.
+        Change management for Okta configuration depends on every policy,
+        admin role, network zone, and integration modification being
+        tracked, approved, and auditable. If policy change events cannot
+        be queried, the organization cannot produce audit-trail evidence
+        that SOC 2 CC8.1 requires. Also monitor
+        `application.lifecycle.*`, `group.user_membership.*`,
+        `zone.lifecycle.*`, and `system.role.create` events, which cover
+        the remaining change-management surface area.
+
+remediation:
+  description: |
+    Establish a documented change management process backed by System Log
+    monitoring for configuration-affecting event types.
+  steps:
+    - "Route policy.lifecycle.*, application.lifecycle.*, zone.lifecycle.*, and system.role.create events to your SIEM via log streaming"
+    - "Require a documented change ticket and peer approval before any production policy modification"
+    - "Manage authentication policies and network zones as Terraform-tracked infrastructure with a pull-request review gate"
+  manual:
+    - "Enforce separation of duties: the admin proposing a change should not be the sole approver"
