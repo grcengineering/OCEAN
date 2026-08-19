@@ -36,6 +36,17 @@ const CREDENTIAL_ENV_VARS: &[&str] = &[
     // token, and `env_as_config()` reads the whole environment.
     "BUILDKITE_API_TOKEN",
     "BUILDKITE_API_KEY",
+    // Ona (formerly Gitpod) authenticates every Connect RPC method with a single
+    // bearer token. ONA_TOKEN is on the fleet credential allowlist
+    // (`fleet::manifest::allowed_credentials`) and is substituted into the
+    // remediation headers on all 18 ONA-* checks, so it must be on the masking
+    // plane: a credential that is allowed but not masked can reach stdout, the
+    // dry-run JSON, and ~/.ocean/audit.log verbatim. ONA_API_KEY is kept here
+    // (masking only, not on the fleet allowlist) because the vendor's own cURL
+    // examples export that spelling for the same token, and `env_as_config()`
+    // reads the whole environment.
+    "ONA_TOKEN",
+    "ONA_API_KEY",
 ];
 
 /// Scrubs known credential values from a string, replacing them with `***REDACTED***`.
@@ -73,12 +84,13 @@ fn validate_remediation_url(url: &str) -> Result<()> {
         || is_aws_url(url)
         || is_azure_url(url)
         || is_buildkite_url(url)
+        || is_ona_url(url)
     {
         Ok(())
     } else {
         Err(anyhow::anyhow!(
             "remediation URL rejected by allowlist: {url}\n\
-             Allowed: api.github.com, *.okta.com, AWS, Azure, Buildkite endpoints.\n\
+             Allowed: api.github.com, *.okta.com, AWS, Azure, Buildkite, Ona endpoints.\n\
              If this is a legitimate endpoint, add it to ALLOWED_URL_PREFIXES in harden/mod.rs"
         ))
     }
@@ -124,6 +136,26 @@ fn is_buildkite_url(raw: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Ona's (formerly Gitpod's) control plane is SaaS-only. The documented base
+/// `https://app.ona.com/api` 308-redirects to `app.gitpod.io`, and HTTP clients
+/// drop the `Authorization` header across that cross-origin hop, so every shipped
+/// ONA-* check and remediation addresses `app.gitpod.io` directly. Both hosts are
+/// accepted because an operator may legitimately paste either.
+///
+/// Host-parsed, never `starts_with`, so a path-embedded `app.ona.com` on a hostile
+/// host (`https://evil.example.com/app.ona.com/steal`) is rejected — the same
+/// SEC-H014 / CISO F-001 bypass class the Buildkite predicate above guards.
+///
+/// Organizations on a custom management-plane domain are deliberately NOT
+/// wildcarded in: a per-tenant host would have to be templated from an env var,
+/// and an allowlist that accepts an arbitrary operator-supplied host is not an
+/// allowlist. Such an organization edits the check URLs, which is visible.
+fn is_ona_url(raw: &str) -> bool {
+    https_host(raw)
+        .map(|host| host == "app.ona.com" || host == "app.gitpod.io")
+        .unwrap_or(false)
+}
+
 // ─── Security: Template variable allowlist (TH-2d) ──────────────────────────
 
 const ALLOWED_TEMPLATE_VARS: &[&str] = &[
@@ -152,6 +184,20 @@ const ALLOWED_TEMPLATE_VARS: &[&str] = &[
     "BUILDKITE_ORG_SLUG",
     "BUILDKITE_CLUSTER_ID",
     "BUILDKITE_GRAPHQL_ID",
+    // Ona. `env_as_config()` is `std::env::vars()`, so the resolvable names are ENV
+    // VAR names — these are exactly the names the ONA-* checks declare under
+    // `credentials` and `inputs[*].env` and that `fleet::manifest::allowed_credentials`
+    // blesses, so a remediation template and a check input read the same variable.
+    // ONA_TOKEN is a credential: it is on CREDENTIAL_ENV_VARS above, so
+    // `resolve_vars_masked` leaves it unresolved for display and `CredentialMask`
+    // scrubs it from any output path that does resolve it.
+    "ONA_TOKEN",
+    "ONA_ORGANIZATION_ID",
+    // Referenced by ONA-1.02b and ONA-2.01 remediation bodies as the id of an
+    // object the operator must supply; not credentials and not on the fleet
+    // allowlist, because no check reads them as inputs.
+    "ONA_SCIM_CONFIGURATION_ID",
+    "ONA_SECURITY_POLICY_ID",
 ];
 
 // ─── Security: Audit logging (TH-2e) ────────────────────────────────────────

@@ -1,0 +1,200 @@
+id: ONA-3.03
+name: Environment Lifetime and Timeout Are Bounded and Strictly Enforced
+description: |
+  Verifies that the organization bounds how long an environment may live and how
+  long it may idle, and that the lifetime bound is strictly enforced — read from
+  `OrganizationPolicies.maximumEnvironmentLifetime`,
+  `.maximumEnvironmentLifetimeStrict` and `.maximumEnvironmentTimeout` via
+  `gitpod.v1.OrganizationService/GetOrganizationPolicies`.
+
+  Why it matters. A development environment holds cloned source, mounted secrets,
+  and a live agent session. An unbounded one is a standing credential-bearing host
+  that nobody is watching: it survives the task it was created for, survives the
+  member's offboarding until someone notices, and keeps whatever the agent left
+  in it. Bounding lifetime and idle timeout turns that standing exposure into a
+  window.
+
+  The zero-duration inversion — the trap this check exists to catch. Ona's
+  duration fields invert the intuition. The vendor states `maximumEnvironmentTimeout`
+  must be "0s (no limit) or at least 1800s (30 minutes)";
+  `maximumEnvironmentLifetime` "0 means no maximum lifetime"; and
+  `deleteArchivedEnvironmentsAfter` "0 means no automatic deletion". A hardening
+  script that "zeroes out" these fields WEAKENS the organization. This check
+  therefore rejects the string `"0s"` as well as absence — a present-but-zero
+  duration is the unbounded state wearing a value. Durations arrive as strings
+  (`"172800s"`, `"1209600s"` were the live values observed on a real tenant), so
+  the comparison is string-based; no numeric parsing is attempted, and none is
+  needed to separate zero from non-zero.
+
+  Why strict enforcement is part of the assertion. `maximumEnvironmentLifetimeStrict`
+  "controls whether environments past their lockdown_at timestamp are blocked from
+  starting". Without it, a lifetime bound is advisory: the timestamp passes and the
+  environment still starts. A lifetime with no strict flag is a policy nobody
+  enforces, so both are required together.
+
+  Not asserted: retention. `archiveEnvironmentsAfter` (Enterprise-only, and
+  constrained to whole days by a CEL rule — `int(this) % int(duration('86400s')) == 0`,
+  so 604800s is accepted and 100000s is rejected) and
+  `deleteArchivedEnvironmentsAfter` are the retention half of the guide control.
+  They are read as evidence but not asserted on, because an organization with a
+  legitimate long-retention requirement would fail a check it should not, and the
+  Enterprise gate would make the result unactionable on lower plans. The live
+  tenant returned `archiveEnvironmentsAfter: "172800s"` and
+  `deleteArchivedEnvironmentsAfter: "1209600s"` by default.
+
+  Host, proto3 omission, and abstention follow the design documented in full on
+  ONA-1.02: `app.gitpod.io` because `app.ona.com` 308-redirects and clients drop
+  the bearer; Protobuf-JSON omits default values, so an unbounded organization
+  returns a policies object carrying none of the three keys — this was the live
+  shape, where lifetime, strict and timeout were all absent; and every assertion
+  is guarded from the always-bound response root down, so an unreadable
+  organization ABSTAINS rather than being accused. Each field is `has()`-tested
+  before it is read, so absence is a clean FAIL rather than a CEL error.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L2
+tags: [environment, lifecycle, retention, organization, proto3]
+
+references:
+  cis: ["4.1"]
+  nist: ["CM-6", "AC-12"]
+  soc2: CC6.1
+  iso27001: A.9.4.2
+  hth: "ona:3.3"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_org_policies
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. Unknown request fields are rejected, so the body
+      carries `organizationId` only. Duration fields come back as strings with a
+      trailing `s` (observed live: "172800s", "1209600s").
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOrganizationPolicies"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      policies: "$.policies"
+      # Read for evidence only — the retention half of the guide control is
+      # deliberately not asserted on. See the description.
+      archive_after: "$.policies.archiveEnvironmentsAfter"
+      delete_archived_after: "$.policies.deleteArchivedEnvironmentsAfter"
+
+assertions:
+  - id: policies_readable
+    expr: "get_org_policies_status_code == 200 && body_root != null && body_is_object && has(body_root.policies)"
+    severity: info
+    title: Organization Policies Readable
+    pass_message: "GetOrganizationPolicies returned a policies object for organization '{{org}}'; the lifecycle verdict below was actually evaluated"
+    fail_message: "GetOrganizationPolicies returned no policies object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return an organization policies object, so no setting
+        was observed. This is a collection failure, not a compliance failure.
+        Check ONA_ORGANIZATION_ID against
+        `IdentityService/GetAuthenticatedIdentity`, confirm the token is live and
+        issued from the same management-plane domain, and confirm the principal
+        holds the permission GetOrganizationPolicies requires.
+
+  - id: lifetime_and_timeout_bounded
+    expr: "get_org_policies_status_code != 200 || body_root == null || !body_is_object || !has(body_root.policies) || (has(policies.maximumEnvironmentLifetime) && policies.maximumEnvironmentLifetime != '' && policies.maximumEnvironmentLifetime != '0s' && has(policies.maximumEnvironmentLifetimeStrict) && policies.maximumEnvironmentLifetimeStrict == true && has(policies.maximumEnvironmentTimeout) && policies.maximumEnvironmentTimeout != '' && policies.maximumEnvironmentTimeout != '0s')"
+    severity: medium
+    title: Environment Lifetime and Idle Timeout
+    pass_message: "No unbounded-environment exposure was observed for '{{org}}' — this row is evidence that lifetime and idle timeout are bounded and strictly enforced ONLY if 'Organization Policies Readable' above also passed; when the policies object could not be read it abstains and asserts nothing about lifecycle"
+    fail_message: "Environments in '{{org}}' are not bounded and strictly enforced — a maximum lifetime, strict enforcement of it, or an idle timeout is missing or set to the zero duration that means NO LIMIT"
+    finding:
+      description: |
+        At least one of `maximumEnvironmentLifetime`,
+        `maximumEnvironmentLifetimeStrict` or `maximumEnvironmentTimeout` is absent
+        or set to the zero duration. An environment holds cloned source, mounted
+        secrets and a live agent session; unbounded, it becomes a standing
+        credential-bearing host that outlives its task and its owner's access.
+        Read the zero-duration inversion carefully before remediating. The vendor
+        documents `maximumEnvironmentTimeout` as "0s (no limit) or at least 1800s",
+        `maximumEnvironmentLifetime` as "0 means no maximum lifetime", and
+        `deleteArchivedEnvironmentsAfter` as "0 means no automatic deletion".
+        Setting these to zero to "tighten" them does the opposite. This check fails
+        a present-but-zero duration for exactly that reason.
+        `maximumEnvironmentLifetimeStrict` is required alongside the lifetime bound
+        because it is what makes the bound enforceable: it "controls whether
+        environments past their lockdown_at timestamp are blocked from starting".
+        A lifetime without it is advisory.
+        Not covered by this finding: retention. `archiveEnvironmentsAfter`
+        (Enterprise-only; constrained to whole days) and
+        `deleteArchivedEnvironmentsAfter` are read as evidence but not asserted on,
+        so a pass here says nothing about how long archived environments persist.
+        Note on the read: ABSENT fields are the insecure default. Protobuf-JSON
+        omits default values, so a policies object missing these keys means
+        unbounded. This check treats absence as a failure deliberately.
+        This finding cannot be raised by an unreadable organization — the guard
+        chain short-circuits to abstain on non-200, a null body, an array-shaped
+        body, or a missing `policies` key.
+
+remediation:
+  description: |
+    Set a maximum lifetime, enable strict enforcement, and set an idle timeout.
+    `UpdateOrganizationPolicies` returns a message with NO fields, so the write is
+    never self-proving — read back with `GetOrganizationPolicies` and assert on
+    the read-back. This check IS that read-back. Never send `0s` for any of these:
+    zero means "no limit", not "immediate".
+  steps:
+    - "Navigate to Settings -> Infrastructure -> Policies -> Environment lifecycle"
+    - "Set 'Auto-stop timeout' away from 'No max timeout' — the API floor is 1800s (30 minutes)"
+    - "Set 'Maximum lifetime' away from 'No maximum lifetime' — the API ceiling is 15552000s (180 days)"
+    - "Enable 'Strict enforcement' so environments past their lockdown timestamp are blocked from starting"
+    - "Review 'Archive inactive' and 'Auto-delete archived' against your retention requirement — these are not asserted by this check"
+    - "Re-run this check and confirm all three asserted fields read non-zero durations with strict enforcement on"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOrganizationPolicies"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      maximumEnvironmentLifetime: "604800s"
+      maximumEnvironmentLifetimeStrict: true
+      maximumEnvironmentTimeout: "1800s"
+  manual:
+    - "The durations above are a starting shape, not a recommendation — derive them from how long your teams legitimately need an environment to live."
+    - "`archiveEnvironmentsAfter` is Enterprise-only and rejects any value that is not a whole number of days (CEL: `int(this) % int(duration('86400s')) == 0`), so 604800s is accepted and 100000s is not."
+    - "Ona ships no first-party CLI verb for the organization policies object; `ona organization security-policy ...` covers SecurityPolicy objects only."

@@ -1,0 +1,196 @@
+id: ONA-1.04b
+name: Personal Access Tokens Are Read-Only
+description: |
+  Surfaces personal access tokens that can write, read from
+  `gitpod.v1.UserService/ListPersonalAccessTokens` by counting entries where
+  `readOnly` is absent or false.
+
+  Severity is INFO, deliberately. A read-write personal access token is a review
+  item, not a defect. Plenty of legitimate work needs one — the very remediation
+  steps in this vendor's other checks call `UpdateOrganizationPolicies`, which no
+  read-only token can perform. What makes this worth surfacing is that the
+  console's "New token" dialog defaults to the **Read & Write** tab, so the
+  write-capable token is what an operator gets by not choosing, and the
+  population drifts write-capable without anyone deciding that it should. This
+  check produces the list to review; it does not call the configuration wrong.
+
+  Absence means read-write, not unknown. `PersonalAccessToken.readOnly` is
+  documented as "When true, the token can only be used for read operations.
+  Mutations will be denied at the data layer" — server-side enforcement, not a
+  scope hint. Protobuf-JSON omits false booleans, and on a live tenant the
+  returned entries carried `expiresAt` and NO `readOnly` key, which is the
+  read-write state. The predicate is therefore
+  `!has(t.readOnly) || t.readOnly == false`, counting absence as write-capable.
+  Reading it the other way round would silently under-report every default token.
+
+  Scope caveat that materially bounds this check. `ListPersonalAccessTokens`
+  takes a `filter` carrying only `userIds` — there is no organization filter, and
+  what the call returns depends on the calling principal's permissions. A token
+  belonging to an ordinary member will see that member's own tokens and little
+  else, so a clean result from a low-privilege credential is not evidence that
+  the organization has no write-capable tokens. Run this with an
+  organization-admin credential, or treat a pass as scoped to the caller.
+
+  Expiry is read but not asserted. `expiresAt` was present on every live entry
+  observed, and the console's New-token dialog offers 30/60/90 days, so an
+  unbounded PAT may not be expressible through the UI at all. It is extracted as
+  evidence rather than asserted on, because a token whose expiry is enforced by
+  the creation surface is not a control this read can meaningfully verify.
+
+  Pagination ceiling. Only the FIRST page is read — OCEAN's `paginate: true`
+  follows GitHub-style `Link` headers, which Connect RPC does not emit — with
+  `pageSize` at the documented maximum of 100.
+
+  Host, response shape, and abstention. The request goes to `app.gitpod.io`
+  because the documented `app.ona.com` base 308-redirects and clients drop the
+  `Authorization` header on the hop. The response is a JSON OBJECT with
+  `personalAccessTokens` nested under it, and Protobuf-JSON OMITS empty repeated
+  fields — so a scope with no tokens returns an object with no
+  `personalAccessTokens` key, which PASSES (there is nothing write-capable to
+  find). An unreadable response ABSTAINS via the reachability assertion.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L2
+tags: [identity, personal-access-tokens, least-privilege, review-item, pagination-ceiling]
+
+references:
+  cis: ["5.4", "16.9"]
+  nist: ["IA-5", "AC-2"]
+  soc2: CC6.1
+  iso27001: A.9.2.4
+  hth: "ona:1.4"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID, used for message interpolation.
+      ListPersonalAccessTokens accepts no organizationId filter — its filter
+      carries `userIds` only, and scoping follows the calling principal's
+      permissions — so this input is not sent in the request body. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: list_personal_access_tokens
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. The body carries only `pagination`: this request
+      message has no `organizationId` field, and the Ona API rejects unknown
+      request fields. What the call returns depends on the caller's permissions —
+      a member-level token sees its own tokens. `pageSize` is the documented
+      maximum (100); only the first page is read because Connect emits no Link
+      header for OCEAN's paginator to follow.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.UserService/ListPersonalAccessTokens"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        pagination:
+          pageSize: 100
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      personal_access_tokens: "$.personalAccessTokens"
+
+assertions:
+  - id: personal_access_tokens_readable
+    expr: "list_personal_access_tokens_status_code == 200 && body_root != null && body_is_object"
+    severity: info
+    title: Personal Access Tokens Readable
+    pass_message: "ListPersonalAccessTokens answered with a response object for the caller's scope; the read-only verdict below was actually evaluated"
+    fail_message: "ListPersonalAccessTokens did not return a readable response (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return a readable ListPersonalAccessTokens response, so
+        no token was observed. This is a collection failure, not a compliance
+        failure. Confirm the token is live and issued from the same
+        management-plane domain, and that the principal holds the permission the
+        method requires.
+
+  - id: no_read_write_personal_access_tokens
+    expr: "list_personal_access_tokens_status_code != 200 || body_root == null || !body_is_object || !has(body_root.personalAccessTokens) || size(personal_access_tokens.filter(t, !has(t.readOnly) || t.readOnly == false)) == 0"
+    severity: info
+    title: Personal Access Token Write Capability
+    pass_message: "No write-capable personal access token was observed in the caller's scope — this row is evidence that the visible tokens are read-only ONLY if 'Personal Access Tokens Readable' above also passed; when the list could not be read it abstains and asserts nothing about token capability"
+    fail_message: "At least one write-capable personal access token is visible in '{{org}}' — review whether each one still needs write access, and whether it still needs to exist"
+    finding:
+      description: |
+        One or more personal access tokens in the caller's scope can perform
+        mutations. This is a REVIEW ITEM, not a defect: legitimate automation needs
+        write access, and every remediation in this vendor's other checks requires
+        a write-capable token to run.
+        What makes it worth reviewing is the default. The console's "New token"
+        dialog opens on the **Read & Write** tab, so a write-capable token is what
+        an operator gets by not choosing. Over time the population drifts
+        write-capable without anyone deciding it should, and each such token is a
+        standing mutation path into the organization if it leaks.
+        For each token surfaced: confirm it is still in use, confirm its holder
+        still needs write, and re-issue as read-only where the workload only reads.
+        `readOnly` is enforced server-side — "Mutations will be denied at the data
+        layer" — so it is a real boundary rather than an advisory scope.
+        Note on the read: an ABSENT `readOnly` key means write-capable.
+        Protobuf-JSON omits false booleans, and the live tenant's entries carried
+        no `readOnly` key at all. The predicate counts absence as write-capable
+        deliberately; the opposite reading would under-report every default token.
+        Scope caveat: this method has no organization filter and returns what the
+        CALLER can see. A member-level credential sees little, so a clean result
+        from a low-privilege token is not organization-wide evidence. Re-run with an
+        organization-admin credential before concluding the population is clean.
+        Read ceiling: only the first page of up to 100 tokens was read, because
+        Connect emits no Link header for OCEAN's paginator to follow.
+        This finding cannot be raised by an unreadable response — the guard chain
+        short-circuits to abstain on non-200, a null body, or an array-shaped body.
+
+remediation:
+  description: |
+    A token's read-only flag is set at creation — `CreatePersonalAccessToken`
+    carries `readOnly`, and no update method changes it. Re-issue rather than
+    edit: create a read-only successor, migrate the consumer, then revoke the
+    original.
+  steps:
+    - "Open the user menu -> Account -> Personal access tokens and review every listed token against its stated purpose"
+    - "For each token whose consumer only reads, create a replacement via 'New token' on the **Read-only** tab — the dialog opens on Read & Write, so this is an explicit choice"
+    - "Set an expiry from the dialog's 30/60/90-day options rather than accepting the widest one"
+    - "Migrate the consumer to the new token, confirm it still works, then delete the original"
+    - "Re-run this check with an organization-admin credential and confirm the remaining write-capable tokens are ones you can name and justify"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.UserService/CreatePersonalAccessToken"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      description: "Read-only replacement token"
+      readOnly: true
+      validFor: "2592000s"
+  manual:
+    - "The created token's value is returned once and never again — capture it into your secret store in the same step."
+    - "Revoke the original with `UserService/DeletePersonalAccessToken` only after the consumer is confirmed working on the replacement."
+    - "Ona ships no first-party CLI verb for personal access tokens; `ona login` consumes one but does not manage them."

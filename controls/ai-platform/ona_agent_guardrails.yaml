@@ -1,0 +1,90 @@
+id: ai-platform.ona_agent_guardrails
+name: Ona Agent Execution Guardrails
+description: >
+  Verifies the organization's controls on what an Ona coding agent may execute
+  and reach: a SecurityPolicy assigned as the organization default, executable
+  rules actually defined in one, a non-empty command deny list, MCP disabled, and
+  SCM tools either off or scoped to a group.
+  Assignment and content are checked separately, and that separation is the point.
+  The vendor states that "creation stores an inactive definition; assigning it as
+  the organization default validates materializability" — so an organization can
+  hold a carefully authored Veto Exec policy and be entirely unprotected by it.
+  ONA-2.01 reads `securityPolicyId`; ONA-2.01b reads whether any policy carries
+  `spec.executables.rules[]`. Assignment without rules is an empty shell; rules
+  without assignment are inert.
+  Two surfaces coexist for Veto, and this control asserts on one. Ona ships both
+  `SecurityPolicy.spec.executables` (EFFECT_ALLOW/_BLOCK/_AUDIT) and the inline
+  `OrganizationPolicies.vetoExecPolicy` (KERNEL_CONTROLS_ACTION_BLOCK/_AUDIT) —
+  different enums for the same idea, both live. The SecurityPolicy surface is
+  asserted because it is what the vendor's own runbook and CLI are written
+  against; the inline policy is collected as evidence.
+  MCP carries MEDIUM severity by design: an organization that curates MCP
+  integrations centrally through `IntegrationService` has a defensible exception,
+  so a failure there is a prompt to produce the exception record rather than an
+  automatic defect.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Three parts of Ona's hardening surface are invisible to every control-plane
+  read. (1) Dotfiles: there is no organization policy AND no admin visibility —
+  `UserService/GetDotfilesConfiguration` carries no `userId` field, so it returns
+  only the caller's own repository, while a member's dotfiles auto-execute at
+  environment start. (2) Automation guardrails (HTH ona:2.5) have ZERO API
+  surface, verified across 45 organization, 18 environment-automation, 17
+  workflow and 16 project reference pages. (3) What actually runs inside an
+  environment — image contents, installed tooling, agent behaviour at runtime —
+  is not a control-plane fact at all. Audit logs (`EventService/ListAuditLogs`)
+  and webhooks (`WebhookService/ListWebhooks`) additionally answer HTTP 400
+  `failed_precondition` on non-Enterprise organizations, so the monitoring band
+  cannot be observed at every plan. A passing result is evidence about the
+  organization's DECLARED POLICY, not about environment runtime behaviour.
+  ABSTENTION — every ONA-* check pairs a compliance verdict with a readability
+  discriminator, and the verdict abstains (evaluates Effective, asserting
+  nothing) whenever the read failed. Control-level evaluation is not fooled by
+  that, because the readability assertion itself reports Ineffective on an
+  unreadable organization, so `ineffective_count == 0` still fails. Read an
+  individual check's rows as a pair; a lone passing verdict is not an
+  attestation.
+  INVOCATION — this control resolves under `--target '*'`, not `--target ona`.
+  Its observers are YAML checks registered under their own ids (ONA-*), and
+  target_matches_module splits a module_id on '.' and compares the first
+  segment, so "ONA-1" is never "ona". This is a property of the YAML-check
+  namespace, not of Ona: BK-*, GH-*, OKTA-*, SLACK-* and VERCEL-* behave
+  identically. The shipped controls that DO match a vendor target reference
+  native Rust modules (okta.mfa_policy, github.branch_protection), and no native
+  ona observer exists. Using dotted ona.* ids here would satisfy the target
+  filter while resolving to nothing, producing a control that looks wired and
+  can never return a finding — the worse failure. Closing this properly means
+  native Rust observers, or registering YAML checks under a vendor alias.
+
+threat_mitigated: >
+  Execution of attacker-chosen commands by an agent steered through untrusted
+  content — a poisoned repository, a crafted issue body, injected text in a
+  fetched page — and reach from that agent into source control or into
+  unreviewed third-party MCP servers whose tool descriptions are themselves a
+  prompt-injection surface.
+framework_mappings:
+  - framework: soc2
+    control: CC6.8
+  - framework: iso27001
+    control: A.12.5.1
+  - framework: nist_csf
+    control: PR.PT-3
+  - framework: cis_controls
+    control: "2.7"
+  - framework: nist_ai_rmf
+    control: MANAGE-2.3
+evidence_requirements:
+  - ona_default_security_policy_assignment
+  - ona_veto_executable_rules
+  - ona_agent_command_deny_list
+  - ona_agent_mcp_policy
+  - ona_agent_scm_tools_scope
+observers:
+  - module_id: ONA-2.01
+  - module_id: ONA-2.01b
+  - module_id: ONA-2.02
+  - module_id: ONA-2.03
+  - module_id: ONA-2.04
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"

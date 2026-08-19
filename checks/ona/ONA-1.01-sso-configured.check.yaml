@@ -1,0 +1,203 @@
+id: ONA-1.01
+name: A Non-Builtin SSO Configuration Is Active
+description: |
+  Verifies that the organization has at least one ACTIVE SSO configuration whose
+  provider type is NOT the built-in one, read from
+  `gitpod.v1.OrganizationService/ListSSOConfigurations`.
+
+  Why "non-builtin" is the load-bearing word. On a live tenant this method
+  returned two entries, both `providerType: PROVIDER_TYPE_BUILTIN` and
+  `state: SSO_CONFIGURATION_STATE_ACTIVE`. Those are Ona's own Google and GitHub
+  login buttons, present on an organization that has configured no federation
+  whatsoever. A check written as "at least one ACTIVE SSO configuration exists"
+  would pass that organization and attest to federated sign-in that does not
+  exist — a false attestation, which is worse than a false accusation because it
+  closes the loop on nothing. The `ProviderType` enum is
+  `UNSPECIFIED(0) | BUILTIN(1) | CUSTOM(2)`, so the assertion requires an ACTIVE
+  entry with `providerType != 'PROVIDER_TYPE_BUILTIN'`.
+
+  What passing does NOT mean. Ona documents no organization-wide "SSO required"
+  toggle, and a built-in provider stays available alongside a configured OIDC
+  provider — so a member can still sign in without your IdP even when this check
+  passes. The control that actually closes the non-SSO join path is
+  `restrictAccountCreationToScim` (ONA-1.02). Read the two together; this one
+  proves federation is configured, not that it is the only way in.
+
+  Domain verification is the sibling half. Ona's "Sign in with SSO" does not
+  appear on the login screen until the email domain is verified, so an ACTIVE
+  custom configuration with no verified domain is a configuration nobody can use.
+  ONA-1.01b asserts the verification half against `ListDomainVerifications`.
+
+  Pagination ceiling. OCEAN's `paginate: true` follows GitHub-style `Link`
+  headers, which Connect RPC does not emit, so only the FIRST page is read;
+  `pageSize` is the documented maximum of 100. An organization with more than 100
+  SSO configurations could hide its only custom one beyond that boundary. This is
+  disclosed rather than hidden, and applies to every list-backed check here.
+
+  Host, response shape, and abstention. The request goes to `app.gitpod.io`
+  because the documented `app.ona.com` base 308-redirects and clients drop the
+  `Authorization` header on the hop, producing a 401 that reads like a bad
+  credential. The response is a JSON OBJECT with `ssoConfigurations` nested under
+  it, not a root array, and Protobuf-JSON OMITS empty repeated fields — so an
+  organization with zero configurations returns an object with no
+  `ssoConfigurations` key. That is a genuine FAIL, not an error: the assertion
+  tests `has(body_root.ssoConfigurations)` before dereferencing, so absence
+  short-circuits to a clean failure rather than raising an "Undeclared reference"
+  that the interpreter's fail-closed default would convert into the same verdict
+  for the wrong reason. An unreadable response ABSTAINS via the reachability
+  assertion, which is the discriminator between "we read zero" and "we read
+  nothing".
+
+  Plan gating. SSO is Enterprise-gated. On a lower plan the method may answer
+  with HTTP 400 `failed_precondition`, which lands in the abstain branch and is
+  reported as a collection failure rather than as a compliance finding.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L1
+tags: [identity, sso, federation, oidc, pagination-ceiling]
+
+references:
+  cis: ["6.7", "12.5"]
+  nist: ["IA-2", "IA-8"]
+  soc2: CC6.1
+  iso27001: A.9.4.2
+  hth: "ona:1.1"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: list_sso_configurations
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. `pageSize` is the documented maximum (100); only the
+      first page is read because Connect emits no Link header for OCEAN's
+      paginator to follow. Unknown request fields are rejected by the server, so
+      the body carries only the documented `organizationId` and
+      `pagination.pageSize`.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/ListSSOConfigurations"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+        pagination:
+          pageSize: 100
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      sso_configurations: "$.ssoConfigurations"
+
+assertions:
+  - id: sso_configurations_readable
+    expr: "list_sso_configurations_status_code == 200 && body_root != null && body_is_object"
+    severity: info
+    title: SSO Configurations Readable
+    pass_message: "ListSSOConfigurations answered with a response object for organization '{{org}}'; the federation verdict below was actually evaluated"
+    fail_message: "ListSSOConfigurations did not return a readable response for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return a readable ListSSOConfigurations response, so no
+        configuration was observed. This is a collection failure, not a compliance
+        failure — do not treat the accompanying federation result as evidence of a
+        misconfiguration.
+        Likely causes: SSO is Enterprise-gated, and Connect answers an
+        Enterprise-only feature with HTTP 400 `failed_precondition`;
+        ONA_ORGANIZATION_ID is not an organization this token can read; the token
+        is expired, revoked, or issued from a different management-plane domain; or
+        the principal lacks the permission the method requires.
+
+  - id: non_builtin_sso_active
+    expr: "list_sso_configurations_status_code != 200 || body_root == null || !body_is_object || (has(body_root.ssoConfigurations) && size(sso_configurations.filter(c, has(c.state) && c.state == 'SSO_CONFIGURATION_STATE_ACTIVE' && has(c.providerType) && c.providerType != 'PROVIDER_TYPE_BUILTIN')) > 0)"
+    severity: high
+    title: Federated Sign-In Configured
+    pass_message: "No federation gap was observed for '{{org}}' — this row is evidence that an ACTIVE non-builtin SSO configuration exists ONLY if 'SSO Configurations Readable' above also passed; when the list could not be read it abstains and asserts nothing about SSO"
+    fail_message: "No ACTIVE non-builtin SSO configuration exists for '{{org}}' — sign-in is not federated to your identity provider, so Ona accounts sit outside your MFA, conditional access, and joiner/mover/leaver process"
+    finding:
+      description: |
+        The organization has no ACTIVE SSO configuration with a provider type other
+        than `PROVIDER_TYPE_BUILTIN`. Members therefore authenticate outside your
+        identity provider: your MFA and conditional-access policies never evaluate
+        the login, and an account survives offboarding until somebody removes it by
+        hand.
+        Read the builtin caveat carefully before disputing this finding. Ona's own
+        Google and GitHub login buttons are themselves returned by this method as
+        ACTIVE SSO configurations with `providerType: PROVIDER_TYPE_BUILTIN` — on a
+        live tenant with no federation at all, two such entries came back. Counting
+        them as SSO would attest to federation that does not exist, so this check
+        requires a non-builtin provider.
+        What fixing this does NOT achieve: Ona documents no organization-wide "SSO
+        required" toggle, and built-in providers remain available alongside your
+        IdP. Configure SSO here, then close the non-SSO join path with
+        `restrictAccountCreationToScim` (ONA-1.02). Also verify your email domain
+        (ONA-1.01b) — "Sign in with SSO" does not appear on the login screen until
+        a domain is verified, so an ACTIVE configuration without one is unusable.
+        Read ceiling: only the first page of up to 100 configurations was read,
+        because Connect emits no Link header for OCEAN's paginator to follow.
+        This finding cannot be raised by an unreadable response — the guard chain
+        short-circuits to abstain on non-200, a null body, or an array-shaped body,
+        which is where an Enterprise-gated 400 lands.
+
+remediation:
+  description: |
+    Verify the email domain first, then register the OIDC provider and activate it.
+    Ona supports OIDC only — no SAML is documented. `UpdateSSOConfiguration`
+    returns a message with NO fields, so a state change is never self-proving;
+    read back with `ListSSOConfigurations` or `GetSSOConfiguration`. This check IS
+    that read-back.
+  steps:
+    - "Navigate to Settings -> Login & Identity -> Login Configuration"
+    - "Under 'Login domains', use 'Add domain' and publish the DNS TXT record Ona provides — 'Sign in with SSO' does not appear on the login screen until the domain is verified"
+    - "Under 'Single Sign On', use 'New SSO' and add your OIDC provider: issuer URL, client ID, client secret, and the verified email domain(s)"
+    - "Optionally add a CEL claims expression for conditional access, e.g. claims.email_verified && claims.email.endsWith(\"@example.com\") — the expression must evaluate to true for the login to succeed"
+    - "Confirm the configuration state is ACTIVE, then have a user on the verified domain sign in and land on your IdP"
+    - "Re-run this check and confirm an ACTIVE non-builtin configuration is present"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/CreateSSOConfiguration"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      issuerUrl: "https://idp.example.com"
+      clientId: "REPLACE_WITH_OIDC_CLIENT_ID"
+      clientSecret: "REPLACE_WITH_OIDC_CLIENT_SECRET"
+      emailDomains:
+        - "example.com"
+  manual:
+    - "The API body above is a shape, not a runnable remediation — it carries placeholder credentials that must be replaced with your IdP's real values, and it is a create rather than an idempotent update."
+    - "A newly created configuration may need `UpdateSSOConfiguration` with `state: SSO_CONFIGURATION_STATE_ACTIVE` before it is usable."
+    - "SSO is Enterprise-gated; on a lower plan this check abstains rather than reporting a gap the operator cannot close."

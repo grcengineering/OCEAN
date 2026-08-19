@@ -57,6 +57,7 @@ fn resolve_headers(
 ///
 /// Supported patterns:
 /// - `$status_code`         → special: numeric status code (set separately in ctx)
+/// - `$is_object`           → special: true when the body is a JSON object
 /// - `$length`              → length of the root array (or 1 for a non-array)
 /// - `$is_array`            → special: boolean, true iff the root is a JSON array
 /// - `$.field`              → field on root object
@@ -93,6 +94,29 @@ fn jsonpath_extract(path: &str, body: &JsonValue) -> Option<JsonValue> {
     // this is the array-shaped equivalent).
     if path == "$is_array" {
         return Some(JsonValue::Bool(matches!(body, JsonValue::Array(_))));
+    }
+
+    // Object-shape discriminator, and the counterpart `$is_array` could not
+    // substitute for.
+    //
+    // `has(x.field)` does NOT raise when `x` is a scalar — cel-interpreter 0.10.0
+    // returns `false` (verified against string, number, bool and array receivers).
+    // That makes `has()` safe from the "Undeclared reference" class, but it also
+    // makes it BLIND: on a response whose body is a JSON scalar,
+    // `has(body_root.items)` returns false — exactly what it returns for a
+    // well-formed object that simply has no `items` key. Those two cases need
+    // opposite verdicts. An object without the key is a real, readable EMPTY
+    // result (Protobuf-JSON omits empty repeated fields, so it is the normal
+    // shape for "none configured") and must FAIL the control. A scalar body was
+    // never a response at all and must ABSTAIN. Without this primitive a check
+    // reading a nested collection has no way to tell them apart, and the
+    // fail-closed default resolves the ambiguity as an accusation.
+    //
+    // Always bound, like `$`, `$length` and `$is_array`, so a guard written
+    // `!body_is_object || <real assertion>` can short-circuit before touching
+    // anything that depends on the body being a map.
+    if path == "$is_object" {
+        return Some(JsonValue::Bool(matches!(body, JsonValue::Object(_))));
     }
 
     if path == "$status_code" {
@@ -1107,6 +1131,59 @@ mod tests {
         let body = serde_json::json!([1, 2, 3]);
         let val = jsonpath_extract("$[*]", &body).unwrap();
         assert_eq!(val, serde_json::json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn jsonpath_is_object_discriminates_every_body_shape() {
+        // Always bound, and true for exactly one shape. This is what lets a check
+        // separate "a readable response whose collection is empty" (object, key
+        // omitted by Protobuf-JSON — a real FAIL) from "not a response at all"
+        // (scalar or array body — must ABSTAIN). `has()` cannot: it answers false
+        // for both.
+        assert_eq!(
+            jsonpath_extract("$is_object", &serde_json::json!({"a": 1})),
+            Some(JsonValue::Bool(true))
+        );
+        assert_eq!(
+            jsonpath_extract("$is_object", &serde_json::json!({})),
+            Some(JsonValue::Bool(true))
+        );
+        for non_object in [
+            serde_json::json!([]),
+            serde_json::json!([{"a": 1}]),
+            serde_json::json!("unexpected"),
+            serde_json::json!(42),
+            serde_json::json!(true),
+            serde_json::Value::Null,
+        ] {
+            assert_eq!(
+                jsonpath_extract("$is_object", &non_object),
+                Some(JsonValue::Bool(false)),
+                "expected false for {non_object}"
+            );
+        }
+    }
+
+    #[test]
+    fn jsonpath_is_object_and_is_array_are_mutually_exclusive() {
+        for body in [
+            serde_json::json!({"a": 1}),
+            serde_json::json!([1, 2]),
+            serde_json::json!("s"),
+            serde_json::Value::Null,
+        ] {
+            let is_object = jsonpath_extract("$is_object", &body);
+            let is_array = jsonpath_extract("$is_array", &body);
+            assert!(
+                is_object.is_some() && is_array.is_some(),
+                "both discriminators must be bound for every body shape"
+            );
+            assert!(
+                !((is_object == Some(JsonValue::Bool(true)))
+                    && (is_array == Some(JsonValue::Bool(true)))),
+                "a body cannot be both an object and an array: {body}"
+            );
+        }
     }
 
     #[test]

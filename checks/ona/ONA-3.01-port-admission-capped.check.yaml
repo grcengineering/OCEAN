@@ -1,0 +1,183 @@
+id: ONA-3.01
+name: Environment Port Admission Level Is Capped
+description: |
+  Verifies that the organization caps how widely an environment port may be
+  shared, read from `OrganizationPolicies.portSharingDisabled` and
+  `OrganizationPolicies.maxPortAdmissionLevel` via
+  `gitpod.v1.OrganizationService/GetOrganizationPolicies`.
+
+  Why it matters. A shared port publishes a service running inside a development
+  environment — a dev server, a database console, an agent's own debug endpoint —
+  onto the public internet. The vendor documents the uncapped state plainly:
+  `maxPortAdmissionLevel` "UNSPECIFIED means no cap (any AdmissionLevel value is
+  allowed)", and `ADMISSION_LEVEL_EVERYONE` requires no login at all. On a live
+  free-tier tenant the console showed the current value as "Anyone (no login
+  required)", which is exactly that state.
+
+  Two hardened states, one assertion. `portSharingDisabled: true` is the
+  strongest: the vendor states it "takes precedence and blocks all user-initiated
+  port sharing". Short of that, a cap of `ADMISSION_LEVEL_CREATOR_ONLY` or
+  `ADMISSION_LEVEL_ORGANIZATION` keeps a shared port behind an identity. Both
+  pass. `ADMISSION_LEVEL_EVERYONE` and an absent/UNSPECIFIED cap fail.
+
+  The deprecated value. `ADMISSION_LEVEL_OWNER_ONLY` (enum 1) is marked
+  "Deprecated. … Use ADMISSION_LEVEL_CREATOR_ONLY instead" in the vendor's own
+  enum table — while simultaneously being the value used in the vendor's
+  `CreateSecurityPolicy` cURL example on the same page, so it is genuinely in the
+  wild. It is accepted here as equivalent to creator-only, because it enforces
+  the same boundary; it is not silently normalised. An organization reading
+  OWNER_ONLY should migrate, and the finding text says so.
+
+  Scope. This is the organization-wide cap only. Ona carries a second, coexisting
+  surface for the same idea — `SecurityPolicy.spec.ports.maxAdmissionLevel` on a
+  `SecurityService` policy object — and a per-environment effective value on
+  `Environment.spec…admission`. Neither is read here. A pass means the ceiling is
+  set, not that every running environment sits under it.
+
+  Host, proto3 omission, and abstention follow the design documented in full on
+  ONA-1.02: `app.gitpod.io` because `app.ona.com` 308-redirects and clients drop
+  the bearer; Protobuf-JSON omits default values, so an uncapped organization
+  returns a policies object carrying NEITHER key; and every assertion is guarded
+  from the always-bound response root down, so an unreadable organization
+  ABSTAINS rather than being accused. Each field is `has()`-tested before it is
+  read, so absence is a clean FAIL — which is the correct verdict, absence being
+  "no cap" — rather than a CEL error.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L1
+tags: [network, port-sharing, admission, organization, proto3]
+
+references:
+  cis: ["4.1", "12.2"]
+  nist: ["AC-3", "SC-7"]
+  soc2: CC6.6
+  iso27001: A.13.1.3
+  hth: "ona:3.1"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_org_policies
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. Unknown request fields are rejected, so the body
+      carries `organizationId` only.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOrganizationPolicies"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      policies: "$.policies"
+
+assertions:
+  - id: policies_readable
+    expr: "get_org_policies_status_code == 200 && body_root != null && body_is_object && has(body_root.policies)"
+    severity: info
+    title: Organization Policies Readable
+    pass_message: "GetOrganizationPolicies returned a policies object for organization '{{org}}'; the port-admission verdict below was actually evaluated"
+    fail_message: "GetOrganizationPolicies returned no policies object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return an organization policies object, so no setting
+        was observed. This is a collection failure, not a compliance failure.
+        Check ONA_ORGANIZATION_ID against
+        `IdentityService/GetAuthenticatedIdentity`, confirm the token is live and
+        issued from the same management-plane domain, and confirm the principal
+        holds the permission GetOrganizationPolicies requires.
+
+  - id: port_admission_capped
+    expr: "get_org_policies_status_code != 200 || body_root == null || !body_is_object || !has(body_root.policies) || (has(policies.portSharingDisabled) && policies.portSharingDisabled == true) || (has(policies.maxPortAdmissionLevel) && (policies.maxPortAdmissionLevel == 'ADMISSION_LEVEL_CREATOR_ONLY' || policies.maxPortAdmissionLevel == 'ADMISSION_LEVEL_ORGANIZATION' || policies.maxPortAdmissionLevel == 'ADMISSION_LEVEL_OWNER_ONLY'))"
+    severity: high
+    title: Environment Port Admission Ceiling
+    pass_message: "No unrestricted-port-sharing exposure was observed for '{{org}}' — this row is evidence that the port admission ceiling is capped ONLY if 'Organization Policies Readable' above also passed; when the policies object could not be read it abstains and asserts nothing about port admission"
+    fail_message: "Environment port sharing is uncapped for '{{org}}' — a member can publish a port from a development environment to anyone on the internet with no login required"
+    finding:
+      description: |
+        Neither `portSharingDisabled` nor a restrictive `maxPortAdmissionLevel` is
+        set, so any admission level is allowed. The vendor's own wording:
+        "UNSPECIFIED means no cap (any AdmissionLevel value is allowed)". With
+        `ADMISSION_LEVEL_EVERYONE` reachable, a member can expose whatever is
+        listening inside a development environment — an unauthenticated dev server,
+        a database console, an agent's debug endpoint, a service holding real data
+        pulled in for testing — to the public internet.
+        Two remediations are both acceptable. Set `portSharingDisabled: true`,
+        which the vendor documents as taking precedence and blocking all
+        user-initiated port sharing, or cap `maxPortAdmissionLevel` at
+        `ADMISSION_LEVEL_CREATOR_ONLY` (tightest) or `ADMISSION_LEVEL_ORGANIZATION`.
+        Deprecated value: `ADMISSION_LEVEL_OWNER_ONLY` is accepted by this check
+        because it enforces the same boundary as creator-only, but the vendor marks
+        it "Deprecated. … Use ADMISSION_LEVEL_CREATOR_ONLY instead" while still
+        using it in its own `CreateSecurityPolicy` cURL example. If your
+        organization reads OWNER_ONLY, migrate it.
+        Scope: this is the organization ceiling only. The coexisting
+        `SecurityPolicy.spec.ports.maxAdmissionLevel` surface and the per-environment
+        effective `admission` value are not read here. System ports (VS Code
+        Browser, agents) are exempt from the cap by design.
+        Note on the read: ABSENT fields are the insecure default. Protobuf-JSON
+        omits default values, so a policies object carrying neither key means "no
+        cap". This check treats absence as a failure deliberately.
+        This finding cannot be raised by an unreadable organization — the guard
+        chain short-circuits to abstain on non-200, a null body, an array-shaped
+        body, or a missing `policies` key.
+
+remediation:
+  description: |
+    Cap the admission ceiling, or disable user-initiated port sharing outright.
+    `UpdateOrganizationPolicies` returns a message with NO fields, so the write is
+    never self-proving — read back with `GetOrganizationPolicies` and assert on
+    the read-back. This check IS that read-back.
+  steps:
+    - "Navigate to Settings -> Infrastructure -> Policies -> Environment access"
+    - "Set 'Maximum port admission level' to the tightest value your workflow tolerates — 'Creator only' if nothing needs to be shared beyond the person who started the environment"
+    - "If no port ever needs sharing, turn 'Port sharing' off instead — the vendor documents this as taking precedence over the admission level"
+    - "Save, re-open the page, and confirm the value shown is no longer 'Anyone (no login required)'"
+    - "Re-run this check and confirm the cap reads CREATOR_ONLY, ORGANIZATION, or that port sharing is disabled"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOrganizationPolicies"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      maxPortAdmissionLevel: "ADMISSION_LEVEL_CREATOR_ONLY"
+  manual:
+    - "Do not copy `ADMISSION_LEVEL_OWNER_ONLY` from the vendor's `CreateSecurityPolicy` cURL example — the same page's enum table marks it deprecated in favour of `ADMISSION_LEVEL_CREATOR_ONLY`."
+    - "Ona ships no first-party CLI verb for the organization policies object; `ona organization security-policy ...` covers SecurityPolicy objects only."

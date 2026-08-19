@@ -1,0 +1,177 @@
+id: ONA-2.04
+name: Agent SCM Tools Disabled or Scoped to a Group
+description: |
+  Verifies that agent access to source-control tooling is either turned off or
+  restricted to a named group, read from
+  `OrganizationPolicies.agentPolicy.scmToolsDisabled` and
+  `.agentPolicy.scmToolsAllowedGroupId` via
+  `gitpod.v1.OrganizationService/GetOrganizationPolicies`.
+
+  Why it matters. SCM tools let an agent act against your source-control provider
+  with the environment's credentials — open pull requests, push branches, read
+  private repositories. The vendor's own wording makes the default explicit:
+  "scm_tools_allowed_group_id restricts SCM tools access to members of this
+  group. Empty means no restriction (all users can use SCM tools if not
+  disabled)." So the hardened states are the cross product of the two fields, and
+  the unhardened state is both defaults: enabled, group empty, every member's
+  agents able to reach SCM.
+
+  Two hardened states, one assertion. This check passes when
+  `scmToolsDisabled == true` (the strongest state) OR when
+  `scmToolsAllowedGroupId` is a non-empty string (scoped). It deliberately does
+  not rank them: an organization that runs agent-driven PR workflows for one
+  team has taken the scoped path legitimately, and demanding the off switch would
+  make the check fail correct configurations. What it does not accept is neither.
+
+  What is NOT verified. The check reads the group ID, not the group's membership.
+  A `scmToolsAllowedGroupId` pointing at a group containing every member is
+  indistinguishable here from one pointing at a two-person platform team.
+  Confirming the group is actually narrow requires `GroupService/GetGroup`
+  (which returns `memberCount`) and `GroupService/ListMemberships`; that is a
+  separate read and is not attempted, so a pass on the scoped branch means the
+  restriction exists, not that it is tight.
+
+  Host, proto3 omission, and abstention follow the design documented in full on
+  ONA-1.02: `app.gitpod.io` because `app.ona.com` 308-redirects and clients drop
+  the bearer; Protobuf-JSON omits false booleans and empty strings, so an
+  unhardened organization returns an `agentPolicy` object carrying NEITHER key;
+  and every assertion is guarded from the always-bound response root down, so an
+  unreadable organization ABSTAINS rather than being accused. Each field is
+  `has()`-tested before it is read, so absence is a clean FAIL rather than a CEL
+  error.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L2
+tags: [agent-governance, scm, least-privilege, organization, proto3]
+
+references:
+  cis: ["2.5", "3.3"]
+  nist: ["AC-3", "CM-7"]
+  soc2: CC6.3
+  iso27001: A.9.4.1
+  hth: "ona:2.4"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_org_policies
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. Unknown request fields are rejected, so the body
+      carries `organizationId` only.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOrganizationPolicies"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      policies: "$.policies"
+
+assertions:
+  - id: policies_readable
+    expr: "get_org_policies_status_code == 200 && body_root != null && body_is_object && has(body_root.policies)"
+    severity: info
+    title: Organization Policies Readable
+    pass_message: "GetOrganizationPolicies returned a policies object for organization '{{org}}'; the SCM-tools verdict below was actually evaluated"
+    fail_message: "GetOrganizationPolicies returned no policies object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return an organization policies object, so no setting
+        was observed. This is a collection failure, not a compliance failure.
+        Check ONA_ORGANIZATION_ID against
+        `IdentityService/GetAuthenticatedIdentity`, confirm the token is live and
+        issued from the same management-plane domain, and confirm the principal
+        holds the permission GetOrganizationPolicies requires.
+
+  - id: scm_tools_disabled_or_scoped
+    expr: "get_org_policies_status_code != 200 || body_root == null || !body_is_object || !has(body_root.policies) || (has(policies.agentPolicy) && ((has(policies.agentPolicy.scmToolsDisabled) && policies.agentPolicy.scmToolsDisabled == true) || (has(policies.agentPolicy.scmToolsAllowedGroupId) && policies.agentPolicy.scmToolsAllowedGroupId != '')))"
+    severity: medium
+    title: Agent SCM Tools Scope
+    pass_message: "No unrestricted-SCM-tools exposure was observed for '{{org}}' — this row is evidence that SCM tools are disabled or group-scoped ONLY if 'Organization Policies Readable' above also passed; when the policies object could not be read it abstains and asserts nothing about SCM tools"
+    fail_message: "Agent SCM tools are enabled and unscoped for '{{org}}' — every member's agents can act against source control with the environment's credentials"
+    finding:
+      description: |
+        Neither `agentPolicy.scmToolsDisabled` nor `agentPolicy.scmToolsAllowedGroupId`
+        is set, which the vendor documents as "no restriction (all users can use
+        SCM tools if not disabled)". Every member's agent can therefore reach your
+        source-control provider with whatever the environment's credentials grant:
+        reading private repositories, pushing branches, opening pull requests.
+        Combined with an agent steered by untrusted repository content, that is a
+        write path into your codebase that no human approved.
+        Two remediations are both acceptable. Turn SCM tools off organization-wide,
+        or scope them to a group that actually needs them. This check accepts
+        either and ranks neither.
+        What this finding does NOT tell you: if you take the scoped path, the check
+        reads the group ID only. Verify the group is narrow with
+        `GroupService/GetGroup` (returns `memberCount`) and
+        `GroupService/ListMemberships` — a group containing everyone satisfies the
+        field and defeats the control.
+        Note on the read: ABSENT fields are the insecure default. Protobuf-JSON
+        omits false booleans and empty strings, so an `agentPolicy` object carrying
+        neither key means "enabled, unrestricted". This check treats absence as a
+        failure deliberately.
+        This finding cannot be raised by an unreadable organization — the guard
+        chain short-circuits to abstain on non-200, a null body, an array-shaped
+        body, or a missing `policies` key.
+
+remediation:
+  description: |
+    Either disable SCM tools organization-wide or bind them to a group.
+    `UpdateOrganizationPolicies` returns a message with NO fields, so the write is
+    never self-proving — read back with `GetOrganizationPolicies` and assert on
+    the read-back. This check IS that read-back.
+  steps:
+    - "Navigate to Settings -> Agents -> Policies"
+    - "Under 'Agent capabilities' -> 'Source Code Management Tools (SCM)', set 'Restrict access to' away from 'All' — either turn the capability off, or select the group that needs it"
+    - "If scoping to a group, review that group's membership under Settings -> Organization -> Members -> Groups and remove anyone who does not need agent-driven SCM access"
+    - "Save, re-open the page, and confirm the setting persisted"
+    - "Re-run this check and confirm `scmToolsDisabled` is true or `scmToolsAllowedGroupId` is non-empty"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOrganizationPolicies"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      agentPolicy:
+        scmToolsDisabled: true
+  manual:
+    - "To take the scoped path instead, send `agentPolicy.scmToolsAllowedGroupId` with the group UUID from `GroupService/ListGroups` rather than `scmToolsDisabled`."
+    - "Ona ships no first-party CLI verb for the organization policies object; `ona organization security-policy ...` covers SecurityPolicy objects only."

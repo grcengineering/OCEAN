@@ -1,0 +1,209 @@
+id: ONA-1.02
+name: Account Creation Restricted to SCIM-Provisioned Users
+description: |
+  Verifies that the Ona organization restricts account creation to SCIM-provisioned
+  users, read from `OrganizationPolicies.restrictAccountCreationToScim` via
+  `gitpod.v1.OrganizationService/GetOrganizationPolicies`.
+
+  Why it matters. Ona documents no organization-wide "SSO required" toggle, and a
+  built-in login provider (Google/GitHub) stays available alongside a configured
+  OIDC provider. `restrictAccountCreationToScim` is therefore the control that
+  actually closes the non-SSO join path: with it true and SCIM configured, only
+  users your IdP provisioned can create an account. Without it, a person who can
+  reach the organization login link can self-provision an identity that your
+  IdP never issued and that offboarding will never revoke.
+
+  Host. The documented base URL `https://app.ona.com/api` 308-redirects to
+  `app.gitpod.io`, and HTTP clients drop the `Authorization` header across a
+  cross-origin redirect hop, so a request sent to `app.ona.com` arrives
+  unauthenticated and fails. This check therefore addresses `app.gitpod.io`
+  directly. The proto package is still `gitpod.v1` by design — see the vendor's
+  own `requireCustomDomainAccess` field description, which names `app.gitpod.io`
+  as the host it blocks. Organizations on a custom management-plane domain must
+  re-point the URL; there is no per-tenant host discovery method.
+
+  Proto3 default omission is the central design constraint. Ona serves
+  Protobuf-JSON, which OMITS fields set to their default value. On a real
+  organization `GetOrganizationPolicies` returned only eleven keys under
+  `policies` — `agentPolicy`, `archiveEnvironmentsAfter`, `defaultEditorId`,
+  `deleteArchivedEnvironmentsAfter`, `maximumEnvironmentsPerUser`,
+  `maximumRunningEnvironmentsPerUser`, `membersCreateProjects`, `organizationId`,
+  `securityAgentPolicy`, `vetoExecPolicy`, `vetoFilePolicy` — and
+  `restrictAccountCreationToScim` was NOT among them, because it was false.
+  An absent boolean means false; an absent enum means UNSPECIFIED; an absent
+  repeated field means empty. So `$.policies.restrictAccountCreationToScim` is
+  UNBOUND on a default organization, and referencing an unbound name in CEL
+  raises "Undeclared reference", which the interpreter's fail-closed
+  `.unwrap_or(false)` converts into a FAILURE. That failure would be correct by
+  accident here and catastrophically wrong elsewhere, so the design does not
+  rely on it: the assertion extracts the always-bound response root and tests
+  `has(policies.restrictAccountCreationToScim) && ... == true`. A MISSING field
+  evaluates to a clean FAIL of the control — it IS the insecure default — and
+  never to a CEL error.
+
+  Abstention. An organization that cannot be read must never be accused. The
+  `policies_readable` assertion is the discriminator: HTTP 200, a non-null body,
+  a body that is not an array, and a `policies` key present. The compliance
+  assertion short-circuits on the same chain from the response root down, so a
+  401 (bad token), a 403 (token lacks the permission the method requires), a 400
+  `failed_precondition` (an Enterprise-gated read on a lower plan) or a 5xx all
+  ABSTAIN rather than emitting a SCIM finding against an organization nothing was
+  read from.
+
+  What the abstention does NOT do. OCEAN emits an assertion's `pass_message`
+  whenever it evaluates Effective, and an abstaining assertion IS Effective. The
+  verdict's `pass_message` is therefore worded to be true in BOTH states — it
+  reports that no violation was observed and names its dependency on
+  `policies_readable` — rather than asserting that SCIM restriction is on. An
+  abstaining row must never read as an attestation that the control is in place.
+
+  Plan gating. `restrictAccountCreationToScim` is only meaningful with SCIM
+  configured, and SCIM itself is Enterprise. On a lower plan the read still
+  succeeds and reports false, which is an honest finding the operator cannot
+  remediate without a plan change — the same reporting posture the Buildkite
+  inactive-token check uses. ONA-1.02b covers the other half: that a SCIM
+  configuration exists and is enabled.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L1
+tags: [identity, scim, provisioning, organization, proto3]
+
+references:
+  cis: ["5.3", "6.2"]
+  nist: ["AC-2"]
+  soc2: CC6.2
+  iso27001: A.9.2.1
+  hth: "ona:1.2"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`, which returns `{organizationId, organizationTier, subject}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_org_policies
+    action: api_call
+    note: >-
+      Connect RPC unary call: POST to
+      `/api/gitpod.v1.OrganizationService/GetOrganizationPolicies` with a
+      Protobuf-JSON body. Addressed at app.gitpod.io rather than the documented
+      app.ona.com because the latter 308-redirects and clients drop the bearer on
+      the hop, producing a 401 that looks like a bad credential. Unknown request
+      fields are rejected by the server, so the body carries `organizationId` only.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOrganizationPolicies"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      # Bound only when the response really is a GetOrganizationPoliciesResponse.
+      # Referencing it is always preceded by `has(body_root.policies)`.
+      policies: "$.policies"
+
+assertions:
+  - id: policies_readable
+    expr: "get_org_policies_status_code == 200 && body_root != null && body_is_object && has(body_root.policies)"
+    severity: info
+    title: Organization Policies Readable
+    pass_message: "GetOrganizationPolicies returned a policies object for organization '{{org}}'; the SCIM verdict below was actually evaluated"
+    fail_message: "GetOrganizationPolicies returned no policies object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return an organization policies object, so no setting
+        was observed. This is a collection failure, not a compliance failure — do
+        not treat the accompanying SCIM result as evidence of a misconfiguration.
+        Common causes, in order of likelihood:
+          - ONA_ORGANIZATION_ID is not the UUID of an organization this token can
+            read. Confirm it with
+            `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` (body `{}`).
+          - The token is expired, revoked, or belongs to a different management-plane
+            domain than the one addressed here (tokens are domain-scoped).
+          - The principal lacks the permission GetOrganizationPolicies requires;
+            Connect returns `permission_denied` rather than an empty object.
+          - The organization uses a custom management-plane domain, so the request
+            reached the wrong host.
+        Re-run after correcting the credential, then re-read the SCIM result.
+
+  - id: account_creation_restricted_to_scim
+    expr: "get_org_policies_status_code != 200 || body_root == null || !body_is_object || !has(body_root.policies) || (has(policies.restrictAccountCreationToScim) && policies.restrictAccountCreationToScim == true)"
+    severity: high
+    title: Account Creation Restricted to SCIM
+    pass_message: "No self-provisioning gap was observed for '{{org}}' — this row is evidence that account creation is SCIM-restricted ONLY if 'Organization Policies Readable' above also passed; when the policies object could not be read it abstains and asserts nothing about SCIM"
+    fail_message: "Account creation is NOT restricted to SCIM-provisioned users for '{{org}}' — anyone who can reach the organization login link can self-provision an identity your IdP never issued"
+    finding:
+      description: |
+        `restrictAccountCreationToScim` is not true for this organization.
+        Ona documents no organization-wide "SSO required" toggle and keeps
+        built-in login providers (Google, GitHub) available alongside a configured
+        OIDC provider, so without this policy the SSO configuration is a preferred
+        path rather than the only path. A person holding the organization login
+        link can create an account outside your IdP: it never appears in your
+        joiner/mover/leaver process, offboarding does not revoke it, and your
+        conditional-access and MFA policies never apply to it.
+        Note on the read: an ABSENT field is the insecure default. Ona serves
+        Protobuf-JSON, which omits false booleans entirely, so a policies object
+        with no `restrictAccountCreationToScim` key means the restriction is off.
+        This check treats absence as a failure deliberately.
+        This finding cannot be raised by an unreadable organization. The assertion
+        is guarded from the response root down — non-200, a null body, an
+        array-shaped body, or a missing `policies` key all short-circuit it to
+        abstain — so `policies_readable` failing produces no SCIM finding at all.
+        Remediation requires SCIM to be configured and enabled first (ONA-1.02b);
+        turning the restriction on without a working SCIM connection locks new
+        joiners out.
+
+remediation:
+  description: |
+    Set `restrictAccountCreationToScim: true` on the organization policies, after
+    confirming a SCIM configuration exists and is enabled. `UpdateOrganizationPolicies`
+    returns a message with NO fields, so the write is never self-proving — always
+    read back with `GetOrganizationPolicies` and assert on the read-back. This
+    check IS that read-back.
+  steps:
+    - "Navigate to Settings -> Login & Identity -> SCIM and confirm a SCIM configuration exists and is enabled (Configuration tab; the Operations Log tab shows provisioning traffic)"
+    - "On the same page enable 'Require SCIM provisioning' — 'Only SCIM-provisioned members can access this organization. SSO accounts without SCIM provisioning are blocked.'"
+    - "Confirm an existing member can still sign in, then confirm a non-provisioned test principal is refused"
+    - "Re-run this check and confirm `restrictAccountCreationToScim` reads true"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOrganizationPolicies"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      restrictAccountCreationToScim: true
+  manual:
+    - "Ona ships no first-party CLI verb for organization policies — the `ona` CLI covers security policies (`ona organization security-policy ...`), not the policies object. Use the API call above or the console steps."
+    - "SCIM provisioning is Enterprise-gated. On a lower plan this policy can be read but not usefully enforced; the finding is real and the remediation requires a plan change."

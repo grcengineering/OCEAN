@@ -1,0 +1,189 @@
+id: ONA-1.02b
+name: A SCIM Configuration Exists and Is Enabled
+description: |
+  Verifies that the organization has at least one SCIM configuration with
+  `enabled == true`, read from
+  `gitpod.v1.OrganizationService/ListSCIMConfigurations`.
+
+  Why this is separate from ONA-1.02. `restrictAccountCreationToScim` (ONA-1.02)
+  is the policy that blocks non-SCIM accounts; this check is the prerequisite
+  that makes the policy safe to turn on. Enabling the restriction against a SCIM
+  connection that does not exist, or exists but is disabled, locks every new
+  joiner out. Running the two as one check would hide which half is missing at
+  exactly the moment an operator needs to know.
+
+  The created-but-not-enabled trap. `CreateSCIMConfigurationRequest` has NO
+  `enabled` field — only `UpdateSCIMConfiguration` does. A one-call provisioning
+  script therefore leaves SCIM created and NOT enabled, and the console shows a
+  configuration that looks present. This check reads `enabled` specifically for
+  that reason: existence is not the question, activation is.
+
+  No organization filter. Unlike `ListSSOConfigurations`, this method's request
+  carries only `pagination` — there is no `organizationId` field, and sending one
+  would be rejected, because the Ona API rejects unknown request fields. Scoping
+  is implicit from the token, so the `org` input is used for message
+  interpolation and cross-check consistency rather than as a filter. That is a
+  real scope caveat: a token that can see more than one organization returns
+  their configurations together, and this check cannot tell them apart. Run it
+  with a token scoped to the organization under assessment.
+
+  Pagination ceiling. Only the FIRST page is read — OCEAN's `paginate: true`
+  follows GitHub-style `Link` headers, which Connect RPC does not emit — with
+  `pageSize` at the documented maximum of 100.
+
+  Host, response shape, and abstention. The request goes to `app.gitpod.io`
+  because the documented `app.ona.com` base 308-redirects and clients drop the
+  `Authorization` header on the hop. The response is a JSON OBJECT with
+  `scimConfigurations` nested under it, and Protobuf-JSON OMITS both empty
+  repeated fields AND false booleans — so an organization with no SCIM returns an
+  object with no `scimConfigurations` key, and a created-but-disabled
+  configuration appears with no `enabled` key at all. Both are FAILs, and both are
+  reached through `has()` tests so absence never raises a CEL error. An unreadable
+  response ABSTAINS via the reachability assertion.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L1
+tags: [identity, scim, provisioning, lifecycle, pagination-ceiling]
+
+references:
+  cis: ["5.3", "6.2"]
+  nist: ["AC-2"]
+  soc2: CC6.2
+  iso27001: A.9.2.1
+  hth: "ona:1.2"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID, used for message interpolation and cross-check
+      consistency. ListSCIMConfigurations accepts NO organization filter — scoping
+      is implicit from the token — so this input is not sent in the request body.
+      Obtain it with `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity`
+      and an empty JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: list_scim_configurations
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. The body carries ONLY `pagination`: unlike
+      ListSSOConfigurations this request message has no `organizationId` field,
+      and the Ona API rejects unknown request fields, so sending one would fail
+      the call outright. `pageSize` is the documented maximum (100); only the
+      first page is read because Connect emits no Link header for OCEAN's
+      paginator to follow.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/ListSCIMConfigurations"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        pagination:
+          pageSize: 100
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      scim_configurations: "$.scimConfigurations"
+
+assertions:
+  - id: scim_configurations_readable
+    expr: "list_scim_configurations_status_code == 200 && body_root != null && body_is_object"
+    severity: info
+    title: SCIM Configurations Readable
+    pass_message: "ListSCIMConfigurations answered with a response object for the token's organization scope; the SCIM verdict below was actually evaluated"
+    fail_message: "ListSCIMConfigurations did not return a readable response (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return a readable ListSCIMConfigurations response, so
+        no configuration was observed. This is a collection failure, not a
+        compliance failure.
+        Likely causes: SCIM is Enterprise-gated, and Connect answers an
+        Enterprise-only feature with HTTP 400 `failed_precondition`; the token is
+        expired, revoked, or issued from a different management-plane domain; or
+        the principal lacks the permission the method requires.
+
+  - id: scim_configuration_enabled
+    expr: "list_scim_configurations_status_code != 200 || body_root == null || !body_is_object || (has(body_root.scimConfigurations) && size(scim_configurations.filter(c, has(c.enabled) && c.enabled == true)) > 0)"
+    severity: high
+    title: SCIM Provisioning Enabled
+    pass_message: "No SCIM-provisioning gap was observed in the token's organization scope — this row is evidence that a SCIM configuration is enabled ONLY if 'SCIM Configurations Readable' above also passed; when the list could not be read it abstains and asserts nothing about SCIM"
+    fail_message: "No ENABLED SCIM configuration exists for '{{org}}' — identity lifecycle is not driven by your IdP, and the SCIM account restriction (ONA-1.02) cannot safely be turned on"
+    finding:
+      description: |
+        The organization has no SCIM configuration with `enabled` true. Joiner,
+        mover, and leaver events in your identity provider therefore do not
+        propagate: a departing employee's Ona access outlives their IdP account
+        until someone removes it by hand, and role changes never reach the
+        organization at all.
+        Check for the created-but-not-enabled state before assuming SCIM is
+        absent. `CreateSCIMConfigurationRequest` has no `enabled` field — only
+        `UpdateSCIMConfiguration` does — so a provisioning script that calls create
+        alone leaves a configuration that exists, appears in the console, and does
+        nothing. Protobuf-JSON omits false booleans, so that state appears here as
+        an entry with no `enabled` key.
+        Order of operations matters. Enable SCIM and confirm it is provisioning
+        BEFORE turning on `restrictAccountCreationToScim` (ONA-1.02); the reverse
+        order blocks every new joiner.
+        Scope caveat: this method accepts no organization filter, so scoping comes
+        from the token. A token that can see several organizations returns their
+        configurations together and this check cannot separate them — run it with a
+        token scoped to the organization under assessment.
+        Read ceiling: only the first page of up to 100 configurations was read,
+        because Connect emits no Link header for OCEAN's paginator to follow.
+        This finding cannot be raised by an unreadable response — the guard chain
+        short-circuits to abstain on non-200, a null body, or an array-shaped body,
+        which is where an Enterprise-gated 400 lands.
+
+remediation:
+  description: |
+    Create the SCIM configuration against an existing SSO configuration, then
+    ENABLE it with a second call — creation cannot enable it. `UpdateSCIMConfiguration`
+    does return the full configuration object, unlike most Ona update methods, but
+    read back with `ListSCIMConfigurations` anyway; this check IS that read-back.
+  steps:
+    - "Navigate to Settings -> Login & Identity -> SCIM"
+    - "Use 'Set up SCIM' and bind it to the SSO configuration from ONA-1.01 — SCIM requires an SSO configuration to attach to"
+    - "Copy the SCIM token shown once at creation into your identity provider's provisioning settings, along with the SCIM endpoint"
+    - "Enable the configuration — creation alone leaves it disabled"
+    - "Check the Operations Log tab and confirm provisioning traffic is arriving from your IdP"
+    - "Only after provisioning is confirmed working, enable 'Require SCIM provisioning' (ONA-1.02)"
+    - "Re-run this check and confirm an entry with `enabled: true` is present"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateSCIMConfiguration"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      scimConfigurationId: "{{ONA_SCIM_CONFIGURATION_ID}}"
+      enabled: true
+  manual:
+    - "The API call above enables an EXISTING configuration. To create one first, call `OrganizationService/CreateSCIMConfiguration` with `organizationId` and `ssoConfigurationId`; its response carries the token, shown once."
+    - "Set `tokenExpiresIn` at creation and rotate with `RegenerateSCIMToken` — an unbounded SCIM token is a standing credential into your directory integration."
+    - "SCIM is Enterprise-gated; on a lower plan this check abstains rather than reporting a gap the operator cannot close."

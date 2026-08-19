@@ -69,6 +69,27 @@ fn allowed_credentials(source: &str) -> Option<&'static [&'static str]> {
             "BUILDKITE_MAX_RULES",
             "BUILDKITE_MAX_MAINTAINERS",
         ]),
+        // Ona (formerly Gitpod) authenticates every Connect RPC method with a single
+        // bearer token — a personal access token or a service account token — named
+        // ONA_TOKEN after the vendor's own docs and its `ona` CLI. The whole ONA-*
+        // check set is read-only, so a read-only PAT satisfies all 18; the write-side
+        // remediations documented on those checks need a read-write token, which is
+        // the same variable holding a differently-scoped value.
+        //
+        // Every entry below is consumed by something. A fleet target can only supply
+        // what this list blesses (`fleet::executor` passes `target.credentials` as the
+        // module config verbatim), so an input a check declares but this list omits is
+        // unsettable in fleet mode, and an entry no check reads is dead surface on a
+        // security allowlist. Consumers:
+        //   ONA_TOKEN           — `credentials:` on all 18 ONA-* checks
+        //   ONA_ORGANIZATION_ID — input `org` on all 18; obtainable from
+        //                         `IdentityService/GetAuthenticatedIdentity`
+        // Deliberately NOT listed: ONA_HOST. Ona is SaaS at a fixed host, and the
+        // checks pin app.gitpod.io because the documented app.ona.com base
+        // 308-redirects and clients drop the bearer on the hop. An organization on a
+        // custom management-plane domain must edit the check URLs, which is a visible
+        // change rather than a silently-unset variable.
+        "ona" => Some(&["ONA_TOKEN", "ONA_ORGANIZATION_ID"]),
         _ => None,
     }
 }
@@ -238,7 +259,7 @@ fn is_valid_target_id(id: &str) -> bool {
 }
 
 /// Known source types.
-const KNOWN_SOURCES: &[&str] = &["github", "okta", "aws", "azure", "buildkite"];
+const KNOWN_SOURCES: &[&str] = &["github", "okta", "aws", "azure", "buildkite", "ona"];
 
 fn validate_target(raw: RawFleetTarget) -> Result<FleetTarget> {
     // F7: Target ID validation

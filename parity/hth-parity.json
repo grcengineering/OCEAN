@@ -1,13 +1,13 @@
 {
   "generated_by": "scripts/hth_parity.py",
-  "hth_repo": "../how-to-harden",
+  "hth_repo": "how-to-harden",
   "totals": {
     "guides": 130,
     "controls": 1813,
-    "pack_vendors": 75,
-    "pack_sections": 658,
-    "checks": 254,
-    "controls_covered": 170
+    "pack_vendors": 76,
+    "pack_sections": 678,
+    "checks": 272,
+    "controls_covered": 184
   },
   "vendors": [
     {
@@ -4910,7 +4910,7 @@
     },
     {
       "vendor": "ona",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 22,
       "controls": [
         "1.1",
@@ -4936,9 +4936,203 @@
         "6.1",
         "6.2"
       ],
-      "pack_sections": {},
-      "ocean_checks": [],
-      "controls_covered": []
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.3": [
+          "api",
+          "terraform"
+        ],
+        "1.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.5": [
+          "api"
+        ],
+        "2.1": [
+          "api",
+          "cli",
+          "config",
+          "sigma",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "config",
+          "terraform"
+        ],
+        "2.4": [
+          "api",
+          "terraform"
+        ],
+        "2.6": [
+          "api"
+        ],
+        "3.1": [
+          "api",
+          "cli",
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "terraform"
+        ],
+        "3.3": [
+          "api",
+          "terraform"
+        ],
+        "3.4": [
+          "api",
+          "terraform"
+        ],
+        "4.1": [
+          "api",
+          "sigma"
+        ],
+        "4.2": [
+          "api",
+          "cli",
+          "terraform"
+        ],
+        "4.3": [
+          "api",
+          "terraform"
+        ],
+        "5.1": [
+          "api",
+          "terraform"
+        ],
+        "6.1": [
+          "api",
+          "cli"
+        ],
+        "6.2": [
+          "api",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "ONA-1.01",
+          "file": "checks/ona/ONA-1.01-sso-configured.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ONA-1.01b",
+          "file": "checks/ona/ONA-1.01b-domain-verified.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ONA-1.02",
+          "file": "checks/ona/ONA-1.02-scim-required.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ONA-1.02b",
+          "file": "checks/ona/ONA-1.02b-scim-enabled.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ONA-1.04",
+          "file": "checks/ona/ONA-1.04-service-account-expiry.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "ONA-1.04b",
+          "file": "checks/ona/ONA-1.04b-pat-read-only.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "ONA-1.05",
+          "file": "checks/ona/ONA-1.05-no-invite-domains.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "ONA-2.01",
+          "file": "checks/ona/ONA-2.01-security-policy-assigned.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ONA-2.01b",
+          "file": "checks/ona/ONA-2.01b-veto-rules-defined.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ONA-2.02",
+          "file": "checks/ona/ONA-2.02-command-deny-list.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "ONA-2.03",
+          "file": "checks/ona/ONA-2.03-mcp-disabled.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "ONA-2.04",
+          "file": "checks/ona/ONA-2.04-scm-tools-scoped.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "ONA-3.01",
+          "file": "checks/ona/ONA-3.01-port-admission-capped.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "ONA-3.02",
+          "file": "checks/ona/ONA-3.02-web-browser-disabled.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "ONA-3.03",
+          "file": "checks/ona/ONA-3.03-lifetime-enforced.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "ONA-3.04",
+          "file": "checks/ona/ONA-3.04-from-scratch-restricted.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "ONA-4.02",
+          "file": "checks/ona/ONA-4.02-oidc-v3-scoped.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "ONA-5.01",
+          "file": "checks/ona/ONA-5.01-local-runners-blocked.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.2",
+        "5.1"
+      ]
     },
     {
       "vendor": "onelogin",

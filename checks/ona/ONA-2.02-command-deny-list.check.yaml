@@ -1,0 +1,185 @@
+id: ONA-2.02
+name: Agent Command Deny List Is Populated
+description: |
+  Verifies that the Ona organization defines at least one entry in the agent
+  command deny list, read from `OrganizationPolicies.agentPolicy.commandDenyList`
+  via `gitpod.v1.OrganizationService/GetOrganizationPolicies`.
+
+  Why it matters. Ona runs coding agents with a shell inside every environment.
+  The command deny list is the only organization-wide lever that stops an agent
+  from invoking a named binary, and it is the compensating control for the two
+  surfaces Ona gives operators no visibility into at all: dotfiles (a user's
+  dotfiles repository auto-executes at environment start, and
+  `GetDotfilesConfiguration` takes no `userId`, so an admin cannot even enumerate
+  what members have set) and arbitrary prompt-driven tool use. An empty deny list
+  means an agent that is persuaded — by a poisoned repository, a malicious issue
+  body, or an injected instruction in fetched content — to run `curl … | sh`
+  meets no organization-level resistance.
+
+  Host, proto3 omission, and abstention follow the same design as ONA-1.02, which
+  documents it in full. In short: the request goes to `app.gitpod.io` because the
+  documented `app.ona.com` base 308-redirects and clients drop the bearer on the
+  hop; Protobuf-JSON omits default values, so an organization that has never set
+  a deny list returns an `agentPolicy` object with no `commandDenyList` key at
+  all (this was the live shape observed on a real tenant — `agentPolicy` came
+  back carrying only `conversationSharingPolicy` and `automationPolicy`); and
+  every assertion is guarded from the always-bound response root down so an
+  unreadable organization ABSTAINS instead of being accused.
+
+  Absence is the finding, not an error. `has(policies.agentPolicy)` and
+  `has(policies.agentPolicy.commandDenyList)` are tested before `size()` is
+  applied, so a missing field produces a clean FAIL — which is the correct
+  verdict, because a missing repeated field means an empty list — rather than a
+  CEL "Undeclared reference" that the interpreter's fail-closed default would
+  convert into the same verdict for the wrong reason.
+
+  Scope ceiling. This check answers "is the deny list non-empty", not "is the
+  deny list sufficient". The API reference documents `commandDenyList` as a plain
+  `array of string` with no pattern constraint and says nothing about wildcard
+  semantics — wildcards are asserted only in the product documentation, not in
+  the API contract — so no assertion here can judge whether a given entry
+  actually matches the invocation an operator intends to block. Treat a pass as
+  evidence that the control is engaged, not that it is complete.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L1
+tags: [agent-governance, command-deny-list, organization, proto3]
+
+references:
+  cis: ["2.7"]
+  nist: ["CM-7"]
+  soc2: CC6.8
+  iso27001: A.12.5.1
+  hth: "ona:2.2"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`, which returns `{organizationId, organizationTier, subject}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_org_policies
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop, producing a 401 that reads like a bad credential.
+      Unknown request fields are rejected by the server, so the body carries
+      `organizationId` only.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOrganizationPolicies"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` is blind to shape:
+      # cel-interpreter 0.10.0 answers `has(scalar.field)` with FALSE, not an
+      # error, which is indistinguishable from a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      policies: "$.policies"
+
+assertions:
+  - id: policies_readable
+    expr: "get_org_policies_status_code == 200 && body_root != null && body_is_object && has(body_root.policies)"
+    severity: info
+    title: Organization Policies Readable
+    pass_message: "GetOrganizationPolicies returned a policies object for organization '{{org}}'; the deny-list verdict below was actually evaluated"
+    fail_message: "GetOrganizationPolicies returned no policies object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return an organization policies object, so no setting
+        was observed. This is a collection failure, not a compliance failure — do
+        not treat the accompanying deny-list result as evidence of a
+        misconfiguration. Check ONA_ORGANIZATION_ID against
+        `IdentityService/GetAuthenticatedIdentity`, confirm the token is live and
+        issued from the same management-plane domain, and confirm the principal
+        holds the permission GetOrganizationPolicies requires.
+
+  - id: command_deny_list_populated
+    expr: "get_org_policies_status_code != 200 || body_root == null || !body_is_object || !has(body_root.policies) || (has(policies.agentPolicy) && has(policies.agentPolicy.commandDenyList) && size(policies.agentPolicy.commandDenyList) > 0)"
+    severity: medium
+    title: Agent Command Deny List
+    pass_message: "No empty-deny-list gap was observed for '{{org}}' — this row is evidence that a command deny list is defined ONLY if 'Organization Policies Readable' above also passed; when the policies object could not be read it abstains and asserts nothing about the deny list"
+    fail_message: "No agent command deny list is defined for '{{org}}' — agents can invoke any binary present in the environment image with no organization-level restriction"
+    finding:
+      description: |
+        `agentPolicy.commandDenyList` is empty or absent for this organization.
+        Ona agents hold a shell in every environment. With no deny list, an agent
+        steered by untrusted content — a poisoned repository, a crafted issue
+        body, injected text in a fetched page — can invoke any binary the image
+        carries, including package managers, network clients, and shells used to
+        pipe remote content into execution.
+        This control is load-bearing beyond its own scope because Ona gives
+        operators NO organization-level control over dotfiles and no way to read
+        what members have configured (`UserService/GetDotfilesConfiguration`
+        accepts no `userId`, so it only ever returns the caller's own). The deny
+        list and the Veto executable policy (ONA-2.01) are the compensating
+        controls for that blind spot; leaving both unset leaves it uncovered.
+        Note on the read: an ABSENT field is the insecure default. Protobuf-JSON
+        omits empty repeated fields, so an `agentPolicy` object with no
+        `commandDenyList` key means the list is empty. This check treats absence
+        as a failure deliberately.
+        Scope: this verdict says the list is non-empty, not that its entries are
+        adequate. The API contract documents no wildcard syntax for these strings,
+        so entry quality has to be reviewed by hand.
+        This finding cannot be raised by an unreadable organization — the guard
+        chain short-circuits to abstain on non-200, a null body, an array-shaped
+        body, or a missing `policies` key.
+
+remediation:
+  description: |
+    Populate `agentPolicy.commandDenyList` with the binaries agents must not
+    invoke. `UpdateOrganizationPolicies` returns a message with NO fields, so the
+    write is never self-proving — always read back with `GetOrganizationPolicies`
+    and assert on the read-back. This check IS that read-back. The update replaces
+    the list wholesale, so read the current value first and send the full intended
+    set rather than a delta.
+  steps:
+    - "Navigate to Settings -> Agents -> Policies"
+    - "In 'Command deny list', enter one command per line"
+    - "Save, then re-open the page and confirm the entries persisted"
+    - "Restart an environment and confirm an agent invocation of a denied command is refused — a running environment keeps the policy it had at its last start"
+    - "Re-run this check and confirm `commandDenyList` is non-empty"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOrganizationPolicies"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      agentPolicy:
+        commandDenyList:
+          - "curl"
+          - "wget"
+          - "nc"
+  manual:
+    - "The deny list above is a starting shape, not a recommendation — derive the real set from the tooling your environments legitimately need."
+    - "Ona ships no first-party CLI verb for the organization policies object; `ona organization security-policy ...` covers SecurityPolicy objects only."

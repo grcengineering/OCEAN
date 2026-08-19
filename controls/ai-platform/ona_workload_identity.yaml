@@ -1,0 +1,91 @@
+id: ai-platform.ona_workload_identity
+name: Ona Runner Placement and Workload Identity
+description: >
+  Verifies that environments run on infrastructure the organization controls, and
+  that the OIDC tokens those environments present to cloud providers are scoped
+  narrowly enough for a cloud trust policy to condition on something smaller than
+  the whole organization.
+  The two checks share a theme: where the workload executes, and what identity it
+  carries when it reaches outside. `allowLocalRunners` decides whether source and
+  execution can land on a member's own machine — outside your egress controls and
+  outside every runner-side hardening the rest of this guide assumes. The vendor
+  has deprecated local runners at the enum level, so the hardened posture and the
+  vendor's direction agree.
+  ABSENCE PASSES on ONA-5.01, and that is deliberate rather than an oversight.
+  Every other policy-backed ONA check treats a missing field as the insecure
+  default, because Protobuf-JSON omits false booleans and the hardened value is
+  `true`. `allowLocalRunners` inverts that — the hardened value is FALSE — so an
+  organization that has never touched the setting returns no key and IS in the
+  desired state. The rule is "reason about what absence MEANS for this field",
+  not "absence always fails".
+  On the OIDC half, `extraSubFields` is the control rather than the version. A
+  bare V3 configuration leaves the `sub` claim in its default shape, so the
+  tightest AWS or GCP condition an operator can express pins the ORGANIZATION —
+  every environment, project, runner and member's agent presenting one identity.
+  An empty V3 therefore fails as surely as a V2. A 404 from `GetOIDCConfig`
+  ("OIDC config not found") is treated as a FINDING, not a collection failure,
+  because it is a definitive answer about the organization's state; only
+  genuinely ambiguous statuses abstain.
+  Two things neither check can see: whether a local runner that was already
+  started has been stopped (`RUNNER_KIND_LOCAL_CONFIGURATION` is a system-managed
+  singleton whose `desiredPhase` can be set to STOPPED), and whether the cloud
+  trust policy actually conditions on the extra claims. The second is the half
+  that turns a scoped token into scoped access, and it is verifiable only in the
+  cloud account.
+
+  SCOPE CEILING — read before treating this control as full coverage.
+  Three parts of Ona's hardening surface are invisible to every control-plane
+  read. (1) Dotfiles: there is no organization policy AND no admin visibility —
+  `UserService/GetDotfilesConfiguration` carries no `userId` field, so it returns
+  only the caller's own repository, while a member's dotfiles auto-execute at
+  environment start. (2) Automation guardrails (HTH ona:2.5) have ZERO API
+  surface, verified across 45 organization, 18 environment-automation, 17
+  workflow and 16 project reference pages. (3) What actually runs inside an
+  environment — image contents, installed tooling, agent behaviour at runtime —
+  is not a control-plane fact at all. Audit logs (`EventService/ListAuditLogs`)
+  and webhooks (`WebhookService/ListWebhooks`) additionally answer HTTP 400
+  `failed_precondition` on non-Enterprise organizations, so the monitoring band
+  cannot be observed at every plan. A passing result is evidence about the
+  organization's DECLARED POLICY, not about environment runtime behaviour.
+  ABSTENTION — every ONA-* check pairs a compliance verdict with a readability
+  discriminator, and the verdict abstains (evaluates Effective, asserting
+  nothing) whenever the read failed. Control-level evaluation is not fooled by
+  that, because the readability assertion itself reports Ineffective on an
+  unreadable organization, so `ineffective_count == 0` still fails. Read an
+  individual check's rows as a pair; a lone passing verdict is not an
+  attestation.
+  INVOCATION — this control resolves under `--target '*'`, not `--target ona`.
+  Its observers are YAML checks registered under their own ids (ONA-*), and
+  target_matches_module splits a module_id on '.' and compares the first
+  segment, so "ONA-1" is never "ona". This is a property of the YAML-check
+  namespace, not of Ona: BK-*, GH-*, OKTA-*, SLACK-* and VERCEL-* behave
+  identically. The shipped controls that DO match a vendor target reference
+  native Rust modules (okta.mfa_policy, github.branch_protection), and no native
+  ona observer exists. Using dotted ona.* ids here would satisfy the target
+  filter while resolving to nothing, producing a control that looks wired and
+  can never return a finding — the worse failure. Closing this properly means
+  native Rust observers, or registering YAML checks under a vendor alias.
+
+threat_mitigated: >
+  Source code and agent execution landing on unmanaged endpoints outside the
+  organization's network and hardening controls, and over-broad keyless cloud
+  access in which every environment presents the same organization-wide identity,
+  so one compromised environment reaches everything the assumed role grants.
+framework_mappings:
+  - framework: soc2
+    control: CC6.6
+  - framework: iso27001
+    control: A.13.2.1
+  - framework: nist_csf
+    control: PR.AC-3
+  - framework: cis_controls
+    control: "12.2"
+evidence_requirements:
+  - ona_local_runner_policy
+  - ona_oidc_sub_claim_scope
+observers:
+  - module_id: ONA-4.02
+  - module_id: ONA-5.01
+testers: []
+evaluation:
+  cel: "effective_count > 0 && ineffective_count == 0"
