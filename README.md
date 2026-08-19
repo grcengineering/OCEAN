@@ -98,7 +98,7 @@ ocean/
 │   ├── evidence/           Evidence types (OCSF-inspired schema)
 │   ├── module/             Module traits, registry, executor, safety
 │   ├── storage/            Store trait + SQLite implementation
-│   ├── eval/               CEL engine (native presets + cel-interpreter)
+│   ├── eval/               CEL engine (native presets + the `cel` crate)
 │   ├── control/            Control definitions, CEL evaluator, uptime
 │   ├── scheduler/          Cron scheduler + module runner
 │   ├── secrets/            Credential providers (env, Vault, AWS Secrets Manager)
@@ -229,7 +229,7 @@ Environment variables override config file values:
 
 - **Language**: Rust (single binary, zero runtime dependencies)
 - **Storage**: SQLite (via rusqlite, bundled)
-- **Evaluation**: CEL (via cel-interpreter crate + native presets)
+- **Evaluation**: CEL (via the `cel` crate + native presets)
 - **Schema**: OCSF-inspired hierarchical taxonomy
 - **CLI**: clap 4 (derive API)
 - **API**: axum 0.7 + tokio

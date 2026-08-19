@@ -70,8 +70,8 @@ fn okta_check_path(filename: &str) -> std::path::PathBuf {
 /// mock server base URL so the interpreter's HTTP calls land on the mock.
 fn load_check_with_mock_urls(filename: &str, mock_base: &str) -> CheckDefinition {
     let path = okta_check_path(filename);
-    let content = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
+    let content =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
     let rewritten = content.replace("https://{{okta_domain}}", mock_base);
     serde_yaml::from_str(&rewritten)
         .unwrap_or_else(|e| panic!("parse rewritten {}: {}", filename, e))
@@ -119,21 +119,29 @@ fn okta103_pass_okta_verify_active() {
     let evidence = run_observer(def, "OKTA-1.03");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
     assert!(evidence[0].findings.is_empty());
 }
 
 #[test]
 fn okta103_fail_okta_verify_not_active() {
-    let body = serde_json::json!([
-        authenticator("okta_verify", "INACTIVE"),
-    ]);
+    let body = serde_json::json!([authenticator("okta_verify", "INACTIVE"),]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
     let def = load_check_with_mock_urls("OKTA-1.03-hardware-bound-tokens.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-1.03");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
     assert!(!evidence[0].findings.is_empty());
 }
 
@@ -161,21 +169,29 @@ fn okta190_pass_custom_policy_exists() {
     let evidence = run_observer(def, "OKTA-1.90");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
     assert!(evidence[0].findings.is_empty());
 }
 
 #[test]
 fn okta190_fail_only_default_policy_exists() {
-    let body = serde_json::json!([
-        access_policy("Default Policy", true),
-    ]);
+    let body = serde_json::json!([access_policy("Default Policy", true),]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
     let def = load_check_with_mock_urls("OKTA-1.90-default-auth-policy.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-1.90");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
     assert_eq!(evidence[0].findings[0].severity_id, 5); // critical
 }
 
@@ -200,14 +216,16 @@ fn org_settings(all_notifications_enabled: bool) -> serde_json::Value {
 fn okta111_pass_all_notifications_and_sar_enabled() {
     let settings = org_settings(true);
     let sar = serde_json::json!({"enabled": true});
-    let server = MockHTTPServer::new(vec![
-        (200, settings.to_string()),
-        (200, sar.to_string()),
-    ]);
-    let def = load_check_with_mock_urls("OKTA-1.11-security-notifications.check.yaml", server.url());
+    let server = MockHTTPServer::new(vec![(200, settings.to_string()), (200, sar.to_string())]);
+    let def =
+        load_check_with_mock_urls("OKTA-1.11-security-notifications.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-1.11");
 
-    assert_eq!(evidence.len(), 2, "expected 2 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "expected 2 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.status_id, StatusId::Effective, "status: {}", ev.status);
         assert!(ev.findings.is_empty());
@@ -218,11 +236,9 @@ fn okta111_pass_all_notifications_and_sar_enabled() {
 fn okta111_fail_notifications_disabled_and_sar_disabled() {
     let settings = org_settings(false);
     let sar = serde_json::json!({"enabled": false});
-    let server = MockHTTPServer::new(vec![
-        (200, settings.to_string()),
-        (200, sar.to_string()),
-    ]);
-    let def = load_check_with_mock_urls("OKTA-1.11-security-notifications.check.yaml", server.url());
+    let server = MockHTTPServer::new(vec![(200, settings.to_string()), (200, sar.to_string())]);
+    let def =
+        load_check_with_mock_urls("OKTA-1.11-security-notifications.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-1.11");
 
     assert_eq!(evidence.len(), 2);
@@ -254,7 +270,12 @@ fn okta203_pass_zone_active_blocklist() {
     let evidence = run_observer(def, "OKTA-2.03");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -265,7 +286,12 @@ fn okta203_fail_zone_inactive() {
     let evidence = run_observer(def, "OKTA-2.03");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -289,29 +315,34 @@ fn sign_on_policy(system: bool, use_persistent_cookie: bool) -> serde_json::Valu
 
 #[test]
 fn okta402_pass_no_persistent_custom_sessions() {
-    let body = serde_json::json!([
-        sign_on_policy(true, false),
-        sign_on_policy(false, false),
-    ]);
+    let body = serde_json::json!([sign_on_policy(true, false), sign_on_policy(false, false),]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
     let def = load_check_with_mock_urls("OKTA-4.02-session-persistence.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-4.02");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
 fn okta402_fail_custom_policy_allows_persistent_session() {
-    let body = serde_json::json!([
-        sign_on_policy(false, true),
-    ]);
+    let body = serde_json::json!([sign_on_policy(false, true),]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
     let def = load_check_with_mock_urls("OKTA-4.02-session-persistence.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-4.02");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -330,10 +361,15 @@ fn org_settings_binding(asn: &str, ip: &str) -> serde_json::Value {
 fn okta403_pass_both_bindings_enabled() {
     let body = org_settings_binding("ENABLED", "ENABLED");
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check_with_mock_urls("OKTA-4.03-admin-session-security.check.yaml", server.url());
+    let def =
+        load_check_with_mock_urls("OKTA-4.03-admin-session-security.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-4.03");
 
-    assert_eq!(evidence.len(), 2, "expected 2 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "expected 2 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.status_id, StatusId::Effective, "status: {}", ev.status);
     }
@@ -343,7 +379,8 @@ fn okta403_pass_both_bindings_enabled() {
 fn okta403_fail_bindings_disabled() {
     let body = org_settings_binding("DISABLED", "DISABLED");
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check_with_mock_urls("OKTA-4.03-admin-session-security.check.yaml", server.url());
+    let def =
+        load_check_with_mock_urls("OKTA-4.03-admin-session-security.check.yaml", server.url());
     let evidence = run_observer(def, "OKTA-4.03");
 
     assert_eq!(evidence.len(), 2);
@@ -369,8 +406,8 @@ fn all_okta_checks_load_and_have_unique_ids() {
         if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
             continue;
         }
-        let def = load_check_file(&path)
-            .unwrap_or_else(|e| panic!("load {}: {}", path.display(), e));
+        let def =
+            load_check_file(&path).unwrap_or_else(|e| panic!("load {}: {}", path.display(), e));
         assert!(!def.id.is_empty(), "{} has empty id", path.display());
         assert!(
             ids.insert(def.id.clone()),
@@ -385,5 +422,8 @@ fn all_okta_checks_load_and_have_unique_ids() {
         );
         count += 1;
     }
-    assert!(count >= 28, "expected at least 28 okta checks (15 original + 13 new), found {count}");
+    assert!(
+        count >= 28,
+        "expected at least 28 okta checks (15 original + 13 new), found {count}"
+    );
 }

@@ -1,7 +1,11 @@
 use chrono::Utc;
 use ocean::control::ControlStatus;
-use ocean::evidence::{ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId};
-use ocean::scheduler::{Schedule, ScheduleRun, ModuleRunResult, RUN_STATUS_SUCCESS, MODULE_STATUS_SUCCESS};
+use ocean::evidence::{
+    ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+};
+use ocean::scheduler::{
+    ModuleRunResult, Schedule, ScheduleRun, MODULE_STATUS_SUCCESS, RUN_STATUS_SUCCESS,
+};
 use ocean::storage::{EvidenceQuery, SqliteStore, Store};
 use uuid::Uuid;
 

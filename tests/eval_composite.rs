@@ -1,5 +1,4 @@
 /// GRC-17 §5.5 — Cross-module evaluation and composite control tests
-
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -147,7 +146,11 @@ fn eval_unknown_preset_returns_err() {
     let result = CelEngine::evaluate(&logic, &[]);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
-    assert!(msg.contains("unknown"), "error should mention 'unknown': {}", msg);
+    assert!(
+        msg.contains("unknown"),
+        "error should mention 'unknown': {}",
+        msg
+    );
 }
 
 /// Empty logic (neither preset nor cel_expression) returns an error.
@@ -234,23 +237,35 @@ fn eval_composite_cross_module_all_pass() {
     store.store_evidence(&github_ev).unwrap();
     store.store_evidence(&okta_ev).unwrap();
 
-    let gh_evidence = store.query_evidence(&EvidenceQuery {
-        control_id: Some("GH-1.1".to_string()),
-        ..Default::default()
-    }).unwrap();
-    let okta_evidence = store.query_evidence(&EvidenceQuery {
-        control_id: Some("OKTA-1.1".to_string()),
-        ..Default::default()
-    }).unwrap();
+    let gh_evidence = store
+        .query_evidence(&EvidenceQuery {
+            control_id: Some("GH-1.1".to_string()),
+            ..Default::default()
+        })
+        .unwrap();
+    let okta_evidence = store
+        .query_evidence(&EvidenceQuery {
+            control_id: Some("OKTA-1.1".to_string()),
+            ..Default::default()
+        })
+        .unwrap();
 
     let gh_result = CelEngine::evaluate(
-        &EvaluationLogic { preset: "all_effective".to_string(), cel_expression: String::new() },
+        &EvaluationLogic {
+            preset: "all_effective".to_string(),
+            cel_expression: String::new(),
+        },
         &gh_evidence,
-    ).unwrap();
+    )
+    .unwrap();
     let okta_result = CelEngine::evaluate(
-        &EvaluationLogic { preset: "all_effective".to_string(), cel_expression: String::new() },
+        &EvaluationLogic {
+            preset: "all_effective".to_string(),
+            cel_expression: String::new(),
+        },
         &okta_evidence,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(gh_result, "GitHub sub-control must pass");
     assert!(okta_result, "Okta sub-control must pass");
@@ -272,25 +287,40 @@ fn eval_composite_cross_module_partial_fail() {
     store.store_evidence(&github_ev).unwrap();
     store.store_evidence(&okta_ev).unwrap();
 
-    let gh_evidence = store.query_evidence(&EvidenceQuery {
-        control_id: Some("GH-2.1".to_string()),
-        ..Default::default()
-    }).unwrap();
-    let okta_evidence = store.query_evidence(&EvidenceQuery {
-        control_id: Some("OKTA-2.1".to_string()),
-        ..Default::default()
-    }).unwrap();
+    let gh_evidence = store
+        .query_evidence(&EvidenceQuery {
+            control_id: Some("GH-2.1".to_string()),
+            ..Default::default()
+        })
+        .unwrap();
+    let okta_evidence = store
+        .query_evidence(&EvidenceQuery {
+            control_id: Some("OKTA-2.1".to_string()),
+            ..Default::default()
+        })
+        .unwrap();
 
     let gh_result = CelEngine::evaluate(
-        &EvaluationLogic { preset: "all_effective".to_string(), cel_expression: String::new() },
+        &EvaluationLogic {
+            preset: "all_effective".to_string(),
+            cel_expression: String::new(),
+        },
         &gh_evidence,
-    ).unwrap();
+    )
+    .unwrap();
     let okta_result = CelEngine::evaluate(
-        &EvaluationLogic { preset: "all_effective".to_string(), cel_expression: String::new() },
+        &EvaluationLogic {
+            preset: "all_effective".to_string(),
+            cel_expression: String::new(),
+        },
         &okta_evidence,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(gh_result, "GitHub sub-control passes");
     assert!(!okta_result, "Okta sub-control fails");
-    assert!(!(gh_result && okta_result), "composite must not pass when any sub-control fails");
+    assert!(
+        !(gh_result && okta_result),
+        "composite must not pass when any sub-control fails"
+    );
 }

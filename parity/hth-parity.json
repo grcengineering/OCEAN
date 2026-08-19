@@ -1,13 +1,13 @@
 {
   "generated_by": "scripts/hth_parity.py",
-  "hth_repo": "C:\\Users\\justi\\Code\\grcengineering\\how-to-harden",
+  "hth_repo": "how-to-harden",
   "totals": {
-    "guides": 126,
-    "controls": 1719,
-    "pack_vendors": 71,
-    "pack_sections": 602,
-    "checks": 242,
-    "controls_covered": 161
+    "guides": 130,
+    "controls": 1813,
+    "pack_vendors": 76,
+    "pack_sections": 678,
+    "checks": 272,
+    "controls_covered": 184
   },
   "vendors": [
     {
@@ -143,13 +143,14 @@
     {
       "vendor": "anthropic-api",
       "status": "partial",
-      "guide_controls": 9,
+      "guide_controls": 10,
       "controls": [
         "1.1",
         "1.2",
         "1.3",
         "2.1",
         "2.2",
+        "2.3",
         "3.1",
         "3.2",
         "4.1",
@@ -718,8 +719,8 @@
     },
     {
       "vendor": "buildkite",
-      "status": "missing",
-      "guide_controls": 14,
+      "status": "partial",
+      "guide_controls": 22,
       "controls": [
         "1.1",
         "1.2",
@@ -728,17 +729,25 @@
         "2.3",
         "2.4",
         "2.5",
+        "2.6",
+        "2.7",
         "3.1",
         "3.2",
         "3.3",
         "3.4",
         "3.5",
         "3.6",
-        "4.1"
+        "3.7",
+        "3.8",
+        "3.9",
+        "3.10",
+        "3.11",
+        "4.1",
+        "4.2"
       ],
       "pack_sections": {
         "1.1": [
-          "terraform"
+          "api"
         ],
         "1.2": [
           "terraform"
@@ -750,9 +759,24 @@
           "terraform"
         ],
         "2.3": [
+          "api",
+          "terraform"
+        ],
+        "2.4": [
+          "config"
+        ],
+        "2.5": [
+          "api",
+          "terraform"
+        ],
+        "2.6": [
+          "api"
+        ],
+        "2.7": [
           "terraform"
         ],
         "3.1": [
+          "api",
           "terraform"
         ],
         "3.2": [
@@ -761,12 +785,115 @@
         "3.3": [
           "terraform"
         ],
+        "3.4": [
+          "cli",
+          "config"
+        ],
+        "3.5": [
+          "api",
+          "config",
+          "terraform"
+        ],
+        "3.6": [
+          "cli",
+          "config"
+        ],
+        "3.7": [
+          "terraform"
+        ],
+        "3.8": [
+          "config"
+        ],
+        "3.9": [
+          "config"
+        ],
+        "3.10": [
+          "terraform"
+        ],
+        "3.11": [
+          "terraform"
+        ],
         "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "cli",
           "terraform"
         ]
       },
-      "ocean_checks": [],
-      "controls_covered": []
+      "ocean_checks": [
+        {
+          "id": "BK-1.02",
+          "file": "checks/buildkite/BK-1.02-enforce-2fa.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "BK-2.02",
+          "file": "checks/buildkite/BK-2.02-no-public-pipelines.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "BK-2.02b",
+          "file": "checks/buildkite/BK-2.02b-fork-builds-disabled.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "BK-2.03",
+          "file": "checks/buildkite/BK-2.03-admin-count-bounded.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "BK-2.05a",
+          "file": "checks/buildkite/BK-2.05a-api-ip-allowlist.check.yaml",
+          "section": "2.5"
+        },
+        {
+          "id": "BK-2.05b",
+          "file": "checks/buildkite/BK-2.05b-inactive-token-revocation.check.yaml",
+          "section": "2.5"
+        },
+        {
+          "id": "BK-2.07",
+          "file": "checks/buildkite/BK-2.07-rules-inventory.check.yaml",
+          "section": "2.7"
+        },
+        {
+          "id": "BK-3.01a",
+          "file": "checks/buildkite/BK-3.01a-agent-token-expiry.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "BK-3.01b",
+          "file": "checks/buildkite/BK-3.01b-agent-token-ip-restricted.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "BK-3.05",
+          "file": "checks/buildkite/BK-3.05-secret-policies.check.yaml",
+          "section": "3.5"
+        },
+        {
+          "id": "BK-3.07",
+          "file": "checks/buildkite/BK-3.07-cluster-maintainers-bounded.check.yaml",
+          "section": "3.7"
+        },
+        {
+          "id": "BK-4.01",
+          "file": "checks/buildkite/BK-4.01-org-not-public.check.yaml",
+          "section": "2.2"
+        }
+      ],
+      "controls_covered": [
+        "1.2",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "2.7",
+        "3.1",
+        "3.5",
+        "3.7"
+      ]
     },
     {
       "vendor": "chatgpt-enterprise",
@@ -2728,7 +2855,7 @@
     {
       "vendor": "google-chat",
       "status": "missing",
-      "guide_controls": 10,
+      "guide_controls": 12,
       "controls": [
         "1.1",
         "2.1",
@@ -2737,26 +2864,47 @@
         "2.4",
         "2.5",
         "2.6",
+        "2.7",
         "3.1",
         "3.2",
-        "3.3"
+        "3.3",
+        "3.4"
       ],
       "pack_sections": {
         "1.1": [
+          "api",
+          "db",
           "terraform"
         ],
         "2.1": [
+          "api",
           "terraform"
         ],
         "2.2": [
+          "api",
           "terraform"
         ],
         "2.3": [
+          "api",
+          "db",
           "sdk"
+        ],
+        "2.6": [
+          "cli"
+        ],
+        "2.7": [
+          "api"
         ],
         "3.1": [
           "api",
+          "cli",
           "db",
+          "sdk"
+        ],
+        "3.3": [
+          "api"
+        ],
+        "3.4": [
           "sdk"
         ]
       },
@@ -3304,6 +3452,87 @@
       "controls_covered": []
     },
     {
+      "vendor": "kernel",
+      "status": "missing",
+      "guide_controls": 19,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "4.5",
+        "5.1",
+        "5.2",
+        "5.3"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "cli"
+        ],
+        "1.2": [
+          "api"
+        ],
+        "1.3": [
+          "cli"
+        ],
+        "1.4": [
+          "api"
+        ],
+        "1.5": [
+          "config"
+        ],
+        "2.1": [
+          "terraform"
+        ],
+        "2.2": [
+          "api"
+        ],
+        "3.1": [
+          "cli"
+        ],
+        "3.2": [
+          "sdk"
+        ],
+        "3.4": [
+          "sdk"
+        ],
+        "4.1": [
+          "terraform"
+        ],
+        "4.2": [
+          "cli"
+        ],
+        "4.3": [
+          "api"
+        ],
+        "4.5": [
+          "cli"
+        ],
+        "5.1": [
+          "cli"
+        ],
+        "5.2": [
+          "cli"
+        ],
+        "5.3": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
       "vendor": "klaviyo",
       "status": "missing",
       "guide_controls": 9,
@@ -3566,6 +3795,45 @@
         "4.1"
       ],
       "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "lovable",
+      "status": "missing",
+      "guide_controls": 25,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "2.5",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "6.1",
+        "6.2",
+        "6.3",
+        "7.1",
+        "7.2"
+      ],
+      "pack_sections": {
+        "1.3": [
+          "api"
+        ]
+      },
       "ocean_checks": [],
       "controls_covered": []
     },
@@ -4642,7 +4910,7 @@
     },
     {
       "vendor": "ona",
-      "status": "missing",
+      "status": "partial",
       "guide_controls": 22,
       "controls": [
         "1.1",
@@ -4668,9 +4936,203 @@
         "6.1",
         "6.2"
       ],
-      "pack_sections": {},
-      "ocean_checks": [],
-      "controls_covered": []
+      "pack_sections": {
+        "1.1": [
+          "api",
+          "terraform"
+        ],
+        "1.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.3": [
+          "api",
+          "terraform"
+        ],
+        "1.4": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "1.5": [
+          "api"
+        ],
+        "2.1": [
+          "api",
+          "cli",
+          "config",
+          "sigma",
+          "terraform"
+        ],
+        "2.2": [
+          "api",
+          "sigma",
+          "terraform"
+        ],
+        "2.3": [
+          "api",
+          "config",
+          "terraform"
+        ],
+        "2.4": [
+          "api",
+          "terraform"
+        ],
+        "2.6": [
+          "api"
+        ],
+        "3.1": [
+          "api",
+          "cli",
+          "terraform"
+        ],
+        "3.2": [
+          "api",
+          "terraform"
+        ],
+        "3.3": [
+          "api",
+          "terraform"
+        ],
+        "3.4": [
+          "api",
+          "terraform"
+        ],
+        "4.1": [
+          "api",
+          "sigma"
+        ],
+        "4.2": [
+          "api",
+          "cli",
+          "terraform"
+        ],
+        "4.3": [
+          "api",
+          "terraform"
+        ],
+        "5.1": [
+          "api",
+          "terraform"
+        ],
+        "6.1": [
+          "api",
+          "cli"
+        ],
+        "6.2": [
+          "api",
+          "terraform"
+        ]
+      },
+      "ocean_checks": [
+        {
+          "id": "ONA-1.01",
+          "file": "checks/ona/ONA-1.01-sso-configured.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ONA-1.01b",
+          "file": "checks/ona/ONA-1.01b-domain-verified.check.yaml",
+          "section": "1.1"
+        },
+        {
+          "id": "ONA-1.02",
+          "file": "checks/ona/ONA-1.02-scim-required.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ONA-1.02b",
+          "file": "checks/ona/ONA-1.02b-scim-enabled.check.yaml",
+          "section": "1.2"
+        },
+        {
+          "id": "ONA-1.04",
+          "file": "checks/ona/ONA-1.04-service-account-expiry.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "ONA-1.04b",
+          "file": "checks/ona/ONA-1.04b-pat-read-only.check.yaml",
+          "section": "1.4"
+        },
+        {
+          "id": "ONA-1.05",
+          "file": "checks/ona/ONA-1.05-no-invite-domains.check.yaml",
+          "section": "1.5"
+        },
+        {
+          "id": "ONA-2.01",
+          "file": "checks/ona/ONA-2.01-security-policy-assigned.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ONA-2.01b",
+          "file": "checks/ona/ONA-2.01b-veto-rules-defined.check.yaml",
+          "section": "2.1"
+        },
+        {
+          "id": "ONA-2.02",
+          "file": "checks/ona/ONA-2.02-command-deny-list.check.yaml",
+          "section": "2.2"
+        },
+        {
+          "id": "ONA-2.03",
+          "file": "checks/ona/ONA-2.03-mcp-disabled.check.yaml",
+          "section": "2.3"
+        },
+        {
+          "id": "ONA-2.04",
+          "file": "checks/ona/ONA-2.04-scm-tools-scoped.check.yaml",
+          "section": "2.4"
+        },
+        {
+          "id": "ONA-3.01",
+          "file": "checks/ona/ONA-3.01-port-admission-capped.check.yaml",
+          "section": "3.1"
+        },
+        {
+          "id": "ONA-3.02",
+          "file": "checks/ona/ONA-3.02-web-browser-disabled.check.yaml",
+          "section": "3.2"
+        },
+        {
+          "id": "ONA-3.03",
+          "file": "checks/ona/ONA-3.03-lifetime-enforced.check.yaml",
+          "section": "3.3"
+        },
+        {
+          "id": "ONA-3.04",
+          "file": "checks/ona/ONA-3.04-from-scratch-restricted.check.yaml",
+          "section": "3.4"
+        },
+        {
+          "id": "ONA-4.02",
+          "file": "checks/ona/ONA-4.02-oidc-v3-scoped.check.yaml",
+          "section": "4.2"
+        },
+        {
+          "id": "ONA-5.01",
+          "file": "checks/ona/ONA-5.01-local-runners-blocked.check.yaml",
+          "section": "5.1"
+        }
+      ],
+      "controls_covered": [
+        "1.1",
+        "1.2",
+        "1.4",
+        "1.5",
+        "2.1",
+        "2.2",
+        "2.3",
+        "2.4",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.2",
+        "5.1"
+      ]
     },
     {
       "vendor": "onelogin",
@@ -5156,6 +5618,46 @@
         "3.1",
         "3.2"
       ]
+    },
+    {
+      "vendor": "replit",
+      "status": "missing",
+      "guide_controls": 20,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "2.1",
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4",
+        "4.1",
+        "4.2",
+        "4.3",
+        "4.4",
+        "5.1",
+        "5.2",
+        "5.3",
+        "6.1",
+        "7.1",
+        "7.2",
+        "7.3"
+      ],
+      "pack_sections": {
+        "4.3": [
+          "api"
+        ],
+        "4.4": [
+          "config"
+        ],
+        "5.3": [
+          "sdk"
+        ]
+      },
+      "ocean_checks": [],
+      "controls_covered": []
     },
     {
       "vendor": "rippling",
@@ -6184,6 +6686,90 @@
         "4.3"
       ],
       "pack_sections": {},
+      "ocean_checks": [],
+      "controls_covered": []
+    },
+    {
+      "vendor": "windows-11",
+      "status": "missing",
+      "guide_controls": 19,
+      "controls": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.1",
+        "3.2",
+        "3.3",
+        "4.1",
+        "4.2",
+        "5.1",
+        "5.2",
+        "5.3",
+        "5.4",
+        "6.1",
+        "6.2",
+        "6.3",
+        "7.1"
+      ],
+      "pack_sections": {
+        "1.1": [
+          "sdk"
+        ],
+        "1.2": [
+          "sdk"
+        ],
+        "1.3": [
+          "sdk"
+        ],
+        "2.1": [
+          "sdk"
+        ],
+        "2.2": [
+          "sdk"
+        ],
+        "3.1": [
+          "sdk"
+        ],
+        "3.2": [
+          "sdk"
+        ],
+        "3.3": [
+          "sdk"
+        ],
+        "4.1": [
+          "sdk"
+        ],
+        "4.2": [
+          "sdk"
+        ],
+        "5.1": [
+          "sdk"
+        ],
+        "5.2": [
+          "config"
+        ],
+        "5.3": [
+          "sdk"
+        ],
+        "5.4": [
+          "sdk"
+        ],
+        "6.1": [
+          "sdk"
+        ],
+        "6.2": [
+          "sdk"
+        ],
+        "6.3": [
+          "sdk"
+        ],
+        "7.1": [
+          "sdk"
+        ]
+      },
       "ocean_checks": [],
       "controls_covered": []
     },

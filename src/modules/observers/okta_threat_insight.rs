@@ -158,7 +158,10 @@ impl Observer for ThreatInsightObserver {
                 });
                 (
                     StatusId::Ineffective,
-                    format!("ThreatInsight action is {:?}; blocking is not active", action),
+                    format!(
+                        "ThreatInsight action is {:?}; blocking is not active",
+                        action
+                    ),
                 )
             }
         };

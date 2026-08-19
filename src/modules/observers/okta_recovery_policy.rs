@@ -180,8 +180,8 @@ impl Observer for RecoveryPolicyObserver {
         if findings.is_empty() {
             findings.push(Finding {
                 title: "Recovery Policy Compliant".to_string(),
-                description:
-                    "Account recovery uses secure factors only (no SMS); OKTA-1.10 met".to_string(),
+                description: "Account recovery uses secure factors only (no SMS); OKTA-1.10 met"
+                    .to_string(),
                 severity_id: 0,
             });
         }

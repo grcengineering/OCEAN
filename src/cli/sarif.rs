@@ -135,10 +135,7 @@ fn ocean_severity_to_score(severity: &str) -> &'static str {
 /// A single check execution result, ready for SARIF conversion.
 pub struct CheckResult {
     pub check_id: String,
-    pub check_name: String,
-    pub description: String,
     pub severity: String,
-    pub tags: Vec<String>,
     /// "PASS", "FAIL", or "ERROR"
     pub status: String,
     pub message: String,
@@ -270,10 +267,7 @@ assertions:
         let def = sample_def();
         let results = vec![CheckResult {
             check_id: "GH-1.01".into(),
-            check_name: "Org MFA Enforcement".into(),
-            description: "test".into(),
             severity: "critical".into(),
-            tags: vec!["mfa".into()],
             status: "FAIL".into(),
             message: "MFA is not enforced".into(),
             source: "github".into(),
@@ -290,10 +284,7 @@ assertions:
         let def = sample_def();
         let results = vec![CheckResult {
             check_id: "GH-1.01".into(),
-            check_name: "Org MFA".into(),
-            description: "test".into(),
             severity: "critical".into(),
-            tags: vec![],
             status: "PASS".into(),
             message: "MFA is enforced".into(),
             source: "github".into(),

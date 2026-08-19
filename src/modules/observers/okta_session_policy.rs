@@ -122,22 +122,13 @@ impl Observer for SessionPolicyObserver {
         let policy = policies
             .iter()
             .find(|p| {
-                p.get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "Default Policy"
-                    && p.get("status")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        == "ACTIVE"
+                p.get("name").and_then(|v| v.as_str()).unwrap_or("") == "Default Policy"
+                    && p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE"
             })
             .or_else(|| {
-                policies.iter().find(|p| {
-                    p.get("status")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        == "ACTIVE"
-                })
+                policies
+                    .iter()
+                    .find(|p| p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE")
             })
             .ok_or_else(|| anyhow!("No active OKTA_SIGN_ON policy found"))?;
 
@@ -166,12 +157,7 @@ impl Observer for SessionPolicyObserver {
         // Pick the first ACTIVE rule (rules are returned in priority order)
         let active_rule = rules
             .iter()
-            .find(|r| {
-                r.get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "ACTIVE"
-            })
+            .find(|r| r.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE")
             .ok_or_else(|| anyhow!("No active rules found for policy {}", policy_id))?;
 
         let session = active_rule

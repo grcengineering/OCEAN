@@ -1,0 +1,197 @@
+id: ONA-2.01b
+name: At Least One Security Policy Defines Executable Rules
+description: |
+  Verifies that at least one `SecurityPolicy` in the organization carries a
+  non-empty `spec.executables.rules[]` list, read from
+  `gitpod.v1.SecurityService/ListSecurityPolicies` filtered by
+  `filter.organizationId`.
+
+  Why this is a separate check from ONA-2.01. Assignment and content are
+  independently breakable. ONA-2.01 answers "is a SecurityPolicy assigned as the
+  organization default" — the field the vendor says makes a policy real
+  ("Creation stores an inactive definition; assigning it as the organization
+  default validates materializability"). This check answers the complementary
+  question: do the policies that exist actually contain executable rules, or is
+  the organization holding an empty shell that would satisfy the assignment check
+  while restricting nothing? Both can pass, both can fail, and the failure modes
+  have different remediations, so they are not merged.
+
+  What a rule looks like. `spec.executables.defaultEffect` is `EFFECT_ALLOW`
+  (the vendor: "For Veto Exec, omit this field or set it to EFFECT_ALLOW;
+  EFFECT_UNSPECIFIED is normalized to EFFECT_ALLOW"), and each entry in
+  `spec.executables.rules[]` is `{path, effect}` where effect is `EFFECT_AUDIT`
+  or `EFFECT_BLOCK` — an executable rule cannot use `EFFECT_ALLOW`. This check
+  counts rules; it does not judge their effect, because an audit-first rollout is
+  the vendor's own documented practice and failing it would punish the correct
+  migration path.
+
+  Pagination ceiling — read before trusting a failure. OCEAN's `paginate: true`
+  follows GitHub-style `Link` headers, which Connect RPC does not emit, so only
+  the FIRST page is read. `pageSize` is set to the documented maximum of 100. An
+  organization holding more than 100 security policies could in principle have
+  its only rule-bearing policy on page two, which would produce a false failure.
+  That is a remote shape for this resource and it is disclosed here rather than
+  hidden; the same ceiling applies to every list-backed check in this vendor.
+
+  Enterprise gating. Veto Exec is Enterprise-only, and `ListSecurityPolicies` on
+  a lower plan can answer with an HTTP 400 `failed_precondition` ("feature is
+  only available for enterprise customers"). That is NOT a compliance failure and
+  must never be reported as one: the reachability assertion carries the
+  collection failure and the rules verdict ABSTAINS. The same 400-shaped gate was
+  confirmed live on `EventService/ListAuditLogs` and `WebhookService/ListWebhooks`.
+
+  Host, response shape, and abstention. The request goes to `app.gitpod.io`
+  because the documented `app.ona.com` base 308-redirects and clients drop the
+  `Authorization` header on the hop. The response is a JSON OBJECT with a
+  `securityPolicies` array nested under it, not a root array, and Protobuf-JSON
+  OMITS empty repeated fields — so an organization with zero policies returns an
+  object with no `securityPolicies` key at all. `jsonpath_extract` binds
+  `$.securityPolicies` only when the key exists, so the assertion tests
+  `has(body_root.securityPolicies)` before dereferencing the extracted array.
+  Zero policies is a genuine FAIL (there are no rules), while an unreadable
+  response ABSTAINS — the two are kept apart by the reachability assertion.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L2
+tags: [agent-governance, veto-exec, security-policy, executables, pagination-ceiling]
+
+references:
+  cis: ["2.5", "2.7"]
+  nist: ["CM-7", "SI-3"]
+  soc2: CC6.8
+  iso27001: A.12.5.1
+  hth: "ona:2.1"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: list_security_policies
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. `pageSize` is the documented maximum (100); only the
+      first page is read because Connect emits no Link header for OCEAN's
+      paginator to follow. Unknown request fields are rejected by the server, so
+      the body carries exactly the documented `filter.organizationId` and
+      `pagination.pageSize`.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.SecurityService/ListSecurityPolicies"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        filter:
+          organizationId: "{{org}}"
+        pagination:
+          pageSize: 100
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` cannot itself
+      # discriminate shape: on a non-object receiver cel 0.14 RAISES ("No such
+      # overload"), which the fail-closed default turns into an accusation,
+      # while it answers FALSE for a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      security_policies: "$.securityPolicies"
+
+assertions:
+  - id: security_policies_readable
+    expr: "list_security_policies_status_code == 200 && body_root != null && body_is_object"
+    severity: info
+    title: Security Policies Readable
+    pass_message: "ListSecurityPolicies answered with a response object for organization '{{org}}'; the executable-rules verdict below was actually evaluated"
+    fail_message: "ListSecurityPolicies did not return a readable response for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return a readable ListSecurityPolicies response, so no
+        policy was observed. This is a collection failure, not a compliance
+        failure — do not treat the accompanying rules result as evidence of a
+        misconfiguration.
+        The most likely cause on a non-Enterprise organization is plan gating:
+        Connect answers an Enterprise-only feature with HTTP 400 and
+        `{"code":"failed_precondition","message":"feature is only available for
+        enterprise customers..."}`. Veto Exec is Enterprise-only, so this is the
+        expected result on lower plans and is reported as unread rather than as a
+        finding.
+        Other causes: ONA_ORGANIZATION_ID is not an organization this token can
+        read; the token is expired, revoked, or issued from a different
+        management-plane domain; or the principal lacks the permission
+        ListSecurityPolicies requires (Connect returns `permission_denied`).
+
+  - id: executable_rules_defined
+    expr: "list_security_policies_status_code != 200 || body_root == null || !body_is_object || (has(body_root.securityPolicies) && size(security_policies.filter(p, has(p.spec) && has(p.spec.executables) && has(p.spec.executables.rules) && size(p.spec.executables.rules) > 0)) > 0)"
+    severity: medium
+    title: Veto Executable Rules
+    pass_message: "No missing-rules gap was observed for '{{org}}' — this row is evidence that a SecurityPolicy carries executable rules ONLY if 'Security Policies Readable' above also passed; when the policy list could not be read it abstains and asserts nothing about rules"
+    fail_message: "No SecurityPolicy in '{{org}}' defines any executable rules — the Veto Exec surface exists but restricts nothing"
+    finding:
+      description: |
+        Every SecurityPolicy readable for this organization has an empty or absent
+        `spec.executables.rules[]` — or there are no policies at all. Veto Exec is
+        therefore not restricting any executable, regardless of whether a policy is
+        assigned as the organization default.
+        Pair this with ONA-2.01. Assignment without rules is an empty shell; rules
+        without assignment are inert. Both must hold for Veto Exec to do anything.
+        Author rules audit-first. Each rule is `{path, effect}` with effect
+        `EFFECT_AUDIT` or `EFFECT_BLOCK` — `EFFECT_ALLOW` is invalid for an
+        executable rule — and the vendor warns that blocking an interpreter such as
+        `/bin/bash` "also blocks scripts that use that interpreter and can make an
+        environment unusable. Test interpreter rules in audit mode first." Selectors
+        must be absolute paths or bare names; `.`, `..`, `./npx` and relative paths
+        such as `tools/npx` are rejected after trimming.
+        Two traps worth knowing before you write rules. The server-populated
+        `vetoExecPolicy.safelist` protects Ona runtime binaries by content hash and
+        "cannot be blocked by the denylist" — a rule naming one is silently inert.
+        And Veto Exec audit-log entries are preview-gated, so an empty audit query
+        is not evidence that enforcement is off.
+        Read ceiling: only the first page of up to 100 policies was read, because
+        Connect emits no Link header for OCEAN's paginator to follow.
+        This finding cannot be raised by an unreadable response — the guard chain
+        short-circuits to abstain on non-200, a null body, or an array-shaped body,
+        which is where an Enterprise-gated 400 lands.
+
+remediation:
+  description: |
+    Author a policy document with executable rules, validate it, create it, and
+    assign it. The CLI is the surface the vendor documents end to end for this
+    control, including the validate-before-send step.
+  steps:
+    - "Write the policy document with `spec.executables.defaultEffect: EFFECT_ALLOW` and one `{path, effect}` entry per executable you want audited or blocked — start every rule at EFFECT_AUDIT"
+    - "Validate client-side: `ona organization security-policy init policy.yaml --validate-only`"
+    - "Create it: `ona organization security-policy create policy.yaml -o json` — this stores an INACTIVE definition and returns its id"
+    - "Assign it: `ona organization security-policy set-default <security-policy-id>` (ONA-2.01 asserts this half)"
+    - "Prove it: `ona organization security-policy list -o json`, then re-run this check"
+    - "Promote rules from EFFECT_AUDIT to EFFECT_BLOCK only after the audit trail shows no legitimate use of the path"
+  cli:
+    command: "ona organization security-policy init policy.yaml --validate-only && ona organization security-policy create policy.yaml -o json"
+  manual:
+    - "`set-default --clear` is not an undo for executable rules — it removes every control in that SecurityPolicy. The documented rollback is to flip each rule back to EFFECT_AUDIT and `update`."
+    - "Running environments keep the policy from their last start; restart them to pick up a change."
+    - "Veto Exec is Enterprise-only. On a lower plan this check abstains rather than reporting a gap the operator cannot close."

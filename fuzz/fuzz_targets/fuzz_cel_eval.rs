@@ -1,12 +1,12 @@
 #![no_main]
 //! Fuzz target for CEL expression evaluation.
 //!
-//! Feeds arbitrary strings as CEL expressions into cel-interpreter's
+//! Feeds arbitrary strings as CEL expressions into cel's
 //! compile + execute pipeline to find panics, excessive memory use,
 //! or stack overflows in expression parsing and evaluation.
 
 use libfuzzer_sys::fuzz_target;
-use cel_interpreter::{Context, Program};
+use cel::{Context, Program};
 
 fuzz_target!(|data: &[u8]| {
     let expr = match std::str::from_utf8(data) {

@@ -374,7 +374,10 @@ assertions:
         assert_eq!(step.id, "get_org_settings");
         assert_eq!(step.request.method, "GET");
         assert!(step.extract.contains_key("mfa_enforced"));
-        assert_eq!(step.extract["mfa_enforced"], "$.two_factor_requirement_enabled");
+        assert_eq!(
+            step.extract["mfa_enforced"],
+            "$.two_factor_requirement_enabled"
+        );
     }
 
     #[test]
@@ -792,7 +795,13 @@ remediation:
           two_factor_requirement_enabled: true
 "#;
         let def: CheckDefinition = serde_yaml::from_str(yaml).unwrap();
-        let tf = def.remediation.as_ref().unwrap().terraform.as_ref().unwrap();
+        let tf = def
+            .remediation
+            .as_ref()
+            .unwrap()
+            .terraform
+            .as_ref()
+            .unwrap();
         assert_eq!(tf.resources.len(), 1);
     }
 

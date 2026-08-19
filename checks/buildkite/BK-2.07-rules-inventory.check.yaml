@@ -1,0 +1,173 @@
+id: BK-2.07
+name: Buildkite Rules Inventory Within Review Bound
+description: |
+  Inventories the organization's Buildkite Rules and fails when the count
+  exceeds the bound a reviewer has committed to actually reading.
+
+  Rules are not a tightening of Buildkite's normal permissions — they are a
+  separate grant that OVERRIDES the usual trigger-step permission checks, and
+  artifact-read rules reach ACROSS cluster boundaries. So every rule is a
+  standing lateral-movement grant: one rule can let a public or low-trust
+  pipeline trigger a production pipeline, and another can quietly undo the
+  isolation a cluster split was built to enforce. There is no API that tells
+  you whether a rule is justified, so inventory-within-a-bound is the minimum
+  viable control: it forces the set to stay small enough that a human review
+  of every rule remains realistic, and it fails the moment the set grows past
+  what anyone has agreed to audit.
+
+  Scope and known limits, stated plainly:
+
+  - THE BOUND IS THE `max_rules` INPUT. `rule_count_within_bound` compares
+    against `max_rules` by name; the interpreter resolves it from
+    BUILDKITE_MAX_RULES, falls back to `inputs.max_rules.default`, coerces it
+    to a number and binds it into the CEL context. Changing the bound is one
+    change, in one place, and there is no literal to keep in sync.
+  - THIS IS A CEILING, NOT AN ALLOWLIST. Passing means the rule set is small
+    enough to review, not that the rules themselves are correct. The rule
+    types, effects, and UUIDs are captured as evidence precisely so a reviewer
+    can do the judgment part the API cannot.
+  - DEGRADES, DOES NOT ACCUSE. If the endpoint is unreachable (token missing
+    `read_rules`, Rules unavailable), the reachability assertion fails loudly
+    and the bound assertion abstains rather than reporting a coverage gap as a
+    policy violation. The reachability assertion also requires the body to
+    actually be a JSON array (`$is_array`): an HTTP 200 with a non-array body
+    leaves `rule_types` unbound rather than defaulted, so status code alone
+    is not a sufficient guard — see `rule_count_within_bound` below.
+
+  Rules are in public preview and available on all plans. Endpoint and field
+  names verified against Buildkite's REST rules documentation; not executed
+  against a live tenant.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L2
+tags: [authorization, lateral-movement, pipelines, cicd]
+
+references:
+  cis: "6.8"
+  nist: [AC-3, AC-4]
+  hth: "buildkite:2.7"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_rules]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+  max_rules:
+    description: >-
+      Maximum number of organization rules a reviewer commits to auditing each
+      cycle. Default 10 — cross-pipeline access is meant to be the exception
+      you justified, not the default you inherited. This is the enforced value:
+      `rule_count_within_bound` compares against `max_rules` directly. Override
+      per-tenant with BUILDKITE_MAX_RULES.
+    env: BUILDKITE_MAX_RULES
+    default: "10"
+    required: false
+
+steps:
+  - id: get_rules
+    action: api_call
+    request:
+      method: GET
+      url: "https://api.buildkite.com/v2/organizations/{{org}}/rules"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Accept: application/json
+    extract:
+      rule_types: "$[*].type"
+      rule_effects: "$[*].effect"
+      rule_actions: "$[*].action"
+      rule_uuids: "$[*].uuid"
+      rule_count: "$length"
+      body_is_array: "$is_array"
+
+assertions:
+  - id: rules_api_reachable
+    expr: "get_rules_status_code == 200 && body_is_array"
+    severity: medium
+    title: Organization Rules Inventory Retrieved
+    pass_message: "Rules inventory retrieved for organization {{org}} — review every returned rule against a documented workflow"
+    fail_message: "The rules inventory for organization {{org}} could not be retrieved, or was not returned as the expected array — this run proves nothing about cross-pipeline access"
+    finding:
+      description: |
+        The organization rules endpoint did not return 200, or returned HTTP
+        200 with a body that was not the expected JSON array. Either way, this
+        run carries no evidence about cross-pipeline authorization. Treat it
+        as a coverage gap, not as a pass.
+
+        Confirm the API access token holds the `read_rules` scope and that the
+        organization slug is correct, then re-run. Until it returns 200 with
+        an array body, there is no answer to "what can this pipeline reach" —
+        which is exactly the question an unreviewed rule set makes
+        unanswerable.
+
+  - id: rule_count_within_bound
+    expr: "get_rules_status_code != 200 || !body_is_array || size(rule_types) <= max_rules"
+    severity: high
+    title: Rule Count Within the Reviewable Bound
+    pass_message: "No rule-count violation was observed for organization {{org}} — this row is evidence that at most {{max_rules}} rules are defined, and an instruction to review each one against a documented workflow, ONLY if 'Organization Rules Inventory Retrieved' above also passed; when the inventory could not be read it abstains and asserts nothing about the rule population. The count that was read, if any, is the rule_count observable in this check's evidence"
+    fail_message: "Organization {{org}} defines {{rule_count}} rules, exceeding the bound of {{max_rules}} that anyone has committed to reviewing"
+    finding:
+      description: |
+        The organization defines more rules than the configured bound of 10.
+
+        Each rule is a standing authorization grant, not a restriction. Rules
+        override the usual trigger-step permission checks, so a rule can widen
+        access beyond what team membership allows; and artifact-read rules
+        cross cluster boundaries, so a rule can undo the isolation a cluster
+        split was configured to enforce. Cross-pipeline triggering is the most
+        direct lateral-movement primitive Buildkite offers.
+
+        Past the point where nobody reads the whole set, an unjustified rule —
+        a public pipeline granted the ability to trigger a private one, or a
+        low-trust pipeline granted artifact reads into production — survives
+        indefinitely because no review ever reaches it.
+
+        Reduce the set: remove every rule not tied to a documented workflow,
+        and re-scope the rest to the narrowest source and target pair that
+        makes the workflow function. If the larger set is genuinely justified,
+        raise the bound deliberately — in BOTH `inputs.max_rules.default` and
+        the literal in this assertion — and record who owns reviewing it.
+
+        Use the `rule_types`, `rule_effects`, `rule_actions`, and `rule_uuids`
+        extractions as the worklist. Read them on the evidence record's
+        `raw_data`, which carries every extraction this check made. They are
+        NOT in `observables`: the YAML interpreter exports an extraction as an
+        observable only when it is a JSON scalar, and all four of these are
+        `$[*]` arrays, so `rule_count` is the only rules value that appears
+        there. This assertion abstains when the endpoint is unreachable;
+        `rules_api_reachable` carries that signal instead. Without the
+        `!body_is_array` guard, a non-200 status OR an HTTP 200 with a
+        non-array body both leave `rule_types` unbound, the CEL expression
+        errors, and the interpreter's fail-closed default reports a
+        high-severity rule-count finding the operator cannot act on.
+
+remediation:
+  description: |
+    Bring the rule set back to a size a human actually reviews, and keep it
+    there. Cross-pipeline access should be the exception you justified, not the
+    default you inherited.
+  steps:
+    - "Go to Buildkite → Settings → Rules and list every rule currently defined"
+    - "For each rule, identify the source pipeline, the target pipeline, and who added it — a rule with no owner is a rule to remove"
+    - "Delete every rule not tied to a documented workflow"
+    - "Re-scope each surviving rule to the narrowest source and target pair that makes the workflow function"
+    - "Pay particular attention to artifact-read rules, which cross cluster boundaries and can undo cluster isolation"
+    - "Add rules to the access-review cycle — they grant access, so they age the same way permissions do"
+  manual:
+    - "Confirm no rule grants a public pipeline the ability to trigger a private one"
+    - "If the count is justified, raise the bound deliberately — set BUILDKITE_MAX_RULES or edit inputs.max_rules.default — and record the owner accountable for reviewing the larger set"
+  terraform:
+    resources:
+      - type: buildkite_organization_rule
+        name: deploy_can_trigger_release
+        attributes:
+          type: "pipeline.trigger_build.pipeline"
+          description: "Narrowly scoped: deploy may trigger release. Owner: platform-team."
+          value: "{\"source_pipeline\":\"<source uuid>\",\"target_pipeline\":\"<target uuid>\"}"

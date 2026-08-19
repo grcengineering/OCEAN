@@ -30,7 +30,7 @@ rules:
     message: >-
       CI npm installs should use `npm ci --ignore-scripts` unless install
       scripts are specifically required (install-script malware vector).
-    pattern-regex: 'npm install(?! .*--ignore-scripts)[^\n]*'
+    pattern-regex: '(?m)^(?!\s*#).*npm install(?! .*--ignore-scripts)[^\n]*'
     paths:
       include: ["*.yml", "*.yaml"]
 

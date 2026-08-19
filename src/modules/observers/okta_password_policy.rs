@@ -193,8 +193,7 @@ impl Observer for PasswordPolicyObserver {
             }
 
             // OKTA-1.5: at least 3 of 4 complexity types enabled
-            let complexity_count =
-                (if min_lower > 0 { 1 } else { 0 })
+            let complexity_count = (if min_lower > 0 { 1 } else { 0 })
                 + (if min_upper > 0 { 1 } else { 0 })
                 + (if min_number > 0 { 1 } else { 0 })
                 + (if min_symbol > 0 { 1 } else { 0 });
@@ -372,7 +371,10 @@ mod tests {
 
     #[test]
     fn api_error_returns_err() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        );
         let result = PasswordPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }

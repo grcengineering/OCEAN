@@ -4,9 +4,7 @@ all-features = true
 exclude = ["grc-controls-apis", "grc-controls-models"]
 
 [advisories]
-ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "paste is a stable, widely-used proc-macro by dtolnay; unmaintained but functionally complete" },
-]
+ignore = []
 
 [licenses]
 allow = [

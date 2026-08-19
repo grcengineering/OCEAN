@@ -14,7 +14,7 @@ use crate::evidence::{
     SourceInfo, StatusId,
 };
 use crate::module::{
-    AuthorizationLevel, Authorizer, Observer, CredentialReq, EnvironmentScope, Module,
+    AuthorizationLevel, Authorizer, CredentialReq, EnvironmentScope, Module, Observer,
     SafetyClassification, Tester,
 };
 
@@ -363,25 +363,23 @@ impl MockHTTPServer {
         let addr = listener.local_addr().expect("local addr");
         let queue = Arc::new(Mutex::new(responses));
 
-        std::thread::spawn(move || {
-            loop {
-                let resp = {
-                    let mut q = queue.lock().unwrap();
-                    if q.is_empty() {
-                        break;
-                    }
-                    q.remove(0)
-                };
-                if let Ok((mut stream, _)) = listener.accept() {
-                    let mut buf = [0u8; 8192];
-                    let _ = stream.read(&mut buf);
-                    let (status, body) = resp;
-                    let raw = format!(
+        std::thread::spawn(move || loop {
+            let resp = {
+                let mut q = queue.lock().unwrap();
+                if q.is_empty() {
+                    break;
+                }
+                q.remove(0)
+            };
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let (status, body) = resp;
+                let raw = format!(
                         "HTTP/1.1 {status} OK\r\nContent-Length: {len}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}",
                         len = body.len()
                     );
-                    let _ = stream.write_all(raw.as_bytes());
-                }
+                let _ = stream.write_all(raw.as_bytes());
             }
         });
 

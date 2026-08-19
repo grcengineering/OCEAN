@@ -43,8 +43,9 @@ impl Module for OAuthAppsObserver {
             CredentialReq {
                 name: "GITHUB_TOKEN".to_string(),
                 cred_type: "api_token".to_string(),
-                description: "GitHub PAT with admin:org scope for reading credential authorizations"
-                    .to_string(),
+                description:
+                    "GitHub PAT with admin:org scope for reading credential authorizations"
+                        .to_string(),
                 required: true,
             },
             CredentialReq {
@@ -72,7 +73,7 @@ impl Observer for OAuthAppsObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/credential-authorizations?per_page=1", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -142,7 +143,10 @@ impl Observer for OAuthAppsObserver {
                 format!("No third-party OAuth tokens found for organization {}", org)
             }
             StatusId::Ineffective => {
-                format!("Third-party OAuth tokens are present for organization {}", org)
+                format!(
+                    "Third-party OAuth tokens are present for organization {}",
+                    org
+                )
             }
             _ => format!(
                 "OAuth app check unavailable for organization {} (GHEC required)",

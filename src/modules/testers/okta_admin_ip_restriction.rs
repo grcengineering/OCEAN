@@ -100,9 +100,7 @@ impl Tester for AdminIpRestrictionTester {
     }
 
     fn pre_flight_checks(&self) -> Vec<String> {
-        vec![
-            "Verify OKTA_API_TOKEN has read access to sign-on policies".to_string(),
-        ]
+        vec!["Verify OKTA_API_TOKEN has read access to sign-on policies".to_string()]
     }
 
     fn cleanup_procedures(&self) -> Vec<String> {
@@ -158,18 +156,18 @@ impl Tester for AdminIpRestrictionTester {
                 false,
             );
             let transcript = recorder.finalize();
-            return Ok(vec![build_evidence(
+            return Ok(vec![build_evidence(BuildEvidenceParams {
                 now,
                 domain,
                 policies_endpoint,
-                StatusId::Ineffective,
-                "No OKTA_SIGN_ON policies found — admin IP restriction not verifiable".to_string(),
-                vec![Finding {
+                status_id: StatusId::Ineffective,
+                status_text: "No OKTA_SIGN_ON policies found — admin IP restriction not verifiable".to_string(),
+                findings: vec![Finding {
                     title: "No Sign-On Policies Found".to_string(),
                     description: "No OKTA_SIGN_ON policies were returned — admin console IP restriction cannot be confirmed.".to_string(),
                     severity_id: 2,
                 }],
-                json!({
+                raw_data: json!({
                     "test_scenario": "admin_ip_restriction_check",
                     "target_system": domain,
                     "policies_found": 0,
@@ -178,9 +176,9 @@ impl Tester for AdminIpRestrictionTester {
                     "name": "admin_restriction_policy",
                     "value": "none",
                 }),
-                "none".to_string(),
-                Some(transcript),
-            )]);
+                observable_value: "none".to_string(),
+                transcript: Some(transcript),
+            })]);
         }
 
         // ── Step 2: Inspect each policy's rules for network zone conditions ─
@@ -312,15 +310,16 @@ impl Tester for AdminIpRestrictionTester {
                     .to_string(),
                 vec![Finding {
                     title: "Admin IP Restriction Not Found".to_string(),
-                    description: "No OKTA_SIGN_ON policy rules with network zone conditions were found. \
+                    description:
+                        "No OKTA_SIGN_ON policy rules with network zone conditions were found. \
                                   Admin console access may not be restricted by IP."
-                        .to_string(),
+                            .to_string(),
                     severity_id: 3,
                 }],
             )
         };
 
-        Ok(vec![build_evidence(
+        Ok(vec![build_evidence(BuildEvidenceParams {
             now,
             domain,
             policies_endpoint,
@@ -329,24 +328,40 @@ impl Tester for AdminIpRestrictionTester {
             findings,
             raw_data,
             observable_value,
-            Some(transcript),
-        )])
+            transcript: Some(transcript),
+        })])
     }
 }
 
 // ─── Evidence builder ─────────────────────────────────────────────────────────
 
-fn build_evidence(
+/// Bundled parameters for [`build_evidence`] (keeps the function's argument
+/// count within clippy's `too_many_arguments` threshold).
+struct BuildEvidenceParams<'a> {
     now: chrono::DateTime<Utc>,
-    domain: &str,
-    policies_endpoint: &str,
+    domain: &'a str,
+    policies_endpoint: &'a str,
     status_id: StatusId,
     status_text: String,
     findings: Vec<Finding>,
     raw_data: Value,
     observable_value: String,
     transcript: Option<crate::evidence::TestTranscript>,
-) -> Evidence {
+}
+
+fn build_evidence(params: BuildEvidenceParams) -> Evidence {
+    let BuildEvidenceParams {
+        now,
+        domain: _domain,
+        policies_endpoint,
+        status_id,
+        status_text,
+        findings,
+        raw_data,
+        observable_value,
+        transcript,
+    } = params;
+
     Evidence {
         id: Uuid::new_v4(),
         control_id: "OKTA-2.2".to_string(),
@@ -474,10 +489,7 @@ mod tests {
 
     #[test]
     fn missing_api_token_errors() {
-        let config = HashMap::from([(
-            "OKTA_DOMAIN".to_string(),
-            "example.okta.com".to_string(),
-        )]);
+        let config = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let err = AdminIpRestrictionTester.test(&config).unwrap_err();
         assert!(err.to_string().contains("OKTA_API_TOKEN"));
     }

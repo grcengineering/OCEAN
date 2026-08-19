@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::{anyhow, Result};
 
-use super::{Observer, Module, Tester};
+use super::{Module, Observer, Tester};
 
 /// Metadata about a registered module, suitable for CLI listings and API responses.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

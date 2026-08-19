@@ -214,7 +214,12 @@ fn cf_config() -> HashMap<String, String> {
 }
 
 fn cf_check(server: &MockHTTPServer, filename: &str) -> ocean::check::CheckDefinition {
-    load_check_with_mock_urls("cloudflare", filename, "https://api.cloudflare.com", server.url())
+    load_check_with_mock_urls(
+        "cloudflare",
+        filename,
+        "https://api.cloudflare.com",
+        server.url(),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -341,12 +346,20 @@ fn cf203_pass_all_posture_checks_configured() {
         {"id": "r3", "type": "os_version"}
     ]});
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = cf_check(&server, "CF-2.03-device-posture-checks-configured.check.yaml");
+    let def = cf_check(
+        &server,
+        "CF-2.03-device-posture-checks-configured.check.yaml",
+    );
 
     let evidence = run_observer(def, &cf_config());
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -356,13 +369,28 @@ fn cf203_fail_missing_disk_and_firewall_checks() {
         {"id": "r3", "type": "os_version"}
     ]});
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = cf_check(&server, "CF-2.03-device-posture-checks-configured.check.yaml");
+    let def = cf_check(
+        &server,
+        "CF-2.03-device-posture-checks-configured.check.yaml",
+    );
 
     let evidence = run_observer(def, &cf_config());
     assert_eq!(evidence.len(), 3);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "disk_encryption missing");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "firewall missing");
-    assert_eq!(evidence[2].status_id, StatusId::Effective, "os_version present");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "disk_encryption missing"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "firewall missing"
+    );
+    assert_eq!(
+        evidence[2].status_id,
+        StatusId::Effective,
+        "os_version present"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -498,7 +526,12 @@ fn cf401_pass_warp_settings_hardened() {
     let evidence = run_observer(def, &cf_config());
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -513,7 +546,12 @@ fn cf401_fail_warp_settings_not_hardened() {
     let evidence = run_observer(def, &cf_config());
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Ineffective, "expected Ineffective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Ineffective,
+            "expected Ineffective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -530,7 +568,12 @@ fn cf402_pass_warp_client_locked() {
     let evidence = run_observer(def, &cf_config());
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -624,7 +667,12 @@ fn cf601_pass_all_datasets_active() {
     let evidence = run_observer(def, &cf_config());
     assert_eq!(evidence.len(), 4);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -639,10 +687,26 @@ fn cf601_fail_gateway_datasets_missing() {
 
     let evidence = run_observer(def, &cf_config());
     assert_eq!(evidence.len(), 4);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "access_requests active");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "gateway_dns active");
-    assert_eq!(evidence[2].status_id, StatusId::Ineffective, "gateway_http missing");
-    assert_eq!(evidence[3].status_id, StatusId::Ineffective, "gateway_network missing");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "access_requests active"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "gateway_dns active"
+    );
+    assert_eq!(
+        evidence[2].status_id,
+        StatusId::Ineffective,
+        "gateway_http missing"
+    );
+    assert_eq!(
+        evidence[3].status_id,
+        StatusId::Ineffective,
+        "gateway_network missing"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -669,7 +733,12 @@ fn auth0101_pass_brute_force_protection_hardened() {
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -681,9 +750,17 @@ fn auth0101_fail_brute_force_protection_disabled_and_loose() {
 
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "protection disabled");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "protection disabled"
+    );
     assert_eq!(evidence[0].findings[0].severity_id, 5); // critical
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "max_attempts above threshold");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "max_attempts above threshold"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -779,7 +856,12 @@ fn auth0201_pass_connections_hardened() {
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -793,8 +875,16 @@ fn auth0201_fail_connections_weak() {
 
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "weak password policy");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "brute force protection disabled");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "weak password policy"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "brute force protection disabled"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -841,7 +931,12 @@ fn auth0301_pass_tenant_settings_hardened() {
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -858,7 +953,12 @@ fn auth0301_fail_tenant_settings_loose() {
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Ineffective, "expected Ineffective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Ineffective,
+            "expected Ineffective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -879,12 +979,20 @@ fn auth0402_pass_clients_hardened() {
         }
     ]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check("auth0", "AUTH0-4.02-application-configuration-audit.check.yaml");
+    let def = load_check(
+        "auth0",
+        "AUTH0-4.02-application-configuration-audit.check.yaml",
+    );
 
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -901,12 +1009,20 @@ fn auth0402_fail_clients_not_hardened() {
         }
     ]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check("auth0", "AUTH0-4.02-application-configuration-audit.check.yaml");
+    let def = load_check(
+        "auth0",
+        "AUTH0-4.02-application-configuration-audit.check.yaml",
+    );
 
     let evidence = run_observer(def, &auth0_config(server.url()));
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Ineffective, "expected Ineffective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Ineffective,
+            "expected Ineffective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -950,7 +1066,12 @@ fn ld_config() -> HashMap<String, String> {
 }
 
 fn ld_check(server: &MockHTTPServer, filename: &str) -> ocean::check::CheckDefinition {
-    load_check_with_mock_urls("launchdarkly", filename, "https://app.launchdarkly.com", server.url())
+    load_check_with_mock_urls(
+        "launchdarkly",
+        filename,
+        "https://app.launchdarkly.com",
+        server.url(),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1034,7 +1155,12 @@ fn ld201_pass_all_environments_secure_mode() {
     let evidence = run_observer(def, &ld_config());
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -1049,8 +1175,16 @@ fn ld201_fail_production_secure_mode_disabled() {
 
     let evidence = run_observer(def, &ld_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "an environment lacks secure mode");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "production lacks secure mode");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "an environment lacks secure mode"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "production lacks secure mode"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1094,12 +1228,20 @@ fn ld301_pass_production_hardened() {
         "key": "production", "requireComments": true, "confirmChanges": true, "critical": true
     });
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = ld_check(&server, "LD-3.01-production-environment-hardened.check.yaml");
+    let def = ld_check(
+        &server,
+        "LD-3.01-production-environment-hardened.check.yaml",
+    );
 
     let evidence = run_observer(def, &ld_config());
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -1109,12 +1251,20 @@ fn ld301_fail_production_not_hardened() {
         "key": "production", "requireComments": false, "confirmChanges": false, "critical": false
     });
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = ld_check(&server, "LD-3.01-production-environment-hardened.check.yaml");
+    let def = ld_check(
+        &server,
+        "LD-3.01-production-environment-hardened.check.yaml",
+    );
 
     let evidence = run_observer(def, &ld_config());
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Ineffective, "expected Ineffective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Ineffective,
+            "expected Ineffective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -1190,16 +1340,27 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
         .join(dir_name);
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one {dir_name} check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one {dir_name} check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
     for expected in expected_ids {
         assert!(ids.contains(expected), "missing {expected}, got: {ids:?}");
     }
-    assert_eq!(ids.len(), expected_ids.len(), "unexpected extra or missing {dir_name} checks: {ids:?}");
+    assert_eq!(
+        ids.len(),
+        expected_ids.len(),
+        "unexpected extra or missing {dir_name} checks: {ids:?}"
+    );
 
     for def in &defs {
-        assert_eq!(def.source, source, "{}: source should be '{source}'", def.id);
+        assert_eq!(
+            def.source, source,
+            "{}: source should be '{source}'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for {dir_name} checks",
@@ -1211,7 +1372,11 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
         assert!(!def.steps.is_empty(), "{}: check has no steps", def.id);
     }
 }
@@ -1236,8 +1401,15 @@ fn all_auth0_checks_load_and_have_hth_references() {
         "auth0",
         "auth0:",
         &[
-            "AUTH0-1.01", "AUTH0-1.02", "AUTH0-1.03", "AUTH0-1.04", "AUTH0-2.01", "AUTH0-2.02",
-            "AUTH0-3.01", "AUTH0-4.02", "AUTH0-5.01",
+            "AUTH0-1.01",
+            "AUTH0-1.02",
+            "AUTH0-1.03",
+            "AUTH0-1.04",
+            "AUTH0-2.01",
+            "AUTH0-2.02",
+            "AUTH0-3.01",
+            "AUTH0-4.02",
+            "AUTH0-5.01",
         ],
     );
 }
@@ -1248,6 +1420,8 @@ fn all_launchdarkly_checks_load_and_have_hth_references() {
         "launchdarkly",
         "launchdarkly",
         "launchdarkly:",
-        &["LD-1.01", "LD-1.02", "LD-2.01", "LD-2.02", "LD-3.01", "LD-3.02", "LD-4.01"],
+        &[
+            "LD-1.01", "LD-1.02", "LD-2.01", "LD-2.02", "LD-3.01", "LD-3.02", "LD-4.01",
+        ],
     );
 }

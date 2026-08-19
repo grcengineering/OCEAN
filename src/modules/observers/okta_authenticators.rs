@@ -294,12 +294,10 @@ mod tests {
         let cfg = base_config(&url);
         let ev = AuthenticatorsObserver.observe(&cfg).unwrap();
         assert_eq!(ev[0].status_id, StatusId::Ineffective);
-        assert!(
-            ev[0]
-                .findings
-                .iter()
-                .any(|f| f.title.contains("FIDO2/WebAuthn") && f.severity_id == 4)
-        );
+        assert!(ev[0]
+            .findings
+            .iter()
+            .any(|f| f.title.contains("FIDO2/WebAuthn") && f.severity_id == 4));
     }
 
     #[test]

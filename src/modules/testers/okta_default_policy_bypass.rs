@@ -155,11 +155,9 @@ impl Tester for DefaultPolicyBypassTester {
         );
 
         // ── Step 2: Find the default (system) policy ──────────────────────
-        let default_policy = policies.iter().find(|p| {
-            p.get("system")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        });
+        let default_policy = policies
+            .iter()
+            .find(|p| p.get("system").and_then(|v| v.as_bool()).unwrap_or(false));
 
         let policy_id = match default_policy {
             Some(p) => p
@@ -244,7 +242,11 @@ impl Tester for DefaultPolicyBypassTester {
         let rules = rules_body.as_array().cloned().unwrap_or_default();
 
         recorder.record_observation(
-            format!("found {} rules for default policy {}", rules.len(), policy_id),
+            format!(
+                "found {} rules for default policy {}",
+                rules.len(),
+                policy_id
+            ),
             true,
         );
 
@@ -459,10 +461,7 @@ mod tests {
 
     #[test]
     fn missing_api_token_errors() {
-        let config = HashMap::from([(
-            "OKTA_DOMAIN".to_string(),
-            "example.okta.com".to_string(),
-        )]);
+        let config = HashMap::from([("OKTA_DOMAIN".to_string(), "example.okta.com".to_string())]);
         let err = DefaultPolicyBypassTester.test(&config).unwrap_err();
         assert!(err.to_string().contains("OKTA_API_TOKEN"));
     }
@@ -479,7 +478,8 @@ mod tests {
     /// Test 1: Default policy with all rules requiring MFA enrollment → Effective (no bypass).
     #[test]
     fn mfa_required_rules_is_effective() {
-        let policies_body = r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
+        let policies_body =
+            r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
         let rules_body = r#"[{"id":"rul1","name":"Default Rule","actions":{"enroll":{"self":"CHALLENGE"}}},{"id":"rul2","name":"Catch-All","actions":{"enroll":{"self":"LOGIN"}}}]"#;
 
         let srv = mock_server(vec![(200, policies_body), (200, rules_body)]);
@@ -498,7 +498,8 @@ mod tests {
     /// Test 2: Default policy has a NOT_ALLOWED rule → Ineffective (bypass detected), finding present.
     #[test]
     fn not_allowed_rule_is_ineffective() {
-        let policies_body = r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
+        let policies_body =
+            r#"[{"id":"pol1","name":"Default Policy","system":true,"type":"MFA_ENROLL"}]"#;
         let rules_body = r#"[{"id":"rul1","name":"Skip Enrollment","actions":{"enroll":{"self":"NOT_ALLOWED"}}},{"id":"rul2","name":"Default Rule","actions":{"enroll":{"self":"CHALLENGE"}}}]"#;
 
         let srv = mock_server(vec![(200, policies_body), (200, rules_body)]);
@@ -522,9 +523,6 @@ mod tests {
         )]);
         let result = DefaultPolicyBypassTester.test(&base_config(&srv));
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("403"));
+        assert!(result.unwrap_err().to_string().contains("403"));
     }
 }

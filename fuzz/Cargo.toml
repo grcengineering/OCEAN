@@ -12,7 +12,7 @@ libfuzzer-sys = "0.4"
 ocean = { path = ".." }
 serde_yaml = "0.9"
 serde_json = "1"
-cel-interpreter = "0.8"
+cel = "0.14"
 
 # Prevent this from interfering with workspaces
 [workspace]

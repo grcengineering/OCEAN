@@ -132,8 +132,8 @@ fn load_check_with_mock_urls(
     mock_base: &str,
 ) -> CheckDefinition {
     let path = check_path(vendor_dir, filename);
-    let content = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
+    let content =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
     let mut rewritten = content;
     for host in hosts {
         rewritten = rewritten.replace(host, mock_base);
@@ -177,7 +177,10 @@ fn run_tester_with_config(
 fn aws_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
     cfg.insert("AWS_ACCESS_KEY_ID".to_string(), "AKIATEST".to_string());
-    cfg.insert("AWS_SECRET_ACCESS_KEY".to_string(), "test-secret".to_string());
+    cfg.insert(
+        "AWS_SECRET_ACCESS_KEY".to_string(),
+        "test-secret".to_string(),
+    );
     cfg.insert("AWS_REGION".to_string(), "us-east-1".to_string());
     cfg
 }
@@ -187,7 +190,10 @@ fn azure_config() -> HashMap<String, String> {
     cfg.insert("AZURE_CLIENT_ID".to_string(), "test-client-id".to_string());
     cfg.insert("AZURE_CLIENT_SECRET".to_string(), "test-secret".to_string());
     cfg.insert("AZURE_TENANT_ID".to_string(), "test-tenant-id".to_string());
-    cfg.insert("AZURE_SUBSCRIPTION_ID".to_string(), "test-sub-id".to_string());
+    cfg.insert(
+        "AZURE_SUBSCRIPTION_ID".to_string(),
+        "test-sub-id".to_string(),
+    );
     cfg
 }
 
@@ -255,7 +261,11 @@ fn ct101_pass_trail_exists_and_multi_region() {
 
     assert_eq!(evidence.len(), 3);
     assert_eq!(evidence[0].status_id, StatusId::Effective, "trail_exists");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "multi_region_enabled");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "multi_region_enabled"
+    );
 }
 
 #[test]
@@ -277,7 +287,11 @@ fn ct101_fail_no_trails() {
 
     assert_eq!(evidence.len(), 3);
     assert_eq!(evidence[0].status_id, StatusId::Ineffective, "trail_exists");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "multi_region_enabled");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "multi_region_enabled"
+    );
 }
 
 #[test]
@@ -298,7 +312,11 @@ fn ct101_fail_no_multi_region_trail() {
     let evidence = run_observer_with_config(def, "AWS-CT-1.01", &aws_config());
 
     assert_eq!(evidence[0].status_id, StatusId::Effective, "trail_exists");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "multi_region_enabled");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "multi_region_enabled"
+    );
 }
 
 // ===========================================================================
@@ -440,8 +458,16 @@ fn ca101_pass_policies_exist_and_mfa_required() {
     let evidence = run_observer_with_config(def, "AZURE-CA-1.01", &azure_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "ca_policies_exist");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "mfa_policy_enabled");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "ca_policies_exist"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "mfa_policy_enabled"
+    );
 }
 
 #[test]
@@ -458,8 +484,16 @@ fn ca101_fail_no_policies() {
     let evidence = run_observer_with_config(def, "AZURE-CA-1.01", &azure_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "ca_policies_exist");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "mfa_policy_enabled");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "ca_policies_exist"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "mfa_policy_enabled"
+    );
 }
 
 // ===========================================================================
@@ -492,7 +526,11 @@ fn kv101_pass_all_vaults_protected() {
 
     assert_eq!(evidence.len(), 2);
     assert_eq!(evidence[0].status_id, StatusId::Effective, "soft_delete");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "purge_protection");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "purge_protection"
+    );
 }
 
 #[test]
@@ -510,7 +548,11 @@ fn kv101_fail_vault_missing_protections() {
 
     assert_eq!(evidence.len(), 2);
     assert_eq!(evidence[0].status_id, StatusId::Ineffective, "soft_delete");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "purge_protection");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "purge_protection"
+    );
 }
 
 // ===========================================================================
@@ -541,8 +583,16 @@ fn log101_pass_settings_with_log_categories() {
     let evidence = run_observer_with_config(def, "AZURE-LOG-1.01", &azure_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "diagnostic_settings_exist");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "diagnostic_settings_capture_security");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "diagnostic_settings_exist"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "diagnostic_settings_capture_security"
+    );
 }
 
 #[test]
@@ -559,8 +609,16 @@ fn log101_fail_no_diagnostic_settings() {
     let evidence = run_observer_with_config(def, "AZURE-LOG-1.01", &azure_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "diagnostic_settings_exist");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "diagnostic_settings_capture_security");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "diagnostic_settings_exist"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "diagnostic_settings_capture_security"
+    );
 }
 
 // ===========================================================================
@@ -607,8 +665,16 @@ fn mfa101_pass_mfa_enforced_no_exclusions() {
     );
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "mfa_enforcement_exists");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "no_broad_mfa_exclusions");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "mfa_enforcement_exists"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "no_broad_mfa_exclusions"
+    );
 }
 
 #[test]
@@ -634,7 +700,11 @@ fn mfa101_fail_no_mfa_enforcement() {
     );
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "mfa_enforcement_exists");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "mfa_enforcement_exists"
+    );
 }
 
 #[test]
@@ -660,8 +730,16 @@ fn mfa101_fail_broad_exclusion_on_mfa_policy() {
     );
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "mfa_enforcement_exists");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "no_broad_mfa_exclusions");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "mfa_enforcement_exists"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "no_broad_mfa_exclusions"
+    );
 }
 
 // ===========================================================================
@@ -703,8 +781,16 @@ fn nsg101_pass_no_unrestricted_rules() {
     let evidence = run_observer_with_config(def, "AZURE-NSG-1.01", &azure_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "no_unrestricted_ssh");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "no_unrestricted_rdp");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "no_unrestricted_ssh"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "no_unrestricted_rdp"
+    );
 }
 
 #[test]
@@ -726,8 +812,16 @@ fn nsg101_fail_unrestricted_ssh_and_rdp() {
     let evidence = run_observer_with_config(def, "AZURE-NSG-1.01", &azure_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "no_unrestricted_ssh");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "no_unrestricted_rdp");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "no_unrestricted_ssh"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "no_unrestricted_rdp"
+    );
 }
 
 // ===========================================================================
@@ -801,8 +895,16 @@ fn gh501_pass_https_and_ssl_verified() {
     let evidence = run_observer_with_config(def, "GH-5.01", &github_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "webhooks_use_https");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "webhooks_ssl_verification");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "webhooks_use_https"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "webhooks_ssl_verification"
+    );
 }
 
 #[test]
@@ -819,8 +921,16 @@ fn gh501_fail_http_and_insecure_ssl() {
     let evidence = run_observer_with_config(def, "GH-5.01", &github_config());
 
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "webhooks_use_https");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "webhooks_ssl_verification");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "webhooks_use_https"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "webhooks_ssl_verification"
+    );
 }
 
 // ===========================================================================

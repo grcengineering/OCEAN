@@ -55,7 +55,7 @@ All specification work is in `.specify/`:
 - **Language**: Rust (cargo workspace; sibling path-deps on `../grc-controls/{grc-controls-models,grc-controls-apis}` — clone that repo alongside this one or the build fails)
 - **Storage**: SQLite via `src/storage/sqlite.rs` (default `--db` path)
 - **Schema**: JSON Schema validation (`schemas/*.schema.json`) over `.check.yaml` files
-- **Expression Engine**: CEL via the `cel-interpreter` crate
+- **Expression Engine**: CEL via the `cel` crate
 - **HTTP**: ureq (check interpreter), axum (`ocean serve` REST API)
 - **Signing/Provenance**: Deferred to Corsair (ADR-001 addendum)
 - **License**: Apache 2.0

@@ -48,7 +48,7 @@ assertions:
       policies.exists(p, p.state == "enabled" &&
         has(p.conditions) && has(p.conditions.authenticationFlows) &&
         has(p.conditions.authenticationFlows.transferMethods) &&
-        "deviceCodeFlow" in p.conditions.authenticationFlows.transferMethods &&
+        p.conditions.authenticationFlows.transferMethods.contains("deviceCodeFlow") &&
         has(p.grantControls) && has(p.grantControls.builtInControls) &&
         "block" in p.grantControls.builtInControls)
     severity: high

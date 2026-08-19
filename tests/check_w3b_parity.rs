@@ -188,7 +188,10 @@ fn run_observer(
 
 fn anth_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("ANTHROPIC_ADMIN_KEY".to_string(), "sk-ant-admin01-test".to_string());
+    cfg.insert(
+        "ANTHROPIC_ADMIN_KEY".to_string(),
+        "sk-ant-admin01-test".to_string(),
+    );
     cfg
 }
 
@@ -210,7 +213,12 @@ fn anth102_pass_admin_count_within_limit() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "ANTH-1.02");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -230,8 +238,16 @@ fn anth102_fail_admin_count_exceeds_limit() {
 
     let evidence = run_observer(def, &anth_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "reachability assertion should pass");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "admin count assertion should fail with 4 admins");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "reachability assertion should pass"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "admin count assertion should fail with 4 admins"
+    );
     assert_eq!(evidence[1].findings[0].severity_id, 3); // medium
 }
 
@@ -256,7 +272,12 @@ fn anth201_pass_all_keys_named_and_scoped() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "ANTH-2.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -276,8 +297,16 @@ fn anth201_fail_unnamed_and_default_workspace_keys() {
 
     let evidence = run_observer(def, &anth_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "unnamed key should fail");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "default-workspace key should fail");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "unnamed key should fail"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "default-workspace key should fail"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +336,12 @@ fn anth302_pass_workspace_admin_count_within_limit() {
     let evidence = run_observer(def, &anth_workspace_config());
     assert_eq!(evidence.len(), 1);
     assert_eq!(evidence[0].control_id, "ANTH-3.02");
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "expected Effective, got: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "expected Effective, got: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -350,7 +384,12 @@ fn anth401_pass_all_active_workspaces_have_geo() {
     let evidence = run_observer(def, &anth_config());
     assert_eq!(evidence.len(), 1);
     assert_eq!(evidence[0].control_id, "ANTH-4.01");
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "expected Effective, got: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "expected Effective, got: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -464,7 +503,10 @@ fn anth704_fail_zero_records() {
 
 fn cgpt_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("COMPLIANCE_API_KEY".to_string(), "cmpl-test-key".to_string());
+    cfg.insert(
+        "COMPLIANCE_API_KEY".to_string(),
+        "cmpl-test-key".to_string(),
+    );
     cfg.insert("openai_principal_id".to_string(), "ws_test_123".to_string());
     cfg.insert("compliance_scope".to_string(), "workspaces".to_string());
     cfg.insert("after".to_string(), "2026-07-01T00:00:00Z".to_string());
@@ -549,7 +591,10 @@ fn cgpt606_fail_zero_auth_log_events() {
 
 fn wkto_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("WORKATO_API_TOKEN".to_string(), "wkto-test-token".to_string());
+    cfg.insert(
+        "WORKATO_API_TOKEN".to_string(),
+        "wkto-test-token".to_string(),
+    );
     cfg
 }
 
@@ -763,7 +808,10 @@ fn wkto401_fail_unauthorized_connection_present() {
 fn wkto501_pass_every_client_has_access_profile() {
     let clients = serde_json::json!({"result": [{"id": "c1", "name": "partner-system", "created_at": "2026-01-01T00:00:00Z"}]});
     let profiles = serde_json::json!({"result": [{"id": "p1", "name": "partner-scope", "api_client_id": "c1", "api_collection_ids": [1]}]});
-    let server = MockHTTPServer::new(vec![(200, clients.to_string()), (200, profiles.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, clients.to_string()),
+        (200, profiles.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "workato",
         "WKTO-5.01-api-clients-scoped.check.yaml",
@@ -774,7 +822,12 @@ fn wkto501_pass_every_client_has_access_profile() {
     let evidence = run_observer(def, &wkto_config());
     assert_eq!(evidence.len(), 1);
     assert_eq!(evidence[0].control_id, "WKTO-5.01");
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "expected Effective, got: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "expected Effective, got: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -784,7 +837,10 @@ fn wkto501_fail_client_with_no_access_profile() {
         {"id": "c2", "name": "unscoped-client", "created_at": "2026-01-01T00:00:00Z"}
     ]});
     let profiles = serde_json::json!({"result": [{"id": "p1", "name": "partner-scope", "api_client_id": "c1", "api_collection_ids": [1]}]});
-    let server = MockHTTPServer::new(vec![(200, clients.to_string()), (200, profiles.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, clients.to_string()),
+        (200, profiles.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "workato",
         "WKTO-5.01-api-clients-scoped.check.yaml",
@@ -923,13 +979,21 @@ fn wkto803_fail_active_recipe_stopped() {
 // workato}/*.check.yaml file loads cleanly with mandatory HTH references.
 // ---------------------------------------------------------------------------
 
-fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefixes: &[&str], expected_ids: &[&str]) {
+fn assert_vendor_dir_loads(
+    dir_name: &str,
+    source: &str,
+    hth_prefixes: &[&str],
+    expected_ids: &[&str],
+) {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("checks")
         .join(dir_name);
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one {dir_name} check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one {dir_name} check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
     for expected in expected_ids {
@@ -937,19 +1001,29 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefixes: &[&str], 
     }
 
     for def in &defs {
-        assert_eq!(def.source, source, "{}: source should be '{source}'", def.id);
+        assert_eq!(
+            def.source, source,
+            "{}: source should be '{source}'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for {dir_name} checks",
             def.id
         );
         assert!(
-            hth_prefixes.iter().any(|p| def.references.hth.starts_with(p)),
+            hth_prefixes
+                .iter()
+                .any(|p| def.references.hth.starts_with(p)),
             "{}: references.hth should start with one of {hth_prefixes:?}, got '{}'",
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
         assert!(!def.steps.is_empty(), "{}: check has no steps", def.id);
     }
 }
@@ -960,7 +1034,14 @@ fn all_anthropic_claude_checks_load_and_have_hth_references() {
         "anthropic-claude",
         "anthropic-claude",
         &["anthropic-claude:", "anthropic-api:", "claude-code:"],
-        &["ANTH-1.02", "ANTH-2.01", "ANTH-3.02", "ANTH-4.01", "ANTH-6.01", "ANTH-7.04"],
+        &[
+            "ANTH-1.02",
+            "ANTH-2.01",
+            "ANTH-3.02",
+            "ANTH-4.01",
+            "ANTH-6.01",
+            "ANTH-7.04",
+        ],
     );
 }
 
@@ -981,8 +1062,16 @@ fn all_workato_checks_load_and_have_hth_references() {
         "workato",
         &["workato:"],
         &[
-            "WKTO-1.05", "WKTO-2.01", "WKTO-2.05", "WKTO-3.04", "WKTO-4.01",
-            "WKTO-5.01", "WKTO-7.02", "WKTO-7.03", "WKTO-8.01", "WKTO-8.03",
+            "WKTO-1.05",
+            "WKTO-2.01",
+            "WKTO-2.05",
+            "WKTO-3.04",
+            "WKTO-4.01",
+            "WKTO-5.01",
+            "WKTO-7.02",
+            "WKTO-7.03",
+            "WKTO-8.01",
+            "WKTO-8.03",
         ],
     );
 }

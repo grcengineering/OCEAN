@@ -1,0 +1,177 @@
+id: BK-3.01a
+name: Cluster Agent Tokens Carry an Expiry
+description: |
+  Verifies that every agent registration token in a Buildkite cluster has a
+  non-null `expires_at`. An agent token is a bearer credential: anything holding
+  it can register an agent into the cluster and receive jobs, which means it can
+  read the secrets and source those jobs touch. A token with no expiry is a
+  permanent key to the build fleet.
+
+  Why this check earns its keep: tokens created through the Buildkite web UI are
+  issued with NO expiry at all — the UI exposes no expiry field. Expiry can only
+  be set at creation time via the REST API (`expires_at`) or GraphQL
+  (`clusterAgentTokenCreate.expiresAt`), and it is IMMUTABLE once set. So the
+  common path produces a non-compliant token silently, and the failure cannot be
+  corrected in place — it requires issuing a replacement and revoking the
+  original. That combination is exactly what a scanner catches and a policy
+  document does not.
+
+  Scope and honest limits:
+  - This check evaluates ONE cluster per run, identified by `cluster` (the
+    cluster UUID). Buildkite scopes agent tokens to a cluster, and OCEAN's step
+    model cannot feed a cluster list from one step into the URL of the next
+    (see the "cluster" input description). Run once per cluster to cover an org.
+  - The request asks for `per_page=100`. OCEAN's `paginate` flag is currently a
+    stub that returns only the first page, so it is deliberately NOT set here.
+    A cluster holding more than 100 agent tokens would be assessed on the first
+    100 only; that is a very unusual configuration, but it is a real ceiling.
+  - The assertion compares the extracted array length against the total token
+    count so that a token missing the `expires_at` key entirely fails the check
+    rather than silently shrinking the sample.
+  - Zero tokens in the cluster passes vacuously — there is no unexpiring
+    credential to find. This is a correct result, not a skipped one.
+  - DEGRADES, DOES NOT ACCUSE. If the token endpoint is unreachable (wrong
+    cluster identifier, token missing `read_clusters`, revoked token), the
+    reachability assertion fails loudly and the expiry assertion abstains
+    rather than reporting a coverage gap as a non-expiring token. The
+    reachability assertion also requires the body to actually be a JSON array
+    (`$is_array`): an HTTP 200 with a non-array body leaves `expiry_values`
+    unbound while `token_count` (from `$length`) silently binds to 1, so
+    status code alone is not a sufficient guard — see `all_tokens_expire`
+    below.
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L2
+tags: [agents, tokens, credential-lifecycle, buildkite]
+
+references:
+  nist: ["IA-5", "AC-2(3)"]
+  soc2: CC6.1
+  hth: "buildkite:3.1"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_clusters]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug (e.g. "grcengineering")
+    env: BUILDKITE_ORG_SLUG
+    required: true
+  cluster:
+    description: >-
+      Cluster UUID whose agent tokens are assessed. This is the REST UUID, NOT
+      the base64 GraphQL node ID — the REST path rejects the GraphQL ID. List
+      candidates with `GET /v2/organizations/{org}/clusters` and take the `id`
+      field of the cluster you want. This is supplied as an input rather than
+      discovered in a prior step because OCEAN's interpreter can only thread a
+      JSON SCALAR from one step into a later step's URL template; a cluster
+      list extracts as a JSON array, which never enters the template context,
+      and an unresolved `{{cluster}}` would be sent to Buildkite verbatim.
+    env: BUILDKITE_CLUSTER_ID
+    required: true
+
+steps:
+  - id: get_cluster_agent_tokens
+    action: api_call
+    note: >-
+      Root-array REST response. Each element is an agent token object carrying
+      `id`, `description`, `expires_at`, and `allowed_ip_addresses`.
+    request:
+      method: GET
+      url: "https://api.buildkite.com/v2/organizations/{{org}}/clusters/{{cluster}}/tokens?per_page=100"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Accept: application/json
+    extract:
+      token_count: "$length"
+      expiry_values: "$[*].expires_at"
+      body_is_array: "$is_array"
+
+assertions:
+  - id: agent_tokens_api_reachable
+    expr: "get_cluster_agent_tokens_status_code == 200 && body_is_array"
+    severity: medium
+    title: Agent Token Endpoint Reachability
+    pass_message: "Cluster agent token endpoint returned 200 with an array body for cluster {{cluster}}"
+    fail_message: "Cluster agent token endpoint was not reachable for cluster {{cluster}}, or returned 200 with a body that was not the expected array"
+    finding:
+      description: |
+        The cluster agent token endpoint did not return 200, or returned HTTP
+        200 with a body that was not the expected JSON array. Either way, this
+        check has NO EVIDENCE about token expiry. This is an operational or
+        authorization condition, NOT a compliance failure — do not read it as
+        "tokens lack expiry."
+
+        Most likely causes, in order:
+        - 404: `cluster` holds the base64 GraphQL node ID instead of the REST
+          cluster UUID, or the cluster does not exist in this organization.
+        - 403: the API token lacks the `read_clusters` scope.
+        - 401: the API token is invalid, revoked, or expired.
+        - 200 with a non-array body: an error object, an empty object, or
+          another shape a proxy or gateway substituted for the real response.
+
+        Resolve the access or identifier problem and re-run. Until this
+        assertion passes, treat the expiry assertion below as unevaluated
+        rather than as a pass or a fail.
+
+  - id: all_tokens_expire
+    expr: 'get_cluster_agent_tokens_status_code != 200 || !body_is_array || (size(expiry_values) == token_count && expiry_values.all(v, v != null && v != ""))'
+    severity: high
+    title: Agent Token Expiry
+    pass_message: "No non-expiring agent token was observed in cluster {{cluster}} — this row is evidence that every token carries an expiry ONLY if 'Agent Token Endpoint Reachability' above also passed; when the token list could not be read it abstains and asserts nothing about any token. The number of tokens actually read, if any, is the token_count observable in this check's evidence"
+    fail_message: "One or more agent tokens in cluster {{cluster}} never expire"
+    finding:
+      description: |
+        At least one cluster agent token has no `expires_at` value, so it is a
+        permanent credential for registering agents into this cluster. Anyone
+        who obtains it — from a CI log, a stale terraform state file, a
+        decommissioned runner image, or a departed contractor's laptop — can
+        join the fleet and receive jobs, along with whatever secrets and source
+        those jobs are given.
+
+        Tokens minted through the Buildkite web UI always land in this state:
+        the UI has no expiry field, so the default outcome is a token that
+        never expires.
+
+        Expiry is immutable once set, so this cannot be patched in place.
+        Remediate by issuing a replacement token that carries `expires_at`,
+        rolling agents onto it, and then revoking the original.
+
+        This assertion abstains when the token endpoint is unreachable;
+        `agent_tokens_api_reachable` carries that signal instead. Without the
+        `!body_is_array` guard, the two extractions diverge on ANY non-array
+        body — not just a 404, but also an HTTP 200 whose body is an error
+        object, an empty object, or another non-array shape: `$length` falls
+        back to 1 on a non-array body so `token_count` binds to 1 regardless
+        of status code, while `expiry_values` never binds at all, the CEL
+        expression errors, and the interpreter's fail-closed default reports a
+        high-severity non-expiring-token finding the operator cannot act on.
+
+remediation:
+  description: |
+    Agent token expiry cannot be added to an existing token — `expires_at` is
+    set at creation and is immutable thereafter. Remediation is therefore a
+    rotation, not an edit, and must be sequenced so the fleet never loses its
+    ability to register.
+
+    Buildkite enforces a floor of roughly 10 minutes in the future on
+    `expires_at`; a nearer timestamp is rejected. Use an ISO 8601 / RFC 3339
+    UTC value (e.g. `2026-12-31T23:59:59Z`).
+
+    The token value is returned exactly once, at creation, and never again.
+    Route it straight into your secret manager rather than letting it land in
+    shell history or a CI log.
+  steps:
+    - "Create a replacement token with an explicit expires_at (see the cli command below), capturing the returned token value directly into your secret manager."
+    - "Roll the cluster's agents onto the new token, confirming each reconnects and picks up a job before proceeding."
+    - "Revoke the original non-expiring token via GraphQL clusterAgentTokenRevoke (ClusterAgentTokenRevokeInput requires organizationId in addition to the token id — introspect the current input shape before scripting it)."
+    - "Confirm remediation by re-running this check; token_count should be unchanged and every expires_at populated."
+    - "Set a calendar reminder ahead of the new expiry, since an expired token stops agent registration and there is no in-place renewal."
+  cli:
+    command: "curl -sS -X POST -H \"Authorization: Bearer $BUILDKITE_API_TOKEN\" -H 'Content-Type: application/json' -d '{\"description\":\"replacement token with expiry\",\"expires_at\":\"2026-12-31T23:59:59Z\"}' https://api.buildkite.com/v2/organizations/{{BUILDKITE_ORG_SLUG}}/clusters/{{BUILDKITE_CLUSTER_ID}}/tokens"
+  manual:
+    - "NO AUTONOMOUS `remediation.api` BLOCK — deliberate. The fix is a token ROTATION, not an edit: `expires_at` is immutable after creation, so remediating means minting a NEW credential, rolling every agent onto it, and revoking the old one. Two of the three required values (the expiry timestamp and the CIDR allowlist) are operator decisions OCEAN cannot supply, and an `api` block carrying REPLACE_WITH_ placeholders would sit in the `--apply` lane creating real agent tokens with invalid fields. The cli command above is display-only (`ocean harden` never shell-execs a cli action) and is the sanctioned path."

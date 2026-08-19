@@ -6,5 +6,7 @@
 pub mod executor;
 pub mod manifest;
 
-pub use executor::{execute_fleet, fleet_exit_code, FleetExecOptions, FleetResult, TargetResult, TargetStatus};
+pub use executor::{
+    execute_fleet, fleet_exit_code, FleetExecOptions, FleetResult, TargetResult, TargetStatus,
+};
 pub use manifest::FleetManifest;

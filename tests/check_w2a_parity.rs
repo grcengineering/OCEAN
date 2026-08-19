@@ -197,14 +197,18 @@ fn run_observer(
 
 fn op_config(mock_url: &str) -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("OP_EVENTS_TOKEN".to_string(), "op-events-test-token".to_string());
+    cfg.insert(
+        "OP_EVENTS_TOKEN".to_string(),
+        "op-events-test-token".to_string(),
+    );
     cfg.insert("OP_EVENTS_BASE".to_string(), mock_url.to_string());
     cfg
 }
 
 #[test]
 fn op401_pass_all_event_classes_active() {
-    let introspect = serde_json::json!({"features": ["auditevents", "itemusages", "signinattempts"]});
+    let introspect =
+        serde_json::json!({"features": ["auditevents", "itemusages", "signinattempts"]});
     let audit_events = serde_json::json!({
         "items": [{"uuid": "e1", "action": "policy-change", "timestamp": "2026-01-01T00:00:00Z"}],
         "cursor": "c1",
@@ -229,17 +233,27 @@ fn op401_pass_all_event_classes_active() {
     let def = load_check("1password", "OP-4.01-events-api-audit-logging.check.yaml");
 
     let evidence = run_observer(def, &op_config(server.url()));
-    assert_eq!(evidence.len(), 4, "expected 4 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        4,
+        "expected 4 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.control_id, "OP-4.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
 
 #[test]
 fn op401_fail_zero_audit_events() {
-    let introspect = serde_json::json!({"features": ["auditevents", "itemusages", "signinattempts"]});
+    let introspect =
+        serde_json::json!({"features": ["auditevents", "itemusages", "signinattempts"]});
     let audit_events = serde_json::json!({"items": [], "cursor": "c1", "has_more": false});
     let item_usages = serde_json::json!({
         "items": [{"uuid": "i1"}],
@@ -263,19 +277,38 @@ fn op401_fail_zero_audit_events() {
     assert_eq!(evidence.len(), 4);
 
     // Order matches assertion declaration order: token, audit, item, signin.
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "token features assertion");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "audit events assertion should fail");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "token features assertion"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "audit events assertion should fail"
+    );
     assert_eq!(evidence[1].findings[0].severity_id, 4); // high
-    assert_eq!(evidence[2].status_id, StatusId::Effective, "item usage assertion");
-    assert_eq!(evidence[3].status_id, StatusId::Effective, "signin attempts assertion");
+    assert_eq!(
+        evidence[2].status_id,
+        StatusId::Effective,
+        "item usage assertion"
+    );
+    assert_eq!(
+        evidence[3].status_id,
+        StatusId::Effective,
+        "signin attempts assertion"
+    );
 }
 
 #[test]
 fn op401_fail_token_has_no_authorized_features() {
     let introspect = serde_json::json!({"features": []});
-    let audit_events = serde_json::json!({"items": [{"uuid": "e1"}], "cursor": "c1", "has_more": false});
-    let item_usages = serde_json::json!({"items": [{"uuid": "i1"}], "cursor": "c1", "has_more": false});
-    let signin_attempts = serde_json::json!({"items": [{"uuid": "s1"}], "cursor": "c1", "has_more": false});
+    let audit_events =
+        serde_json::json!({"items": [{"uuid": "e1"}], "cursor": "c1", "has_more": false});
+    let item_usages =
+        serde_json::json!({"items": [{"uuid": "i1"}], "cursor": "c1", "has_more": false});
+    let signin_attempts =
+        serde_json::json!({"items": [{"uuid": "s1"}], "cursor": "c1", "has_more": false});
     let server = MockHTTPServer::new(vec![
         (200, introspect.to_string()),
         (200, audit_events.to_string()),
@@ -286,7 +319,11 @@ fn op401_fail_token_has_no_authorized_features() {
 
     let evidence = run_observer(def, &op_config(server.url()));
     assert_eq!(evidence.len(), 4);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "token features assertion should fail");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "token features assertion should fail"
+    );
     assert_eq!(evidence[0].findings[0].severity_id, 3); // medium
     assert_eq!(evidence[1].status_id, StatusId::Effective);
     assert_eq!(evidence[2].status_id, StatusId::Effective);
@@ -366,7 +403,12 @@ fn sg302_pass_results_key_admin_count_within_limit() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "SG-3.02");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -386,8 +428,16 @@ fn sg302_fail_results_key_too_many_admins() {
 
     let evidence = run_observer(def, &sendgrid_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "reachability assertion should pass");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "admin-count assertion should fail with 4 admins");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "reachability assertion should pass"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "admin-count assertion should fail with 4 admins"
+    );
     assert_eq!(evidence[1].findings[0].severity_id, 3); // medium
 }
 
@@ -409,7 +459,12 @@ fn sg302_pass_result_schema_key_variant() {
     let evidence = run_observer(def, &sendgrid_config());
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective via the 'result' schema key, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective via the 'result' schema key, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -425,7 +480,11 @@ fn sg302_fail_neither_envelope_key_present() {
     );
 
     let evidence = run_observer(def, &sendgrid_config());
-    assert_eq!(evidence.len(), 2, "should still produce evidence, not panic, when neither key is present");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "should still produce evidence, not panic, when neither key is present"
+    );
     assert_eq!(evidence[0].status_id, StatusId::Ineffective);
     assert_eq!(evidence[1].status_id, StatusId::Ineffective);
 }
@@ -436,7 +495,10 @@ fn sg302_fail_neither_envelope_key_present() {
 
 fn zoom_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("ZOOM_ACCESS_TOKEN".to_string(), "zoom-test-access-token".to_string());
+    cfg.insert(
+        "ZOOM_ACCESS_TOKEN".to_string(),
+        "zoom-test-access-token".to_string(),
+    );
     cfg
 }
 
@@ -450,7 +512,10 @@ fn zoom201_pass_groups_present_and_locks_reachable() {
     let lock_settings = serde_json::json!({
         "schedule_meeting": {"require_password_for_scheduling_new_meetings": true}
     });
-    let server = MockHTTPServer::new(vec![(200, settings.to_string()), (200, lock_settings.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, settings.to_string()),
+        (200, lock_settings.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "zoom",
         "ZOOM-2.01-meeting-security-settings-audit.check.yaml",
@@ -462,7 +527,12 @@ fn zoom201_pass_groups_present_and_locks_reachable() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "ZOOM-2.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -474,7 +544,10 @@ fn zoom201_fail_missing_group_and_empty_locks() {
         // meeting_security intentionally absent
     });
     let lock_settings = serde_json::json!({});
-    let server = MockHTTPServer::new(vec![(200, settings.to_string()), (200, lock_settings.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, settings.to_string()),
+        (200, lock_settings.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "zoom",
         "ZOOM-2.01-meeting-security-settings-audit.check.yaml",
@@ -484,8 +557,16 @@ fn zoom201_fail_missing_group_and_empty_locks() {
 
     let evidence = run_observer(def, &zoom_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "missing meeting_security group should fail");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "empty lock_settings should fail");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "missing meeting_security group should fail"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "empty lock_settings should fail"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -500,7 +581,10 @@ fn zoom402_pass_recording_present_and_locked() {
     let lock_settings = serde_json::json!({
         "recording": {"cloud_recording": true}
     });
-    let server = MockHTTPServer::new(vec![(200, settings.to_string()), (200, lock_settings.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, settings.to_string()),
+        (200, lock_settings.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "zoom",
         "ZOOM-4.02-recording-security-settings-audit.check.yaml",
@@ -512,7 +596,12 @@ fn zoom402_pass_recording_present_and_locked() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "ZOOM-4.02");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -520,7 +609,10 @@ fn zoom402_pass_recording_present_and_locked() {
 fn zoom402_fail_recording_not_locked() {
     let settings = serde_json::json!({"recording": {"cloud_recording": true}});
     let lock_settings = serde_json::json!({"in_meeting": {"waiting_room": true}});
-    let server = MockHTTPServer::new(vec![(200, settings.to_string()), (200, lock_settings.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, settings.to_string()),
+        (200, lock_settings.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "zoom",
         "ZOOM-4.02-recording-security-settings-audit.check.yaml",
@@ -530,8 +622,16 @@ fn zoom402_fail_recording_not_locked() {
 
     let evidence = run_observer(def, &zoom_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "recording group is present");
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "recording lock is absent");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "recording group is present"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "recording lock is absent"
+    );
     assert_eq!(evidence[1].findings[0].severity_id, 4); // high
 }
 
@@ -539,7 +639,10 @@ fn zoom402_fail_recording_not_locked() {
 fn zoom402_fail_recording_group_absent() {
     let settings = serde_json::json!({"schedule_meeting": {}});
     let lock_settings = serde_json::json!({"recording": {"cloud_recording": true}});
-    let server = MockHTTPServer::new(vec![(200, settings.to_string()), (200, lock_settings.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, settings.to_string()),
+        (200, lock_settings.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "zoom",
         "ZOOM-4.02-recording-security-settings-audit.check.yaml",
@@ -549,8 +652,16 @@ fn zoom402_fail_recording_group_absent() {
 
     let evidence = run_observer(def, &zoom_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "recording group is absent from settings");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "recording lock is present");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "recording group is absent from settings"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "recording lock is present"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -564,7 +675,10 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
         .join(dir_name);
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one {dir_name} check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one {dir_name} check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
     for expected in expected_ids {
@@ -572,7 +686,11 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
     }
 
     for def in &defs {
-        assert_eq!(def.source, source, "{}: source should be '{source}'", def.id);
+        assert_eq!(
+            def.source, source,
+            "{}: source should be '{source}'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for {dir_name} checks",
@@ -584,7 +702,11 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
         assert!(!def.steps.is_empty(), "{}: check has no steps", def.id);
     }
 }

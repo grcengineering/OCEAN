@@ -223,7 +223,15 @@ def main() -> int:
     unmapped = {k: v for k, v in checks.items() if k.startswith("_unmapped/") or k == "aws"}
     manifest = {
         "generated_by": "scripts/hth_parity.py",
-        "hth_repo": str(args.hth),
+        # Recorded relative to this repo when the HTH checkout is a sibling (the
+        # normal layout), so a machine-generated file committed to a public repo
+        # does not carry a contributor's absolute home path. Falls back to the
+        # directory name for any other layout.
+        "hth_repo": (
+            f"../{args.hth.resolve().name}"
+            if args.hth.resolve().parent == REPO.resolve().parent
+            else args.hth.resolve().name
+        ),
         "totals": totals,
         "vendors": vendors,
         "ocean_only": unmapped,

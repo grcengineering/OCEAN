@@ -1,0 +1,171 @@
+id: ONA-1.01b
+name: At Least One Email Domain Is Verified
+description: |
+  Verifies that the organization has at least one domain in state
+  `DOMAIN_VERIFICATION_STATE_VERIFIED`, read from
+  `gitpod.v1.OrganizationService/ListDomainVerifications`.
+
+  Why this is its own check. Domain verification is a precondition for federated
+  sign-in, not a decoration: Ona's "Sign in with SSO" does not appear on the login
+  screen until a domain is verified. An organization can hold an ACTIVE OIDC
+  configuration (which ONA-1.01 would pass) that no member can actually reach,
+  because the button that routes to it was never rendered. Splitting the two
+  means the failing half is named precisely instead of a single combined check
+  reporting "SSO is broken" without saying which half.
+
+  Verification also anchors ownership. `DomainVerificationState` is
+  `UNSPECIFIED | PENDING | VERIFIED`, and reaching VERIFIED requires publishing a
+  DNS TXT record — proof the organization controls the domain it is claiming
+  identities for. A PENDING entry is a started, unfinished process: it is not
+  counted here, deliberately, because a half-finished verification grants nothing.
+
+  Pagination ceiling. Only the FIRST page is read — OCEAN's `paginate: true`
+  follows GitHub-style `Link` headers, which Connect RPC does not emit — with
+  `pageSize` at the documented maximum of 100.
+
+  Host, response shape, and abstention. The request goes to `app.gitpod.io`
+  because the documented `app.ona.com` base 308-redirects and clients drop the
+  `Authorization` header on the hop. The response is a JSON OBJECT with
+  `domainVerifications` nested under it, and Protobuf-JSON OMITS empty repeated
+  fields — so an organization with no domains returns an object with no
+  `domainVerifications` key. The assertion tests `has(body_root.domainVerifications)`
+  before dereferencing, so absence is a clean FAIL (there is genuinely no verified
+  domain) rather than a CEL error. An unreadable response ABSTAINS via the
+  reachability assertion, which is the discriminator between "we read zero" and
+  "we read nothing".
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L1
+tags: [identity, sso, domain-verification, pagination-ceiling]
+
+references:
+  cis: ["6.7", "12.5"]
+  nist: ["IA-2", "IA-8"]
+  soc2: CC6.1
+  iso27001: A.9.2.1
+  hth: "ona:1.1"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: list_domain_verifications
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. `pageSize` is the documented maximum (100); only the
+      first page is read because Connect emits no Link header for OCEAN's
+      paginator to follow.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/ListDomainVerifications"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+        pagination:
+          pageSize: 100
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` cannot itself
+      # discriminate shape: on a non-object receiver cel 0.14 RAISES ("No such
+      # overload"), which the fail-closed default turns into an accusation,
+      # while it answers FALSE for a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      domain_verifications: "$.domainVerifications"
+
+assertions:
+  - id: domain_verifications_readable
+    expr: "list_domain_verifications_status_code == 200 && body_root != null && body_is_object"
+    severity: info
+    title: Domain Verifications Readable
+    pass_message: "ListDomainVerifications answered with a response object for organization '{{org}}'; the verification verdict below was actually evaluated"
+    fail_message: "ListDomainVerifications did not return a readable response for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return a readable ListDomainVerifications response, so
+        no domain was observed. This is a collection failure, not a compliance
+        failure.
+        Likely causes: domain verification accompanies SSO, which is
+        Enterprise-gated, and Connect answers an Enterprise-only feature with HTTP
+        400 `failed_precondition`; ONA_ORGANIZATION_ID is not an organization this
+        token can read; the token is expired, revoked, or issued from a different
+        management-plane domain; or the principal lacks the required permission.
+
+  - id: verified_domain_exists
+    expr: "list_domain_verifications_status_code != 200 || body_root == null || !body_is_object || (has(body_root.domainVerifications) && size(domain_verifications.filter(d, has(d.state) && d.state == 'DOMAIN_VERIFICATION_STATE_VERIFIED')) > 0)"
+    severity: medium
+    title: Email Domain Verification
+    pass_message: "No unverified-domain gap was observed for '{{org}}' — this row is evidence that an email domain is VERIFIED ONLY if 'Domain Verifications Readable' above also passed; when the list could not be read it abstains and asserts nothing about verification"
+    fail_message: "No email domain is VERIFIED for '{{org}}' — 'Sign in with SSO' does not appear on the login screen until a domain is verified, so any SSO configuration is unreachable"
+    finding:
+      description: |
+        The organization has no domain in `DOMAIN_VERIFICATION_STATE_VERIFIED`.
+        Two consequences follow. Members cannot reach federated sign-in at all —
+        Ona does not render "Sign in with SSO" until a domain is verified — so an
+        otherwise-correct OIDC configuration sits unusable. And the organization
+        has not proven it controls the domain whose identities it is claiming,
+        which is what publishing the DNS TXT record demonstrates.
+        A PENDING entry does not satisfy this check. Verification is a two-step
+        process (create, then publish the record and verify), and a started but
+        unfinished one grants nothing, so only VERIFIED is counted.
+        Pair with ONA-1.01, which asserts that an ACTIVE non-builtin SSO
+        configuration exists. Both halves are required for federated sign-in to
+        work; this check names which half is missing.
+        Read ceiling: only the first page of up to 100 domain verifications was
+        read, because Connect emits no Link header for OCEAN's paginator to follow.
+        This finding cannot be raised by an unreadable response — the guard chain
+        short-circuits to abstain on non-200, a null body, or an array-shaped body,
+        which is where an Enterprise-gated 400 lands.
+
+remediation:
+  description: |
+    Create the domain verification, publish the DNS TXT record it returns, then
+    call VerifyDomain. The state transitions PENDING -> VERIFIED only after the
+    record resolves publicly.
+  steps:
+    - "Navigate to Settings -> Login & Identity -> Login Configuration"
+    - "Under 'Login domains', use 'Add domain' and enter the email domain your members sign in with"
+    - "Publish the DNS TXT record Ona shows, at the name it specifies, in that domain's authoritative zone"
+    - "Wait for propagation, then trigger verification and confirm the state reads VERIFIED"
+    - "Confirm 'Sign in with SSO' now appears on the login screen"
+    - "Re-run this check and confirm a DOMAIN_VERIFICATION_STATE_VERIFIED entry is present"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/CreateDomainVerification"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      domain: "example.com"
+  manual:
+    - "Replace `example.com` above with your real domain. The response carries the `verificationToken` to publish; after the record resolves, call `OrganizationService/VerifyDomain` with the `domainVerificationId`."
+    - "Ona ships no first-party CLI verb for domain verification; `ona organization security-policy ...` covers SecurityPolicy objects only."

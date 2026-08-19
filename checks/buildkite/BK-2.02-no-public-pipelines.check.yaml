@@ -1,0 +1,156 @@
+id: BK-2.02
+name: No Pipelines Set to Public Visibility
+description: |
+  Enumerates every pipeline in the Buildkite organization via the REST API
+  (GET /v2/organizations/{org}/pipelines) and fails if any pipeline carries
+  public visibility. A public pipeline exposes its build logs, job output,
+  step configuration, and build metadata to anyone on the internet without
+  authentication.
+
+  Why this check exists rather than relying on Terraform: in the Buildkite
+  Terraform provider (v1.38.0) `buildkite_pipeline.visibility` is
+  optional+computed. When the attribute is left unset, Terraform adopts
+  whatever the server currently reports instead of correcting it — so a
+  console user flipping a pipeline from PRIVATE to PUBLIC produces no drift,
+  no plan diff, and survives every subsequent `terraform apply`. Detection at
+  the API is the only control that catches that flip.
+
+  Scope and degradation notes:
+  - The check reads the org-wide pipeline list. If the token lacks the
+    `read_pipelines` scope, or the org slug is wrong, the request will not
+    return 200 and the reachability assertion reports that explicitly rather
+    than silently passing.
+  - The reachability assertion also requires the response body to actually be
+    a JSON array (`$is_array`), not merely a 200 status. A 200 with a
+    non-array body — an error object, an empty object, a proxy's HTML error
+    page parsed as a JSON string — leaves `pipeline_visibility` unbound rather
+    than defaulted, so guarding on status code alone is not sufficient; see
+    the `no_public_pipelines` assertion below for why this matters.
+  - Visibility is compared case-insensitively against both spellings
+    ("public" as returned by REST, "PUBLIC" as used by GraphQL and Terraform)
+    so a representation change in either surface cannot produce a false pass.
+  - An organization with zero pipelines passes (there is nothing exposed).
+author: grc-engineering
+version: "1.0"
+source: buildkite
+profile: L1
+tags: [pipelines, visibility, public-exposure, data-leakage, drift]
+
+references:
+  cis: "5.4"
+  nist: ["AC-6", "AC-3"]
+  soc2: CC6.1
+  iso27001: A.9.4.1
+  hth: "buildkite:2.2"
+
+credentials:
+  BUILDKITE_API_TOKEN:
+    type: api_token
+    scopes: [read_pipelines]
+    required: true
+
+inputs:
+  org:
+    description: Buildkite organization slug
+    env: BUILDKITE_ORG_SLUG
+    required: true
+
+steps:
+  - id: list_pipelines
+    action: api_call
+    note: |
+      Root-array response. `$[*].field` extraction is only supported at the
+      root array by the check interpreter, which this endpoint satisfies.
+      per_page is set to the API maximum because Link-header pagination is
+      not yet implemented in the interpreter — organizations with more than
+      100 pipelines will only have the first page evaluated.
+    request:
+      method: GET
+      url: "https://api.buildkite.com/v2/organizations/{{org}}/pipelines?per_page=100"
+      headers:
+        Authorization: "Bearer {{BUILDKITE_API_TOKEN}}"
+        Accept: application/json
+      paginate: true
+    extract:
+      pipeline_visibility: "$[*].visibility"
+      pipeline_count: "$length"
+      body_is_array: "$is_array"
+
+assertions:
+  - id: pipelines_api_reachable
+    expr: "list_pipelines_status_code == 200 && body_is_array"
+    severity: medium
+    title: Pipeline Inventory Reachable
+    pass_message: "GET /v2/organizations/{{org}}/pipelines returned 200 with an array body — pipeline visibility is auditable"
+    fail_message: "GET /v2/organizations/{{org}}/pipelines did not return 200, or returned 200 with a body that was not the expected array — pipeline visibility could not be audited"
+    finding:
+      description: |
+        The Buildkite pipelines endpoint did not return a successful
+        response, or returned HTTP 200 with a body that was not the expected
+        JSON array (an error object, an empty object, or another non-array
+        shape a proxy or gateway can substitute for the real response). Either
+        way, pipeline visibility cannot be verified. This is an
+        audit-coverage failure, not proof of a public pipeline. Confirm the
+        organization slug is correct and that the API access token carries
+        the `read_pipelines` scope, then re-run. Until this returns 200 with
+        an array body the visibility assertion below is vacuous by design and
+        must not be read as a pass.
+
+  - id: no_public_pipelines
+    expr: "list_pipelines_status_code != 200 || !body_is_array || size(pipeline_visibility.filter(v, v == \"public\" || v == \"PUBLIC\")) == 0"
+    severity: high
+    title: No Public Pipelines
+    pass_message: "No public-visibility violation was observed among the pipelines read for '{{org}}' — this row is evidence that no pipeline is public ONLY if 'Pipeline Inventory Reachable' above also passed; when the inventory could not be read it abstains and asserts nothing about any pipeline"
+    fail_message: "One or more pipelines are set to public visibility and are readable without authentication"
+    finding:
+      description: |
+        At least one pipeline is set to public visibility. Public pipelines
+        expose build logs, job command output, step configuration, and build
+        metadata to anyone on the internet with no authentication — build
+        logs routinely leak internal hostnames, artifact paths, dependency
+        inventories, and occasionally credentials echoed by a build step.
+
+        This is also the highest-risk configuration to leave undetected,
+        because Terraform will not correct it. `buildkite_pipeline.visibility`
+        is optional+computed in provider v1.38.0: if the attribute is not
+        explicitly declared, a console-side flip to PUBLIC is adopted as the
+        new desired state and produces no plan diff on any future apply. A
+        pipeline made public in the UI stays public through every deploy.
+
+        Set the pipeline back to private, then pin `visibility = "PRIVATE"`
+        explicitly in Terraform so the flip becomes drift the next plan
+        catches. Note that the organization-wide "Change Pipeline Visibility"
+        toggle (Settings -> Security -> Pipelines) governs who is able to
+        make the flip at all, and Buildkite exposes no write interface for
+        it — it must be verified in the console.
+
+        This assertion abstains when the pipelines endpoint is unreachable;
+        `pipelines_api_reachable` carries that signal instead. Without the
+        `!body_is_array` guard, a 404/403 OR an HTTP 200 with a non-array body
+        both leave `pipeline_visibility` unbound, the CEL expression errors,
+        and the interpreter's fail-closed default reports a high-severity
+        public-pipeline finding the operator cannot act on. `$length` does not
+        rescue this case either — it silently falls back to 1 for any
+        non-array body, so a count-based guard alone would not detect it.
+
+remediation:
+  description: |
+    Return every flagged pipeline to private visibility, then pin visibility
+    explicitly in Terraform so a future console flip registers as drift
+    instead of being silently adopted. Separately, restrict who may change
+    pipeline visibility at the organization level.
+  steps:
+    - "Open buildkite.com/organizations/{org}/pipelines and identify each pipeline reported by this check"
+    - "For each one, go to Pipeline Settings -> General and set Visibility to Private"
+    - "Go to Settings -> Security -> Pipelines and review the 'Change Pipeline Visibility' toggle so ordinary members cannot make a pipeline public again"
+    - "Declare visibility explicitly in Terraform (see below) so the attribute stops being computed-from-server"
+  manual:
+    - "The six organization-wide pipeline toggles (Create/Delete Pipelines, Change Pipeline Visibility, Manage Notification Services, Manage Agent Registration Tokens, Stop Agents) have no write API — REST /organizations is GET-only and no GraphQL mutation sets them. They must be verified in the console."
+    - "Re-run this check on a schedule: because the Terraform attribute is optional+computed, periodic detection is the only durable control against a UI-side visibility flip."
+    - "If a pipeline is deliberately public (an open-source project), record the exception and confirm it runs on an agent pool holding no production credentials."
+  terraform:
+    resources:
+      - type: buildkite_pipeline
+        name: example
+        attributes:
+          visibility: "PRIVATE"

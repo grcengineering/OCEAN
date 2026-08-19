@@ -4,7 +4,9 @@ pub mod definition;
 pub mod evaluator;
 pub mod framework;
 
-pub use composite::{evaluate_composite, evaluate_composite_with_components, ComponentResult, CrossCheckResult};
+pub use composite::{
+    evaluate_composite, evaluate_composite_with_components, ComponentResult, CrossCheckResult,
+};
 pub use definition::{
     ComponentSpec, Control, ControlStatus, CrossCheck, CrossCheckAssertion, EvaluationLogic,
     ExportSpec, FrameworkMapping, ModuleRef, UptimeResult,

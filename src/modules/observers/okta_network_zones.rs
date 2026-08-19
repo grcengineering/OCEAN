@@ -125,18 +125,9 @@ impl Observer for NetworkZonesObserver {
         let mut observables: Vec<Observable> = Vec::new();
 
         for zone in zones {
-            let zone_type = zone
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let usage = zone
-                .get("usage")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let zone_id = zone
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let zone_type = zone.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let usage = zone.get("usage").and_then(|v| v.as_str()).unwrap_or("");
+            let zone_id = zone.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
 
             observables.push(Observable {
                 obs_type: "resource".to_string(),
@@ -170,10 +161,9 @@ impl Observer for NetworkZonesObserver {
         if !has_policy_zone {
             findings.push(Finding {
                 title: "No IP Allowlist Policy Zone Configured".to_string(),
-                description:
-                    "OKTA-2.1 requires at least one POLICY-usage network zone to enforce \
+                description: "OKTA-2.1 requires at least one POLICY-usage network zone to enforce \
                      IP allowlisting. No such zone was found."
-                        .to_string(),
+                    .to_string(),
                 severity_id: 3,
             });
         }

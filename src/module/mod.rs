@@ -1,14 +1,14 @@
 // Module system — pluggable observers and testers.
 
-pub mod observer;
 pub mod executor;
+pub mod observer;
 pub mod registry;
 pub mod safety;
 pub mod tester;
 pub mod validation;
 
-pub use observer::Observer;
 pub use executor::{Executor, TestConfig};
+pub use observer::Observer;
 pub use registry::{ModuleInfo, Registry};
 pub use safety::{
     AuthorizationLevel, Authorizer, AutoAuthorizer, ConfirmAuthorizer, EnvironmentScope,

@@ -186,10 +186,7 @@ impl Observer for MfaPolicyObserver {
                     .and_then(|a| a.as_array())
                     .map(|auths| {
                         auths.iter().any(|auth| {
-                            let key = auth
-                                .get("key")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
+                            let key = auth.get("key").and_then(|v| v.as_str()).unwrap_or("");
                             // Only count non-password authenticators as MFA factors
                             key != "okta_password"
                                 && auth
@@ -222,12 +219,7 @@ impl Observer for MfaPolicyObserver {
 
         let first_active = policies
             .iter()
-            .find(|p| {
-                p.get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "ACTIVE"
-            });
+            .find(|p| p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE");
 
         if let Some(active_policy) = first_active {
             first_active_policy_name = active_policy

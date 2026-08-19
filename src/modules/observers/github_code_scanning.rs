@@ -82,7 +82,7 @@ impl Observer for CodeScanningAlertsObserver {
             "/repos/{}/{}/code-scanning/alerts?state=open&severity=critical&per_page=1",
             owner, repo
         );
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -124,10 +124,7 @@ impl Observer for CodeScanningAlertsObserver {
                     },
                 ],
                 status_id: StatusId::Unknown,
-                status: format!(
-                    "Code scanning not configured on {}/{}",
-                    owner, repo
-                ),
+                status: format!("Code scanning not configured on {}/{}", owner, repo),
                 raw_data: body,
                 findings: vec![Finding {
                     title: "Code Scanning Not Configured".to_string(),
@@ -274,7 +271,9 @@ mod tests {
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
         assert_eq!(ev.findings[0].title, "Code Scanning Not Configured");
-        assert!(ev.findings[0].description.contains("Code scanning not configured"));
+        assert!(ev.findings[0]
+            .description
+            .contains("Code scanning not configured"));
     }
 
     #[test]

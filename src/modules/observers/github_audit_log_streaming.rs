@@ -72,7 +72,7 @@ impl Observer for AuditLogStreamingObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/audit-log/streams", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -142,7 +142,10 @@ impl Observer for AuditLogStreamingObserver {
                 format!("Audit log streaming is active for organization {}", org)
             }
             StatusId::Ineffective => {
-                format!("Audit log streaming is not configured for organization {}", org)
+                format!(
+                    "Audit log streaming is not configured for organization {}",
+                    org
+                )
             }
             _ => format!(
                 "Audit log streaming check unavailable for organization {} (GHEC required)",
@@ -204,10 +207,7 @@ mod tests {
 
     #[test]
     fn one_stream_is_effective() {
-        let srv = mock_server(
-            200,
-            r#"[{"id":1,"stream_type":"S3","enabled":true}]"#,
-        );
+        let srv = mock_server(200, r#"[{"id":1,"stream_type":"S3","enabled":true}]"#);
         let ev = &AuditLogStreamingObserver
             .observe(&test_config_with_org(&srv))
             .unwrap()[0];

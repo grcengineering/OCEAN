@@ -21,7 +21,7 @@ fn render_main(frame: &mut Frame, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // header
-            Constraint::Min(5),   // table
+            Constraint::Min(5),    // table
             Constraint::Length(3), // footer
         ])
         .split(area);
@@ -34,7 +34,11 @@ fn render_main(frame: &mut Frame, app: &App) {
         app.controls.len(),
     );
     let header = Paragraph::new(header_text)
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .block(Block::default().borders(Borders::BOTTOM));
     frame.render_widget(header, chunks[0]);
 
@@ -111,8 +115,8 @@ fn render_detail(frame: &mut Frame, app: &App, idx: usize) {
     let row = match app.controls.get(idx) {
         Some(r) => r,
         None => {
-            let msg = Paragraph::new("No control data available.")
-                .style(Style::default().fg(Color::Red));
+            let msg =
+                Paragraph::new("No control data available.").style(Style::default().fg(Color::Red));
             frame.render_widget(msg, area);
             return;
         }
@@ -123,7 +127,7 @@ fn render_detail(frame: &mut Frame, app: &App, idx: usize) {
         .constraints([
             Constraint::Length(3), // header
             Constraint::Length(5), // status summary
-            Constraint::Min(8),   // evidence + transcript
+            Constraint::Min(8),    // evidence + transcript
             Constraint::Length(3), // footer
         ])
         .split(area);
@@ -131,7 +135,11 @@ fn render_detail(frame: &mut Frame, app: &App, idx: usize) {
     // Header
     let header_text = format!(" {}  —  {}", row.control.id, row.control.name);
     let header = Paragraph::new(header_text)
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .block(Block::default().borders(Borders::BOTTOM));
     frame.render_widget(header, chunks[0]);
 
@@ -152,7 +160,9 @@ fn render_detail(frame: &mut Frame, app: &App, idx: usize) {
             Span::raw("  Status: "),
             Span::styled(
                 row.status_text().to_uppercase(),
-                Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw("    Confidence: "),
             Span::raw(row.confidence_text()),
@@ -167,12 +177,10 @@ fn render_detail(frame: &mut Frame, app: &App, idx: usize) {
 
     // Evidence timeline + transcript
     let mut lines: Vec<Line> = Vec::new();
-    lines.push(Line::from(
-        Span::styled(
-            "  Evidence Timeline:",
-            Style::default().add_modifier(Modifier::BOLD),
-        ),
-    ));
+    lines.push(Line::from(Span::styled(
+        "  Evidence Timeline:",
+        Style::default().add_modifier(Modifier::BOLD),
+    )));
 
     if row.evidence.is_empty() {
         lines.push(Line::from("    No evidence records found."));
@@ -200,19 +208,14 @@ fn render_detail(frame: &mut Frame, app: &App, idx: usize) {
     }
 
     // Test transcripts
-    let has_transcript = row
-        .evidence
-        .iter()
-        .any(|e| e.test_transcript.is_some());
+    let has_transcript = row.evidence.iter().any(|e| e.test_transcript.is_some());
 
     if has_transcript {
         lines.push(Line::from(""));
-        lines.push(Line::from(
-            Span::styled(
-                "  Test Transcripts:",
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ));
+        lines.push(Line::from(Span::styled(
+            "  Test Transcripts:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
         for ev in &row.evidence {
             if let Some(ref transcript) = ev.test_transcript {
                 lines.push(Line::from(format!(
@@ -245,10 +248,7 @@ fn render_detail(frame: &mut Frame, app: &App, idx: usize) {
     }
 
     // Apply scroll offset
-    let visible_lines: Vec<Line> = lines
-        .into_iter()
-        .skip(app.scroll_offset)
-        .collect();
+    let visible_lines: Vec<Line> = lines.into_iter().skip(app.scroll_offset).collect();
 
     let evidence_section = Paragraph::new(visible_lines)
         .block(Block::default().borders(Borders::TOP).title(" Evidence "));

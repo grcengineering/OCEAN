@@ -5,12 +5,14 @@ use anyhow::Result;
 use chrono::Utc;
 use uuid::Uuid;
 
-use ocean::evidence::{ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId};
+use ocean::evidence::{
+    ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+};
 use ocean::module::{CredentialReq, Module, Observer, Registry};
+use ocean::scheduler::runner::execute_schedule;
 use ocean::scheduler::{
     Schedule, MODULE_STATUS_FAILURE, MODULE_STATUS_SUCCESS, RUN_STATUS_FAILURE, RUN_STATUS_SUCCESS,
 };
-use ocean::scheduler::runner::execute_schedule;
 use ocean::storage::SqliteStore;
 
 // ---------------------------------------------------------------------------

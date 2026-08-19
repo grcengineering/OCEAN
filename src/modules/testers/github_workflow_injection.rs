@@ -10,7 +10,9 @@ use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
     TranscriptRecorder,
 };
-use crate::module::{tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification};
+use crate::module::{
+    tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
+};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
 
 // ─── WorkflowInjectionTester ──────────────────────────────────────────────────
@@ -116,11 +118,7 @@ impl Tester for WorkflowInjectionTester {
         let safety_class = "safe".to_string();
 
         let workflows_path = format!("/repos/{}/{}/contents/.github/workflows", owner, repo);
-        let endpoint = format!(
-            "{}{}",
-            base_url.trim_end_matches('/'),
-            &workflows_path
-        );
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), workflows_path);
 
         recorder.record_action(
             "list workflow files in .github/workflows via GitHub API",
@@ -248,7 +246,7 @@ impl Tester for WorkflowInjectionTester {
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             // GitHub wraps base64 in newlines — strip them before decoding.
-            let cleaned = raw_content.replace('\n', "").replace('\r', "");
+            let cleaned = raw_content.replace(['\n', '\r'], "");
             let decoded = BASE64.decode(cleaned.as_bytes()).unwrap_or_default();
             let content = String::from_utf8_lossy(&decoded);
 
@@ -259,10 +257,7 @@ impl Tester for WorkflowInjectionTester {
                 );
                 injection_risks.push(filename.clone());
             } else {
-                recorder.record_observation(
-                    format!("no injection pattern in {}", filename),
-                    true,
-                );
+                recorder.record_observation(format!("no injection pattern in {}", filename), true);
             }
         }
 
@@ -435,10 +430,7 @@ mod tests {
 
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["workflows_checked"].as_u64(), Some(1));
-        assert_eq!(
-            ev.raw_data["injection_risks"].as_array().unwrap().len(),
-            0
-        );
+        assert_eq!(ev.raw_data["injection_risks"].as_array().unwrap().len(), 0);
         assert_eq!(ev.control_id, "GH-3.8");
         assert_eq!(ev.confidence_level, ConfidenceLevel::ActiveVerification);
     }

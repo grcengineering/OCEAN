@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
+use std::str::FromStr;
 
 use anyhow::{Context, Result};
 
@@ -25,6 +26,27 @@ const CREDENTIAL_ENV_VARS: &[&str] = &[
     "AWS_SESSION_TOKEN",
     "AZURE_CLIENT_SECRET",
     "GCP_SERVICE_ACCOUNT_KEY",
+    // Buildkite issues a single API access token that authenticates BOTH the REST
+    // API and GraphQL. BUILDKITE_API_TOKEN is on the fleet credential allowlist
+    // (`fleet::manifest::allowed_credentials`) and is substituted into remediation
+    // headers, so it must be on the masking plane: a credential that is allowed but
+    // not masked can reach stdout, the dry-run JSON, and ~/.ocean/audit.log
+    // verbatim. BUILDKITE_API_KEY is kept here (masking only, not on the fleet
+    // allowlist) because operators commonly export that spelling for the same
+    // token, and `env_as_config()` reads the whole environment.
+    "BUILDKITE_API_TOKEN",
+    "BUILDKITE_API_KEY",
+    // Ona (formerly Gitpod) authenticates every Connect RPC method with a single
+    // bearer token. ONA_TOKEN is on the fleet credential allowlist
+    // (`fleet::manifest::allowed_credentials`) and is substituted into the
+    // remediation headers on all 18 ONA-* checks, so it must be on the masking
+    // plane: a credential that is allowed but not masked can reach stdout, the
+    // dry-run JSON, and ~/.ocean/audit.log verbatim. ONA_API_KEY is kept here
+    // (masking only, not on the fleet allowlist) because the vendor's own cURL
+    // examples export that spelling for the same token, and `env_as_config()`
+    // reads the whole environment.
+    "ONA_TOKEN",
+    "ONA_API_KEY",
 ];
 
 /// Scrubs known credential values from a string, replacing them with `***REDACTED***`.
@@ -61,12 +83,14 @@ fn validate_remediation_url(url: &str) -> Result<()> {
         || is_okta_url(url)
         || is_aws_url(url)
         || is_azure_url(url)
+        || is_buildkite_url(url)
+        || is_ona_url(url)
     {
         Ok(())
     } else {
         Err(anyhow::anyhow!(
             "remediation URL rejected by allowlist: {url}\n\
-             Allowed: api.github.com, *.okta.com, AWS, Azure endpoints.\n\
+             Allowed: api.github.com, *.okta.com, AWS, Azure, Buildkite, Ona endpoints.\n\
              If this is a legitimate endpoint, add it to ALLOWED_URL_PREFIXES in harden/mod.rs"
         ))
     }
@@ -99,6 +123,39 @@ fn is_azure_url(raw: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Buildkite's control plane is SaaS-only: `api.buildkite.com` (REST v2) and
+/// `graphql.buildkite.com` (GraphQL v1). There is no self-hosted Buildkite
+/// control plane, so the host set is fixed and does not need to be templated.
+///
+/// Host-parsed, never `starts_with`, so a path-embedded `buildkite.com` on a
+/// hostile host (`https://evil.example.com/api.buildkite.com/steal`) is rejected
+/// — the SEC-H014 / CISO F-001 bypass class.
+fn is_buildkite_url(raw: &str) -> bool {
+    https_host(raw)
+        .map(|host| host == "buildkite.com" || host.ends_with(".buildkite.com"))
+        .unwrap_or(false)
+}
+
+/// Ona's (formerly Gitpod's) control plane is SaaS-only. The documented base
+/// `https://app.ona.com/api` 308-redirects to `app.gitpod.io`, and HTTP clients
+/// drop the `Authorization` header across that cross-origin hop, so every shipped
+/// ONA-* check and remediation addresses `app.gitpod.io` directly. Both hosts are
+/// accepted because an operator may legitimately paste either.
+///
+/// Host-parsed, never `starts_with`, so a path-embedded `app.ona.com` on a hostile
+/// host (`https://evil.example.com/app.ona.com/steal`) is rejected — the same
+/// SEC-H014 / CISO F-001 bypass class the Buildkite predicate above guards.
+///
+/// Organizations on a custom management-plane domain are deliberately NOT
+/// wildcarded in: a per-tenant host would have to be templated from an env var,
+/// and an allowlist that accepts an arbitrary operator-supplied host is not an
+/// allowlist. Such an organization edits the check URLs, which is visible.
+fn is_ona_url(raw: &str) -> bool {
+    https_host(raw)
+        .map(|host| host == "app.ona.com" || host == "app.gitpod.io")
+        .unwrap_or(false)
+}
+
 // ─── Security: Template variable allowlist (TH-2d) ──────────────────────────
 
 const ALLOWED_TEMPLATE_VARS: &[&str] = &[
@@ -116,6 +173,31 @@ const ALLOWED_TEMPLATE_VARS: &[&str] = &[
     "org_name",
     "domain",
     "tenant",
+    // Buildkite. `env_as_config()` is `std::env::vars()`, so the resolvable names
+    // are ENV VAR names — these are exactly the names the buildkite checks already
+    // declare under `inputs[*].env` and that `fleet::manifest::allowed_credentials`
+    // blesses, so a remediation template and a check input read the same variable.
+    // BUILDKITE_API_TOKEN is a credential: it is on CREDENTIAL_ENV_VARS above, so
+    // `resolve_vars_masked` leaves it unresolved for display and `CredentialMask`
+    // scrubs it from any output path that does resolve it.
+    "BUILDKITE_API_TOKEN",
+    "BUILDKITE_ORG_SLUG",
+    "BUILDKITE_CLUSTER_ID",
+    "BUILDKITE_GRAPHQL_ID",
+    // Ona. `env_as_config()` is `std::env::vars()`, so the resolvable names are ENV
+    // VAR names — these are exactly the names the ONA-* checks declare under
+    // `credentials` and `inputs[*].env` and that `fleet::manifest::allowed_credentials`
+    // blesses, so a remediation template and a check input read the same variable.
+    // ONA_TOKEN is a credential: it is on CREDENTIAL_ENV_VARS above, so
+    // `resolve_vars_masked` leaves it unresolved for display and `CredentialMask`
+    // scrubs it from any output path that does resolve it.
+    "ONA_TOKEN",
+    "ONA_ORGANIZATION_ID",
+    // Referenced by ONA-1.02b and ONA-2.01 remediation bodies as the id of an
+    // object the operator must supply; not credentials and not on the fleet
+    // allowlist, because no check reads them as inputs.
+    "ONA_SCIM_CONFIGURATION_ID",
+    "ONA_SECURITY_POLICY_ID",
 ];
 
 // ─── Security: Audit logging (TH-2e) ────────────────────────────────────────
@@ -190,8 +272,10 @@ pub enum RemediationMode {
     All,
 }
 
-impl RemediationMode {
-    pub fn from_str(s: &str) -> Result<Self> {
+impl FromStr for RemediationMode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "api" => Ok(Self::Api),
             "terraform" | "tf" => Ok(Self::Terraform),
@@ -202,7 +286,9 @@ impl RemediationMode {
             )),
         }
     }
+}
 
+impl RemediationMode {
     fn includes_api(&self) -> bool {
         matches!(self, Self::Api | Self::All)
     }
@@ -228,11 +314,20 @@ pub struct RemediationPlan {
     pub terraform_resources: Vec<serde_json::Value>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ApiAction {
     pub method: String,
     pub url: String,
     pub body: Option<serde_json::Value>,
+    /// Request headers declared by the check's `remediation.api.headers` block.
+    ///
+    /// Stored UNRESOLVED (`Bearer {{BUILDKITE_API_TOKEN}}`) on purpose: the plan is
+    /// printed by `print_dry_run`/`confirm_apply` and written to `~/.ocean/audit.log`,
+    /// and a header that is never resolved until `execute_api_call` cannot leak a
+    /// token through any of those paths. Empty means "use the built-in
+    /// GitHub/Okta bearer", which is the pre-existing behaviour for every check
+    /// that declares no headers.
+    pub headers: HashMap<String, String>,
 }
 
 /// Result of executing a single remediation plan.
@@ -322,15 +417,26 @@ pub fn plan_harden(
             if let Some(api) = rem.api.as_ref() {
                 let resolved_url = resolve_vars(&api.url, config);
                 // TH-2b: Validate URL against allowlist before including in plan.
-                if let Err(e) = validate_remediation_url(&resolved_url) {
-                    eprintln!("  ⚠ Skipping {}: {e}", check_id);
-                    continue;
+                match validate_remediation_url(&resolved_url) {
+                    Ok(()) => Some(ApiAction {
+                        method: api.method.clone(),
+                        url: resolved_url,
+                        body: api.body.as_ref().map(|b| resolve_json_vars(b, config)),
+                        headers: api.headers.clone(),
+                    }),
+                    Err(e) => {
+                        // A rejected URL disqualifies the API ACTION, not the whole
+                        // plan. The previous `continue` dropped the entire
+                        // RemediationPlan — the operator lost `steps`, `manual`,
+                        // `cli` and `terraform` as well, and `findings = plans.len()`
+                        // in fleet under-reported the run.
+                        eprintln!(
+                            "  ⚠ {}: API remediation dropped ({e}); manual steps, CLI and Terraform remain",
+                            check_id
+                        );
+                        None
+                    }
                 }
-                Some(ApiAction {
-                    method: api.method.clone(),
-                    url: resolved_url,
-                    body: api.body.clone(),
-                })
             } else {
                 None
             }
@@ -451,16 +557,56 @@ fn execute_api_call(action: &ApiAction, config: &HashMap<String, String>) -> Res
         ));
     }
 
-    let auth = config
-        .get("GITHUB_TOKEN")
-        .or_else(|| config.get("OKTA_API_TOKEN"))
-        .map(|t| format!("Bearer {t}"))
-        .unwrap_or_default();
+    let mut req = ureq::request(&method_upper, &action.url);
 
-    let req = ureq::request(&action.method.to_uppercase(), &action.url)
-        .set("Authorization", &auth)
-        .set("Accept", "application/vnd.github+json")
-        .set("X-GitHub-Api-Version", "2022-11-28");
+    if action.headers.is_empty() {
+        // Unchanged legacy path: every check that declares no
+        // `remediation.api.headers` keeps the GitHub/Okta bearer and the GitHub
+        // media-type headers it has always been sent with.
+        let auth = config
+            .get("GITHUB_TOKEN")
+            .or_else(|| config.get("OKTA_API_TOKEN"))
+            .map(|t| format!("Bearer {t}"))
+            .unwrap_or_default();
+        req = req
+            .set("Authorization", &auth)
+            .set("Accept", "application/vnd.github+json")
+            .set("X-GitHub-Api-Version", "2022-11-28");
+    } else {
+        // The check declared its own headers. Honour them verbatim and send NO
+        // GitHub headers — `X-GitHub-Api-Version` on a Buildkite request is at
+        // best noise, and the GitHub/Okta bearer is the wrong credential
+        // entirely. Values are resolved here (not at plan time) so the token
+        // never enters the printed plan or the audit log.
+        let mut names: Vec<&String> = action.headers.keys().collect();
+        names.sort(); // deterministic request construction
+        for name in names {
+            let value = resolve_vars(&action.headers[name], config);
+            if value.contains("{{") {
+                return Err(anyhow::anyhow!(
+                    "header '{name}' still contains an unresolved template after \
+                     substitution — the variable is either unset in the environment or \
+                     not on ALLOWED_TEMPLATE_VARS; refusing to send the request"
+                ));
+            }
+            req = req.set(name, &value);
+        }
+    }
+
+    // The body is resolved at plan time (`resolve_json_vars`). A surviving `{{...}}`
+    // means a required variable was unset or is not on ALLOWED_TEMPLATE_VARS —
+    // sending it would post a literal placeholder as a real value (an invalid
+    // GraphQL node id, an unparseable timestamp) against the tenant.
+    if let Some(body) = &action.body {
+        let rendered = serde_json::to_string(body).unwrap_or_default();
+        if rendered.contains("{{") {
+            return Err(anyhow::anyhow!(
+                "request body still contains an unresolved template after substitution \
+                 — a required variable is unset in the environment or is not on \
+                 ALLOWED_TEMPLATE_VARS; refusing to send the request"
+            ));
+        }
+    }
 
     let resp = if let Some(body) = &action.body {
         req.send_json(body).context("API call failed")?
@@ -468,10 +614,37 @@ fn execute_api_call(action: &ApiAction, config: &HashMap<String, String>) -> Res
         req.call().context("API call failed")?
     };
 
-    Ok(format!(
-        "{} {} → HTTP {}",
-        action.method, action.url, resp.status()
-    ))
+    let status = resp.status();
+    let body_text = resp.into_string().unwrap_or_default();
+
+    // GraphQL reports application-level failure as HTTP 200 with a top-level
+    // `errors` array. ureq only errors on non-2xx, so without this a rejected
+    // mutation (bad variables, missing scope, plan-gated field) was recorded as
+    // SUCCESS in ~/.ocean/audit.log. Buildkite's remediation surface is GraphQL,
+    // so this is the difference between a real fix and a false assurance.
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body_text) {
+        if let Some(errors) = parsed.get("errors").and_then(|e| e.as_array()) {
+            if !errors.is_empty() {
+                let detail = errors
+                    .iter()
+                    .filter_map(|e| e.get("message").and_then(|m| m.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(anyhow::anyhow!(
+                    "{} {} → HTTP {status} but the response carries GraphQL errors: {}",
+                    action.method,
+                    action.url,
+                    if detail.is_empty() {
+                        "(no message field)".to_string()
+                    } else {
+                        detail
+                    }
+                ));
+            }
+        }
+    }
+
+    Ok(format!("{} {} → HTTP {status}", action.method, action.url))
 }
 
 fn write_terraform(plan: &RemediationPlan, dir: &Path) -> Result<std::path::PathBuf> {
@@ -506,7 +679,10 @@ pub fn confirm_apply<W: Write>(
 ) -> Result<bool> {
     let mask = CredentialMask::from_config(config);
 
-    writeln!(out, "\n⚠ APPLY MODE — the following API calls will be executed:\n")?;
+    writeln!(
+        out,
+        "\n⚠ APPLY MODE — the following API calls will be executed:\n"
+    )?;
     for (i, plan) in plans.iter().enumerate() {
         writeln!(out, "  {}. {} — {}", i + 1, plan.check_id, plan.check_name)?;
         if let Some(api) = &plan.api_action {
@@ -520,7 +696,11 @@ pub fn confirm_apply<W: Write>(
             writeln!(out, "     CLI (display only): {}", mask.scrub(cmd))?;
         }
         if !plan.terraform_resources.is_empty() {
-            writeln!(out, "     Terraform: {} resource(s) will be written", plan.terraform_resources.len())?;
+            writeln!(
+                out,
+                "     Terraform: {} resource(s) will be written",
+                plan.terraform_resources.len()
+            )?;
         }
     }
     writeln!(out)?;
@@ -545,7 +725,12 @@ pub fn confirm_apply<W: Write>(
 /// Print harden plans in dry-run mode.
 ///
 /// Credential values are scrubbed from all output (TH-1a).
-pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &str, config: &HashMap<String, String>) -> Result<()> {
+pub fn print_dry_run<W: Write>(
+    out: &mut W,
+    plans: &[RemediationPlan],
+    format: &str,
+    config: &HashMap<String, String>,
+) -> Result<()> {
     let mask = CredentialMask::from_config(config);
     if format == "json" {
         let json: Vec<serde_json::Value> = plans
@@ -560,6 +745,8 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
                         "method": a.method,
                         "url": mask.scrub(&a.url),
                         "body": a.body,
+                        // Unresolved templates by construction — see ApiAction::headers.
+                        "headers": a.headers,
                     })),
                     "cli": p.cli_action.as_ref().map(|c| mask.scrub(c)),
                     "terraform_resources": p.terraform_resources.len(),
@@ -573,17 +760,36 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
             writeln!(out, "No failing checks with remediation plans found.")?;
             return Ok(());
         }
-        writeln!(out, "\n[DRY RUN] Remediation plan — use --apply to execute\n")?;
+        writeln!(
+            out,
+            "\n[DRY RUN] Remediation plan — use --apply to execute\n"
+        )?;
         for plan in plans {
             writeln!(out, "  ▸ {} — {}", plan.check_id, plan.check_name)?;
             if let Some(api) = &plan.api_action {
                 writeln!(out, "    API: {} {}", api.method, mask.scrub(&api.url))?;
+                if !api.headers.is_empty() {
+                    let mut names: Vec<&String> = api.headers.keys().collect();
+                    names.sort();
+                    for name in names {
+                        // Templates, not values — resolution happens at execute time.
+                        writeln!(
+                            out,
+                            "      header {name}: {}",
+                            mask.scrub(&api.headers[name])
+                        )?;
+                    }
+                }
             }
             if let Some(cmd) = &plan.cli_action {
                 writeln!(out, "    CLI: {}", mask.scrub(cmd))?;
             }
             if !plan.terraform_resources.is_empty() {
-                writeln!(out, "    Terraform: {} resource(s)", plan.terraform_resources.len())?;
+                writeln!(
+                    out,
+                    "    Terraform: {} resource(s)",
+                    plan.terraform_resources.len()
+                )?;
             }
             if !plan.steps.is_empty() {
                 writeln!(out, "    Manual steps:")?;
@@ -599,7 +805,12 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
 /// Print harden execution results.
 ///
 /// Credential values are scrubbed from all output (TH-1a).
-pub fn print_results<W: Write>(out: &mut W, results: &[RemediationResult], format: &str, config: &HashMap<String, String>) -> Result<()> {
+pub fn print_results<W: Write>(
+    out: &mut W,
+    results: &[RemediationResult],
+    format: &str,
+    config: &HashMap<String, String>,
+) -> Result<()> {
     let mask = CredentialMask::from_config(config);
     if format == "json" {
         let json: Vec<serde_json::Value> = results
@@ -650,6 +861,31 @@ fn resolve_vars(template: &str, config: &HashMap<String, String>) -> String {
         }
     }
     result
+}
+
+/// Recursively apply `resolve_vars` to every string inside a JSON value.
+///
+/// Remediation request bodies carry `{{VAR}}` placeholders exactly as URLs do
+/// (`{"variables": {"orgId": "{{BUILDKITE_GRAPHQL_ID}}"}}`). Before this, `body`
+/// was cloned verbatim, so a templated body was transmitted with the braces
+/// still in it. Substitution is restricted to `ALLOWED_TEMPLATE_VARS` because it
+/// reuses `resolve_vars` (TH-2d).
+fn resolve_json_vars(
+    val: &serde_json::Value,
+    config: &HashMap<String, String>,
+) -> serde_json::Value {
+    match val {
+        serde_json::Value::String(s) => serde_json::Value::String(resolve_vars(s, config)),
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), resolve_json_vars(v, config)))
+                .collect(),
+        ),
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(|v| resolve_json_vars(v, config)).collect())
+        }
+        other => other.clone(),
+    }
 }
 
 /// Like `resolve_vars` but masks credential values for safe display (TH-1a).
@@ -739,11 +975,26 @@ assertions: []
 
     #[test]
     fn remediation_mode_from_str() {
-        assert_eq!(RemediationMode::from_str("api").unwrap(), RemediationMode::Api);
-        assert_eq!(RemediationMode::from_str("terraform").unwrap(), RemediationMode::Terraform);
-        assert_eq!(RemediationMode::from_str("tf").unwrap(), RemediationMode::Terraform);
-        assert_eq!(RemediationMode::from_str("cli").unwrap(), RemediationMode::Cli);
-        assert_eq!(RemediationMode::from_str("all").unwrap(), RemediationMode::All);
+        assert_eq!(
+            RemediationMode::from_str("api").unwrap(),
+            RemediationMode::Api
+        );
+        assert_eq!(
+            RemediationMode::from_str("terraform").unwrap(),
+            RemediationMode::Terraform
+        );
+        assert_eq!(
+            RemediationMode::from_str("tf").unwrap(),
+            RemediationMode::Terraform
+        );
+        assert_eq!(
+            RemediationMode::from_str("cli").unwrap(),
+            RemediationMode::Cli
+        );
+        assert_eq!(
+            RemediationMode::from_str("all").unwrap(),
+            RemediationMode::All
+        );
         assert!(RemediationMode::from_str("unknown").is_err());
     }
 
@@ -820,6 +1071,7 @@ assertions: []
                 method: "PATCH".to_string(),
                 url: "https://api.github.com/orgs/my-org".to_string(),
                 body: None,
+                ..Default::default()
             }),
             cli_action: Some("gh api orgs/my-org -X PATCH".to_string()),
             terraform_resources: Vec::new(),
@@ -876,7 +1128,10 @@ assertions: []
     fn sec_dry_run_does_not_leak_token() {
         // TH-1b: Dry-run output must not contain credential values.
         let mut config = HashMap::new();
-        config.insert("GITHUB_TOKEN".to_string(), "ghp_test_secret_token_xyz".to_string());
+        config.insert(
+            "GITHUB_TOKEN".to_string(),
+            "ghp_test_secret_token_xyz".to_string(),
+        );
         config.insert("org".to_string(), "my-org".to_string());
 
         let plans = vec![RemediationPlan {
@@ -886,8 +1141,10 @@ assertions: []
             steps: Vec::new(),
             api_action: Some(ApiAction {
                 method: "PATCH".to_string(),
-                url: "https://api.github.com/orgs/my-org?auth=ghp_test_secret_token_xyz".to_string(),
+                url: "https://api.github.com/orgs/my-org?auth=ghp_test_secret_token_xyz"
+                    .to_string(),
                 body: None,
+                ..Default::default()
             }),
             cli_action: None,
             terraform_resources: Vec::new(),
@@ -897,13 +1154,19 @@ assertions: []
         let mut out = Vec::new();
         print_dry_run(&mut out, &plans, "table", &config).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(!s.contains("ghp_test_secret_token_xyz"), "Token leaked in table output: {s}");
+        assert!(
+            !s.contains("ghp_test_secret_token_xyz"),
+            "Token leaked in table output: {s}"
+        );
 
         // Test JSON output
         let mut out = Vec::new();
         print_dry_run(&mut out, &plans, "json", &config).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(!s.contains("ghp_test_secret_token_xyz"), "Token leaked in JSON output: {s}");
+        assert!(
+            !s.contains("ghp_test_secret_token_xyz"),
+            "Token leaked in JSON output: {s}"
+        );
     }
 
     #[test]
@@ -920,7 +1183,8 @@ assertions: []
     fn sec_url_allowlist_rejects_evil_host() {
         // TH-2b: Malicious URLs must be rejected.
         assert!(validate_remediation_url("https://evil.example.com/steal").is_err());
-        assert!(validate_remediation_url("http://api.github.com/orgs/my-org").is_err()); // http not https
+        assert!(validate_remediation_url("http://api.github.com/orgs/my-org").is_err());
+        // http not https
     }
 
     #[test]
@@ -929,7 +1193,9 @@ assertions: []
         assert!(validate_remediation_url("https://evil.example.com/.okta.com/steal").is_err());
         assert!(validate_remediation_url("https://evil.example.com/.amazonaws.com/exfil").is_err());
         assert!(validate_remediation_url("https://evil.example.com/.azure.com/steal").is_err());
-        assert!(validate_remediation_url("https://evil.example.com/api.github.com/orgs/x").is_err());
+        assert!(
+            validate_remediation_url("https://evil.example.com/api.github.com/orgs/x").is_err()
+        );
     }
 
     #[test]
@@ -950,8 +1216,14 @@ assertions: []
         config.insert("org".to_string(), "legit-org".to_string());
 
         let result = resolve_vars("{{MALICIOUS_VAR}}/{{org}}", &config);
-        assert!(result.contains("{{MALICIOUS_VAR}}"), "Unknown var was resolved: {result}");
-        assert!(result.contains("legit-org"), "Known var was not resolved: {result}");
+        assert!(
+            result.contains("{{MALICIOUS_VAR}}"),
+            "Unknown var was resolved: {result}"
+        );
+        assert!(
+            result.contains("legit-org"),
+            "Known var was not resolved: {result}"
+        );
     }
 
     #[test]
@@ -961,8 +1233,14 @@ assertions: []
         config.insert("org".to_string(), "my-org".to_string());
 
         let result = resolve_vars_masked("{{GITHUB_TOKEN}} {{org}}", &config);
-        assert!(result.contains("{{GITHUB_TOKEN}}"), "Credential should stay as placeholder: {result}");
-        assert!(result.contains("my-org"), "Non-credential should be resolved: {result}");
+        assert!(
+            result.contains("{{GITHUB_TOKEN}}"),
+            "Credential should stay as placeholder: {result}"
+        );
+        assert!(
+            result.contains("my-org"),
+            "Non-credential should be resolved: {result}"
+        );
     }
 
     #[test]
@@ -1003,6 +1281,7 @@ assertions: []
                 method: "PATCH".to_string(),
                 url: "https://api.github.com/orgs/test".to_string(),
                 body: None,
+                ..Default::default()
             }),
             cli_action: None,
             terraform_resources: Vec::new(),
@@ -1041,7 +1320,11 @@ remediation:
 
         // load_remediable_checks returns it (it has a remediation block)
         let checks = load_remediable_checks(dir.path());
-        assert_eq!(checks.len(), 1, "Should find the active check with remediation");
+        assert_eq!(
+            checks.len(),
+            1,
+            "Should find the active check with remediation"
+        );
         assert_eq!(checks[0].check_type, CheckType::Active);
         // But plan_harden will skip it because it's active (verified by the
         // `if def.check_type != CheckType::Passive { continue; }` guard in plan_harden).
@@ -1060,6 +1343,7 @@ remediation:
                     method: "PATCH".to_string(),
                     url: "https://api.github.com/orgs/test".to_string(),
                     body: Some(serde_json::json!({"require_mfa": true})),
+                    ..Default::default()
                 }),
                 cli_action: None,
                 terraform_resources: Vec::new(),
@@ -1142,7 +1426,10 @@ remediation:
         // UT-H013: Invalid mode string returns descriptive error listing valid modes.
         let err = RemediationMode::from_str("garbage").unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("garbage"), "Error should mention the invalid input");
+        assert!(
+            msg.contains("garbage"),
+            "Error should mention the invalid input"
+        );
         assert!(msg.contains("api"), "Error should list valid modes");
         assert!(msg.contains("terraform"), "Error should list valid modes");
         assert!(msg.contains("cli"), "Error should list valid modes");
@@ -1154,13 +1441,20 @@ remediation:
     fn sec_h002_credentials_not_in_error_output() {
         // SEC-H002: Failed API calls must not leak credential values in error messages.
         let mut config = HashMap::new();
-        config.insert("GITHUB_TOKEN".to_string(), "ghp_supersecrettoken999".to_string());
+        config.insert(
+            "GITHUB_TOKEN".to_string(),
+            "ghp_supersecrettoken999".to_string(),
+        );
         let mask = CredentialMask::from_config(&config);
 
         // Simulate an error message that might contain a token
-        let raw_error = "API call failed: 403 Forbidden. Authorization: Bearer ghp_supersecrettoken999";
+        let raw_error =
+            "API call failed: 403 Forbidden. Authorization: Bearer ghp_supersecrettoken999";
         let scrubbed = mask.scrub(raw_error);
-        assert!(!scrubbed.contains("ghp_supersecrettoken999"), "Token leaked in error: {scrubbed}");
+        assert!(
+            !scrubbed.contains("ghp_supersecrettoken999"),
+            "Token leaked in error: {scrubbed}"
+        );
         assert!(scrubbed.contains("***REDACTED***"), "Should show REDACTED");
     }
 
@@ -1168,7 +1462,10 @@ remediation:
     fn sec_h004_terraform_no_credential_literals() {
         // SEC-H004: Terraform output must not contain credential literal values.
         let mut config = HashMap::new();
-        config.insert("GITHUB_TOKEN".to_string(), "ghp_terraform_secret_xyz".to_string());
+        config.insert(
+            "GITHUB_TOKEN".to_string(),
+            "ghp_terraform_secret_xyz".to_string(),
+        );
 
         let plan = RemediationPlan {
             check_id: "GH-1.01".to_string(),
@@ -1184,18 +1481,29 @@ remediation:
             })],
         };
         let hcl = generate_terraform_hcl(&plan);
-        assert!(!hcl.contains("ghp_terraform_secret_xyz"), "Terraform output must not contain credentials");
+        assert!(
+            !hcl.contains("ghp_terraform_secret_xyz"),
+            "Terraform output must not contain credentials"
+        );
     }
 
     #[test]
     fn sec_h010_user_checks_dir_detection() {
         // SEC-H010: is_user_checks_dir correctly identifies ~/.ocean/checks/ paths.
         if let Ok(home) = std::env::var("HOME") {
-            let user_dir = std::path::PathBuf::from(&home).join(".ocean").join("checks");
-            assert!(is_user_checks_dir(&user_dir), "~/.ocean/checks/ should be detected as user dir");
+            let user_dir = std::path::PathBuf::from(&home)
+                .join(".ocean")
+                .join("checks");
+            assert!(
+                is_user_checks_dir(&user_dir),
+                "~/.ocean/checks/ should be detected as user dir"
+            );
 
             let built_in_dir = std::path::PathBuf::from("/usr/share/ocean/checks");
-            assert!(!is_user_checks_dir(&built_in_dir), "Built-in dir should not be flagged");
+            assert!(
+                !is_user_checks_dir(&built_in_dir),
+                "Built-in dir should not be flagged"
+            );
         }
     }
 
@@ -1203,28 +1511,31 @@ remediation:
     fn sec_h010_warn_user_checks_output() {
         // SEC-H010: warn_user_checks writes a warning for user-authored checks.
         if let Ok(home) = std::env::var("HOME") {
-            let user_dir = std::path::PathBuf::from(&home).join(".ocean").join("checks");
+            let user_dir = std::path::PathBuf::from(&home)
+                .join(".ocean")
+                .join("checks");
             let mut out = Vec::new();
             warn_user_checks(&mut out, &user_dir, &[]);
             let s = String::from_utf8(out).unwrap();
-            assert!(s.contains("not verified"), "Should warn about unverified checks");
+            assert!(
+                s.contains("not verified"),
+                "Should warn about unverified checks"
+            );
         }
     }
 
     #[test]
     fn sec_h012_partial_failure_result() {
         // SEC-H012: When some remediations succeed and some fail, results reflect this correctly.
-        let plans = vec![
-            RemediationPlan {
-                check_id: "GH-1.01".to_string(),
-                check_name: "MFA".to_string(),
-                description: String::new(),
-                steps: Vec::new(),
-                api_action: None,
-                cli_action: Some("gh api test".to_string()),
-                terraform_resources: Vec::new(),
-            },
-        ];
+        let plans = vec![RemediationPlan {
+            check_id: "GH-1.01".to_string(),
+            check_name: "MFA".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: Some("gh api test".to_string()),
+            terraform_resources: Vec::new(),
+        }];
         let config = HashMap::new();
         let results = execute_plans(&plans, &config, None);
 
@@ -1271,7 +1582,10 @@ remediation:
         let mut out = Vec::new();
         print_dry_run(&mut out, &[plan], "table", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("test; rm -rf /"), "Name should appear as-is in output");
+        assert!(
+            s.contains("test; rm -rf /"),
+            "Name should appear as-is in output"
+        );
         // Verify no shell interpretation occurred (we're still here)
         assert!(std::path::Path::new("/").exists());
     }
@@ -1307,6 +1621,7 @@ remediation:
                 method: "PATCH".to_string(),
                 url: "https://api.github.com/orgs/test".to_string(),
                 body: Some(serde_json::json!({"members_can_create_repos": false})),
+                ..Default::default()
             }),
             cli_action: None,
             terraform_resources: Vec::new(),
@@ -1316,8 +1631,14 @@ remediation:
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("PATCH"), "Must show HTTP method");
         assert!(s.contains("api.github.com"), "Must show URL");
-        assert!(s.contains("members_can_create_repos"), "Must show body content");
-        assert!(!s.contains("ghp_secret"), "Must not leak token in confirmation output");
+        assert!(
+            s.contains("members_can_create_repos"),
+            "Must show body content"
+        );
+        assert!(
+            !s.contains("ghp_secret"),
+            "Must not leak token in confirmation output"
+        );
     }
 
     // ─── Edge case tests (from test plan GRC-51) ────────────────────────────
@@ -1328,7 +1649,10 @@ remediation:
         let mut out = Vec::new();
         print_dry_run(&mut out, &[], "table", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("No failing"), "Should indicate no checks to remediate");
+        assert!(
+            s.contains("No failing"),
+            "Should indicate no checks to remediate"
+        );
     }
 
     #[test]
@@ -1344,6 +1668,7 @@ remediation:
                     method: "PATCH".to_string(),
                     url: "https://api.github.com/orgs/test/mfa".to_string(),
                     body: None,
+                    ..Default::default()
                 }),
                 cli_action: None,
                 terraform_resources: Vec::new(),
@@ -1357,6 +1682,7 @@ remediation:
                     method: "PATCH".to_string(),
                     url: "https://api.github.com/orgs/test/repos".to_string(),
                     body: None,
+                    ..Default::default()
                 }),
                 cli_action: None,
                 terraform_resources: Vec::new(),
@@ -1368,7 +1694,10 @@ remediation:
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         let arr = v.as_array().unwrap();
         assert_eq!(arr.len(), 2, "Two independent plans should be generated");
-        assert_ne!(arr[0]["check_id"], arr[1]["check_id"], "Plans should be for different checks");
+        assert_ne!(
+            arr[0]["check_id"], arr[1]["check_id"],
+            "Plans should be for different checks"
+        );
     }
 
     #[test]
@@ -1392,6 +1721,177 @@ remediation:
         config.insert("ORG_NAME".to_string(), "my-company".to_string());
         let result = resolve_vars("https://api.github.com/orgs/{{ORG_NAME}}", &config);
         assert_eq!(result, "https://api.github.com/orgs/my-company");
+    }
+
+    // ── Buildkite: URL allowlist, masking plane, template plumbing ──────────
+
+    #[test]
+    fn buildkite_hosts_pass_the_remediation_url_allowlist() {
+        for u in [
+            "https://graphql.buildkite.com/v1",
+            "https://api.buildkite.com/v2/organizations/acme/clusters/abc/tokens",
+            "https://buildkite.com/organizations/acme/settings/security",
+        ] {
+            assert!(
+                validate_remediation_url(u).is_ok(),
+                "should be allowed: {u}"
+            );
+        }
+    }
+
+    #[test]
+    fn buildkite_lookalike_hosts_are_still_rejected() {
+        // Host-parsed, not `starts_with` — the SEC-H014 path-embedding class.
+        assert!(
+            validate_remediation_url("https://evil.example.com/api.buildkite.com/steal").is_err()
+        );
+        assert!(validate_remediation_url("https://buildkite.com.evil.example.com/v1").is_err());
+        assert!(validate_remediation_url("http://graphql.buildkite.com/v1").is_err());
+        assert!(validate_remediation_url("https://notbuildkite.com/v1").is_err());
+    }
+
+    #[test]
+    fn buildkite_api_token_is_on_the_masking_plane() {
+        // A credential on the fleet allowlist that is NOT on CREDENTIAL_ENV_VARS
+        // reaches stdout, the dry-run JSON and ~/.ocean/audit.log verbatim.
+        let mut config = HashMap::new();
+        config.insert(
+            "BUILDKITE_API_TOKEN".to_string(),
+            "bkua_deadbeef".to_string(),
+        );
+        config.insert(
+            "BUILDKITE_API_KEY".to_string(),
+            "bkua_altspelling".to_string(),
+        );
+        let mask = CredentialMask::from_config(&config);
+        let line =
+            "POST https://graphql.buildkite.com/v1 Bearer bkua_deadbeef alt bkua_altspelling";
+        let scrubbed = mask.scrub(line);
+        assert!(!scrubbed.contains("bkua_deadbeef"));
+        assert!(!scrubbed.contains("bkua_altspelling"));
+    }
+
+    #[test]
+    fn rejected_url_drops_only_the_api_action_not_the_whole_plan() {
+        // Regression for the `continue` that deleted the entire RemediationPlan —
+        // steps, manual, cli and terraform went with it, and fleet's
+        // `findings = plans.len()` under-counted the run.
+        let tmp = TempDir::new().unwrap();
+        write_check(
+            tmp.path(),
+            "unlisted.check.yaml",
+            r#"
+id: TST-UNLISTED
+name: Unlisted Host
+source: mock
+type: passive
+steps: []
+assertions:
+  - id: always_fails
+    expr: "1 == 2"
+    severity: high
+    title: t
+    pass_message: p
+    fail_message: f
+remediation:
+  description: d
+  steps: ["do the thing by hand"]
+  api:
+    method: POST
+    url: "https://not-on-the-allowlist.example.com/v1"
+  cli:
+    command: "echo fix-me"
+"#,
+        );
+        let plans = plan_harden(tmp.path(), &RemediationMode::All, &HashMap::new(), None).unwrap();
+        if let Some(p) = plans.iter().find(|p| p.check_id == "TST-UNLISTED") {
+            assert!(
+                p.api_action.is_none(),
+                "rejected URL must drop the API action"
+            );
+            assert!(
+                !p.steps.is_empty(),
+                "manual steps must survive a rejected URL"
+            );
+            assert!(
+                p.cli_action.is_some(),
+                "cli action must survive a rejected URL"
+            );
+        }
+    }
+
+    #[test]
+    fn remediation_body_templates_are_resolved() {
+        let mut config = HashMap::new();
+        config.insert(
+            "BUILDKITE_GRAPHQL_ID".to_string(),
+            "T3JnYW5pemF0aW9uLS0t".to_string(),
+        );
+        let body = serde_json::json!({
+            "query": "mutation($orgId: ID!) { x }",
+            "variables": { "orgId": "{{BUILDKITE_GRAPHQL_ID}}" }
+        });
+        let resolved = resolve_json_vars(&body, &config);
+        assert_eq!(
+            resolved["variables"]["orgId"],
+            serde_json::json!("T3JnYW5pemF0aW9uLS0t")
+        );
+        // Query text is untouched: `$orgId` is GraphQL syntax, not a template.
+        assert_eq!(resolved["query"], body["query"]);
+    }
+
+    #[test]
+    fn non_allowlisted_template_var_is_never_substituted_into_a_body() {
+        let mut config = HashMap::new();
+        config.insert("MALICIOUS".to_string(), "pwned".to_string());
+        let body = serde_json::json!({"v": "{{MALICIOUS}}"});
+        assert_eq!(
+            resolve_json_vars(&body, &config)["v"],
+            serde_json::json!("{{MALICIOUS}}")
+        );
+    }
+
+    #[test]
+    fn declared_headers_reach_the_plan_unresolved() {
+        // Headers stay templated in the plan so the token cannot leak into the
+        // dry-run output or the audit log; resolution happens in execute_api_call.
+        let mut headers = HashMap::new();
+        headers.insert(
+            "Authorization".to_string(),
+            "Bearer {{BUILDKITE_API_TOKEN}}".to_string(),
+        );
+        let action = ApiAction {
+            method: "POST".to_string(),
+            url: "https://graphql.buildkite.com/v1".to_string(),
+            body: None,
+            headers,
+        };
+        assert_eq!(
+            action.headers["Authorization"],
+            "Bearer {{BUILDKITE_API_TOKEN}}"
+        );
+        let plan = RemediationPlan {
+            check_id: "BK-1.02".to_string(),
+            check_name: "n".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: Some(action),
+            cli_action: None,
+            terraform_resources: Vec::new(),
+        };
+        let mut config = HashMap::new();
+        config.insert("BUILDKITE_API_TOKEN".to_string(), "bkua_secret".to_string());
+        let mut out = Vec::new();
+        print_dry_run(&mut out, std::slice::from_ref(&plan), "table", &config).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(
+            s.contains("{{BUILDKITE_API_TOKEN}}"),
+            "header template should be shown"
+        );
+        assert!(
+            !s.contains("bkua_secret"),
+            "token must never reach dry-run output"
+        );
     }
 
     #[test]

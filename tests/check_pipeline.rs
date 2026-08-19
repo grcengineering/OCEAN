@@ -27,25 +27,23 @@ impl MockHTTPServer {
         let addr = listener.local_addr().expect("local addr");
         let queue = Arc::new(Mutex::new(responses));
 
-        std::thread::spawn(move || {
-            loop {
-                let resp = {
-                    let mut q = queue.lock().unwrap();
-                    if q.is_empty() {
-                        break;
-                    }
-                    q.remove(0)
-                };
-                if let Ok((mut stream, _)) = listener.accept() {
-                    let mut buf = [0u8; 8192];
-                    let _ = stream.read(&mut buf);
-                    let (status, body) = resp;
-                    let raw = format!(
+        std::thread::spawn(move || loop {
+            let resp = {
+                let mut q = queue.lock().unwrap();
+                if q.is_empty() {
+                    break;
+                }
+                q.remove(0)
+            };
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let (status, body) = resp;
+                let raw = format!(
                         "HTTP/1.1 {status} OK\r\nContent-Length: {len}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}",
                         len = body.len()
                     );
-                    let _ = stream.write_all(raw.as_bytes());
-                }
+                let _ = stream.write_all(raw.as_bytes());
             }
         });
 
@@ -111,7 +109,11 @@ fn gh101_pass_mfa_enforced_no_noncompliant() {
         .expect("execute GH-1.01 observer");
 
     // GH-1.01 has 2 assertions → 2 evidence items.
-    assert_eq!(evidence.len(), 2, "expected 2 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "expected 2 evidence items (one per assertion)"
+    );
 
     // Both should pass (Effective).
     for ev in &evidence {
@@ -128,7 +130,10 @@ fn gh101_pass_mfa_enforced_no_noncompliant() {
 
     // Verify metadata.
     let first = &evidence[0];
-    assert_eq!(first.metadata.module.name, "Enforce 2FA for Organization Members");
+    assert_eq!(
+        first.metadata.module.name,
+        "Enforce 2FA for Organization Members"
+    );
     assert_eq!(first.metadata.source.system, "github");
     assert_eq!(first.metadata.module.module_type, "observer");
 }

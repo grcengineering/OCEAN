@@ -1,0 +1,189 @@
+id: ONA-1.05
+name: No Email Domain Auto-Admit Is Configured
+description: |
+  Verifies that the organization has no email-domain auto-admit list, read from
+  `organization.inviteDomains.domains[]` via
+  `gitpod.v1.OrganizationService/GetOrganization`.
+
+  Why it matters. `InviteDomains.domains` is "the list of domains that are
+  allowed to join the organization". Every address at a listed domain can admit
+  itself — no invitation, no approval, no review. The blast radius is the whole
+  domain, which for any organization using a shared or acquired domain, or one
+  whose IdP is not the sole issuer of addresses at it, is a much wider set than
+  the intended one. Combined with the shared organization invite link (whose
+  summary endpoint discloses organization name and member count to anyone holding
+  it), it is the broadest self-service path into the organization.
+
+  The hardened state is an EMPTY list, and the vendor says so. "To remove
+  auto-admit, send an empty `domains` array" — and `GetOrganization` proves it.
+  Protobuf-JSON omits empty repeated fields, so a hardened organization returns
+  an `organization` object with either no `inviteDomains` key or an
+  `inviteDomains` object with no `domains` key. Both PASS. The assertion is
+  written `!has(...inviteDomains) || !has(...inviteDomains.domains) || size(...) == 0`,
+  so absence short-circuits to a pass at each level rather than raising an
+  "Undeclared reference" that the interpreter's fail-closed default would turn
+  into a false accusation against a correctly configured organization. This is
+  the same inverted-default reasoning as ONA-5.01: the rule is "work out what
+  absence MEANS for this field", not "absence always fails".
+
+  Deliberately narrow. This is the domain auto-admit half of the guide control
+  only. The other half — resetting the shared invite link with
+  `CreateOrganizationInvite`, which mints a new `inviteId` and kills the old
+  link — has no readable "is this link stale" state to assert on, so no honest
+  check can be written for it. And no per-email invite method exists anywhere in
+  the public API (verified across all 45 `organization/*`, 9 `account/*` and 15
+  `user/*` pages), so email invitations are console-only and out of reach
+  entirely.
+
+  Host, response shape, and abstention. The request goes to `app.gitpod.io`
+  because the documented `app.ona.com` base 308-redirects and clients drop the
+  `Authorization` header on the hop. `GetOrganization` returns
+  `organization` as a REQUIRED field, so its absence means the response was not a
+  GetOrganizationResponse at all — that is the reachability discriminator, and an
+  unreadable response ABSTAINS rather than being accused.
+author: grc-engineering
+version: "1.0"
+source: ona
+profile: L2
+tags: [identity, invitations, auto-admit, organization, proto3]
+
+references:
+  cis: ["6.1", "6.2"]
+  nist: ["AC-2"]
+  soc2: CC6.2
+  iso27001: A.9.2.1
+  hth: "ona:1.5"
+
+credentials:
+  ONA_TOKEN:
+    type: api_token
+    scopes: [read-only]
+    required: true
+
+inputs:
+  org:
+    description: >-
+      Ona organization UUID. Obtain it with
+      `POST /api/gitpod.v1.IdentityService/GetAuthenticatedIdentity` and an empty
+      JSON body `{}`.
+    env: ONA_ORGANIZATION_ID
+    required: true
+
+steps:
+  - id: get_organization
+    action: api_call
+    note: >-
+      Connect RPC unary call. Addressed at app.gitpod.io rather than the
+      documented app.ona.com because the latter 308-redirects and clients drop
+      the bearer on the hop. Unknown request fields are rejected by the server, so
+      the body carries `organizationId` only.
+    request:
+      method: POST
+      url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/GetOrganization"
+      headers:
+        Authorization: "Bearer {{ONA_TOKEN}}"
+        Content-Type: application/json
+        Accept: application/json
+      body:
+        organizationId: "{{org}}"
+    extract:
+      # Always-bound reachability anchors. `jsonpath_extract` returns the body
+      # verbatim for `$` before attempting any navigation, and answers
+      # `$is_object` for every body shape, so both names are bound on EVERY
+      # response — including the ones where nothing else is. Every guard below is
+      # written against them, walking down from the root, so no clause is ever
+      # reached with an unnavigable receiver.
+      #
+      # `$is_object` rather than `!$is_array` because `has()` cannot itself
+      # discriminate shape: on a non-object receiver cel 0.14 RAISES ("No such
+      # overload"), which the fail-closed default turns into an accusation,
+      # while it answers FALSE for a well-formed object that simply
+      # omits the key. Those need opposite verdicts — Protobuf-JSON omits empty
+      # repeated fields, so an object missing the key is a readable EMPTY result
+      # and a real finding, while a scalar body was never a response at all and
+      # must abstain.
+      body_root: "$"
+      body_is_object: "$is_object"
+      organization: "$.organization"
+      # Read for evidence: OrganizationTier tells a reviewer which plan-gated
+      # controls in this vendor are even available to the organization.
+      organization_tier: "$.organization.tier"
+
+assertions:
+  - id: organization_readable
+    expr: "get_organization_status_code == 200 && body_root != null && body_is_object && has(body_root.organization)"
+    severity: info
+    title: Organization Readable
+    pass_message: "GetOrganization returned an organization object for '{{org}}'; the invite-domain verdict below was actually evaluated"
+    fail_message: "GetOrganization returned no organization object for '{{org}}' (HTTP {{status_code}}) — nothing was read, so the verdict below abstains and asserts nothing in either direction"
+    finding:
+      description: |
+        The Ona API did not return an organization object, so no setting was
+        observed. This is a collection failure, not a compliance failure — do not
+        treat the accompanying invite-domain result as evidence of a
+        misconfiguration.
+        `organization` is a REQUIRED field on GetOrganizationResponse, so its
+        absence means the response was not a successful read. Check
+        ONA_ORGANIZATION_ID against `IdentityService/GetAuthenticatedIdentity`,
+        confirm the token is live and issued from the same management-plane domain,
+        and confirm the principal holds the permission the method requires.
+
+  - id: no_invite_domains
+    expr: "get_organization_status_code != 200 || body_root == null || !body_is_object || !has(body_root.organization) || !has(body_root.organization.inviteDomains) || !has(body_root.organization.inviteDomains.domains) || size(body_root.organization.inviteDomains.domains) == 0"
+    severity: medium
+    title: Email Domain Auto-Admit
+    pass_message: "No email-domain auto-admit list was observed for '{{org}}' — this row is evidence that domain auto-admit is off ONLY if 'Organization Readable' above also passed; when the organization could not be read it abstains and asserts nothing about invite domains"
+    fail_message: "'{{org}}' auto-admits every address at one or more email domains — anyone with such an address can join with no invitation and no approval"
+    finding:
+      description: |
+        `organization.inviteDomains.domains` is non-empty. The vendor documents
+        this as "the list of domains that are allowed to join the organization":
+        any address at a listed domain admits itself, with no invitation, no
+        approval, and no record of anyone having decided to grant access.
+        The blast radius is the domain, not your roster. That gap matters most
+        where it is least visible — a domain shared with a parent or sibling
+        company, one acquired with a business unit, a consumer-hosted domain where
+        addresses are cheap to obtain, or simply one where your IdP is not the only
+        issuer. Once inside, a member reaches whatever the organization's
+        environments and secrets expose.
+        Remediation is to send an empty `domains` array; the vendor states this
+        explicitly, and `GetOrganization` proves it, which is what this check reads.
+        Pair it with the other half of the guide control, which this check cannot
+        observe: reset the shared invite link with
+        `OrganizationService/CreateOrganizationInvite`, which mints a new
+        `inviteId` and kills the old one. That matters because
+        `GetOrganizationInviteSummary` discloses organization name and member count
+        to anyone holding the link. There is no readable staleness state for the
+        link, so no check asserts on it.
+        Note on the read: ABSENCE PASSES here, unlike most fields in this vendor.
+        The hardened state is an EMPTY list, and Protobuf-JSON omits empty repeated
+        fields, so a hardened organization returns no `inviteDomains` key or an
+        `inviteDomains` object with no `domains` key.
+        This finding cannot be raised by an unreadable organization — the guard
+        chain short-circuits to abstain on non-200, a null body, an array-shaped
+        body, or a missing `organization` key.
+
+remediation:
+  description: |
+    Send an empty `domains` array on `UpdateOrganization`. Unlike most Ona update
+    methods this one does echo the organization back, but read back with
+    `GetOrganization` regardless — this check IS that read-back.
+  steps:
+    - "Navigate to Settings -> Login & Identity -> Login Configuration and review the login-domain and organization-login-link settings"
+    - "Send the API call below with an empty `domains` array to remove every auto-admit domain"
+    - "Reset the shared invite link with `OrganizationService/CreateOrganizationInvite` — the new `inviteId` invalidates the old link, which anyone who ever held it can otherwise still use"
+    - "Review current membership under Settings -> Organization -> Members for accounts that joined via auto-admit and were never reviewed"
+    - "Re-run this check and confirm `inviteDomains.domains` is empty or absent"
+  api:
+    method: POST
+    url: "https://app.gitpod.io/api/gitpod.v1.OrganizationService/UpdateOrganization"
+    headers:
+      Authorization: "Bearer {{ONA_TOKEN}}"
+      Content-Type: application/json
+    body:
+      organizationId: "{{ONA_ORGANIZATION_ID}}"
+      inviteDomains:
+        domains: []
+  manual:
+    - "No per-email invite method exists in the public API — verified across all 45 organization, 9 account and 15 user reference pages. Email invitations are console-only, so removing auto-admit shifts joining to the console invite flow and the shared link."
+    - "Ona ships no first-party CLI verb for organization membership; `ona organization security-policy ...` covers SecurityPolicy objects only."

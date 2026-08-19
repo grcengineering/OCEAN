@@ -10,7 +10,7 @@
     "id": {
       "type": "string",
       "description": "Unique check identifier (e.g., GH-1.01, AWS-IAM-01).",
-      "pattern": "^[A-Z][A-Z0-9-]*-[0-9]+(\\.[0-9]+)*$"
+      "pattern": "^[A-Z][A-Z0-9-]*-[0-9]+(\\.[0-9]+)*[a-z]?$"
     },
     "name": {
       "type": "string",

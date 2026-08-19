@@ -89,11 +89,13 @@ fn gitlab_check_path(filename: &str) -> std::path::PathBuf {
 }
 
 fn load_check(filename: &str) -> ocean::check::CheckDefinition {
-    load_check_file(&gitlab_check_path(filename))
-        .unwrap_or_else(|e| panic!("load {filename}: {e}"))
+    load_check_file(&gitlab_check_path(filename)).unwrap_or_else(|e| panic!("load {filename}: {e}"))
 }
 
-fn run_observer(def: ocean::check::CheckDefinition, config: &HashMap<String, String>) -> Vec<ocean::evidence::Evidence> {
+fn run_observer(
+    def: ocean::check::CheckDefinition,
+    config: &HashMap<String, String>,
+) -> Vec<ocean::evidence::Evidence> {
     let registry = Arc::new(Registry::new());
     let id = def.id.clone();
     register_check(&registry, def);
@@ -132,10 +134,19 @@ fn gitlab103_pass_all_tokens_compliant() {
     let def = load_check("GITLAB-1.03-pat-policy.check.yaml");
 
     let evidence = run_observer(def, &base_config(server.url()));
-    assert_eq!(evidence.len(), 2, "expected 2 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "expected 2 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.control_id, "GITLAB-1.03");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
@@ -189,7 +200,12 @@ fn gitlab201_pass_all_variables_protected_and_masked() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "GITLAB-2.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
@@ -211,11 +227,17 @@ fn gitlab201_fail_unprotected_and_unmasked_variables() {
 
     // all_variables_protected: PROD_API_KEY is unprotected.
     assert_eq!(evidence[0].status_id, StatusId::Ineffective);
-    assert_eq!(evidence[0].findings[0].title, "All CI/CD Variables Are Protected");
+    assert_eq!(
+        evidence[0].findings[0].title,
+        "All CI/CD Variables Are Protected"
+    );
 
     // all_variables_masked: DEBUG_TOKEN is unmasked.
     assert_eq!(evidence[1].status_id, StatusId::Ineffective);
-    assert_eq!(evidence[1].findings[0].title, "All CI/CD Variables Are Masked");
+    assert_eq!(
+        evidence[1].findings[0].title,
+        "All CI/CD Variables Are Masked"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -236,10 +258,19 @@ fn gitlab401_pass_all_push_rules_enabled() {
     cfg.insert("GITLAB_PROJECT_ID".to_string(), "42".to_string());
 
     let evidence = run_observer(def, &cfg);
-    assert_eq!(evidence.len(), 4, "expected 4 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        4,
+        "expected 4 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.control_id, "GITLAB-4.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
@@ -263,10 +294,26 @@ fn gitlab401_fail_partial_push_rules() {
     let evidence = run_observer(def, &cfg);
     assert_eq!(evidence.len(), 4);
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "push_rules_configured should pass — id is present");
-    assert_eq!(evidence[1].status_id, StatusId::Effective, "prevent_secrets_enabled should pass");
-    assert_eq!(evidence[2].status_id, StatusId::Ineffective, "deny_delete_tag_enabled should fail");
-    assert_eq!(evidence[3].status_id, StatusId::Ineffective, "reject_unsigned_commits_enabled should fail on null");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "push_rules_configured should pass — id is present"
+    );
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Effective,
+        "prevent_secrets_enabled should pass"
+    );
+    assert_eq!(
+        evidence[2].status_id,
+        StatusId::Ineffective,
+        "deny_delete_tag_enabled should fail"
+    );
+    assert_eq!(
+        evidence[3].status_id,
+        StatusId::Ineffective,
+        "reject_unsigned_commits_enabled should fail on null"
+    );
 }
 
 /// GitLab returns 200 OK with a literal `null` body when push rules were
@@ -281,9 +328,17 @@ fn gitlab401_fail_push_rules_never_configured() {
     cfg.insert("GITLAB_PROJECT_ID".to_string(), "42".to_string());
 
     let evidence = run_observer(def, &cfg);
-    assert_eq!(evidence.len(), 4, "should still produce evidence even with a null body");
+    assert_eq!(
+        evidence.len(),
+        4,
+        "should still produce evidence even with a null body"
+    );
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Ineffective, "expected Ineffective for unconfigured push rules");
+        assert_eq!(
+            ev.status_id,
+            StatusId::Ineffective,
+            "expected Ineffective for unconfigured push rules"
+        );
     }
     assert_eq!(evidence[0].findings[0].title, "Push Rules Are Configured");
 }
@@ -301,7 +356,10 @@ fn gitlab601_pass_events_and_streaming_present() {
     let destinations = serde_json::json!([
         {"id": 1, "name": "siem-forwarder", "destination_url": "https://siem.example.com/ingest", "verification_token": "abc123"}
     ]);
-    let server = MockHTTPServer::new(vec![(200, events.to_string()), (200, destinations.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, events.to_string()),
+        (200, destinations.to_string()),
+    ]);
     let def = load_check("GITLAB-6.01-audit-events.check.yaml");
 
     let mut cfg = base_config(server.url());
@@ -311,7 +369,12 @@ fn gitlab601_pass_events_and_streaming_present() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "GITLAB-6.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
@@ -320,7 +383,10 @@ fn gitlab601_pass_events_and_streaming_present() {
 fn gitlab601_fail_no_events_no_streaming() {
     let events = serde_json::json!([]);
     let destinations = serde_json::json!([]);
-    let server = MockHTTPServer::new(vec![(200, events.to_string()), (200, destinations.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, events.to_string()),
+        (200, destinations.to_string()),
+    ]);
     let def = load_check("GITLAB-6.01-audit-events.check.yaml");
 
     let mut cfg = base_config(server.url());
@@ -345,16 +411,35 @@ fn all_gitlab_checks_load_and_have_hth_references() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("checks/gitlab");
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one GitLab check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one GitLab check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
-    assert!(ids.contains(&"GITLAB-1.03"), "missing GITLAB-1.03, got: {ids:?}");
-    assert!(ids.contains(&"GITLAB-2.01"), "missing GITLAB-2.01, got: {ids:?}");
-    assert!(ids.contains(&"GITLAB-4.01"), "missing GITLAB-4.01, got: {ids:?}");
-    assert!(ids.contains(&"GITLAB-6.01"), "missing GITLAB-6.01, got: {ids:?}");
+    assert!(
+        ids.contains(&"GITLAB-1.03"),
+        "missing GITLAB-1.03, got: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"GITLAB-2.01"),
+        "missing GITLAB-2.01, got: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"GITLAB-4.01"),
+        "missing GITLAB-4.01, got: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"GITLAB-6.01"),
+        "missing GITLAB-6.01, got: {ids:?}"
+    );
 
     for def in &defs {
-        assert_eq!(def.source, "gitlab", "{}: source should be 'gitlab'", def.id);
+        assert_eq!(
+            def.source, "gitlab",
+            "{}: source should be 'gitlab'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for GitLab checks",
@@ -366,7 +451,11 @@ fn all_gitlab_checks_load_and_have_hth_references() {
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
         assert!(!def.steps.is_empty(), "{}: check has no steps", def.id);
     }
 }

@@ -7,6 +7,7 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
 use std::io::Write;
+use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -27,7 +28,9 @@ use ocean::{
     storage::{EvidenceQuery, SqliteStore, Store},
 };
 
-use output::{print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat};
+use output::{
+    print_evaluation_table, print_output, EvaluationResult, ModuleRunResult, OutputFormat,
+};
 
 // ---------------------------------------------------------------------------
 // CLI structure
@@ -438,9 +441,9 @@ pub fn run() -> Result<()> {
         } => {
             if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
+                let p = control
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
                 cmd_observe_path(&mut out, format, &cli.db, t, p, &controls_dir, !no_store)
             } else if let Some(m) = module.as_deref() {
                 cmd_observe(&mut out, format, &cli.db, m, !no_store)
@@ -461,10 +464,20 @@ pub fn run() -> Result<()> {
         } => {
             if target.is_some() || control.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
-                cmd_test_path(&mut out, format, &cli.db, t, p, &env, &controls_dir, !no_store, confirm)
+                let p = control
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
+                cmd_test_path(
+                    &mut out,
+                    format,
+                    &cli.db,
+                    t,
+                    p,
+                    &env,
+                    &controls_dir,
+                    !no_store,
+                    confirm,
+                )
             } else if let Some(m) = module.as_deref() {
                 cmd_test(&mut out, format, &cli.db, m, &env, !no_store, confirm)
             } else {
@@ -488,12 +501,19 @@ pub fn run() -> Result<()> {
         } => {
             if target.is_some() || control_path.is_some() {
                 let t = target.as_deref().unwrap_or("*");
-                let p = control_path.as_deref().ok_or_else(|| {
-                    anyhow!("--control/-c is required when using --target/-t")
-                })?;
+                let p = control_path
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("--control/-c is required when using --target/-t"))?;
                 cmd_evaluate_path(&mut out, format, &cli.db, t, p, &controls_dir)
             } else if let Some(ctrl) = control.as_deref() {
-                cmd_evaluate(&mut out, format, &cli.db, ctrl, cel.as_deref(), &controls_dir)
+                cmd_evaluate(
+                    &mut out,
+                    format,
+                    &cli.db,
+                    ctrl,
+                    cel.as_deref(),
+                    &controls_dir,
+                )
             } else {
                 Err(anyhow!(
                     "Specify a control ID or use --target/-t and --control/-c"
@@ -534,13 +554,15 @@ pub fn run() -> Result<()> {
             if let Some(frameworks) = framework {
                 cmd_report_framework(
                     &mut out,
-                    &checks_dir,
-                    &frameworks,
-                    include_passing,
-                    &rep_fmt,
-                    &check_filter,
-                    source.as_deref(),
-                    profile.as_deref(),
+                    ReportFrameworkParams {
+                        checks_dir: &checks_dir,
+                        frameworks: &frameworks,
+                        include_passing,
+                        format: &rep_fmt,
+                        check_filter: &check_filter,
+                        source_filter: source.as_deref(),
+                        profile_filter: profile.as_deref(),
+                    },
                 )
             } else {
                 let p = period.ok_or_else(|| {
@@ -576,31 +598,35 @@ pub fn run() -> Result<()> {
                 // Fleet mode: multi-target hardening
                 cmd_harden_fleet(
                     &mut out,
-                    &fleet_path,
-                    &checks_dir,
-                    &mode,
-                    apply,
-                    confirm,
-                    &terraform_dir,
-                    &harden_fmt,
-                    &check_filter,
-                    concurrency,
-                    continue_on_error,
-                    &output,
-                    dry_run,
+                    HardenFleetParams {
+                        fleet_path: &fleet_path,
+                        checks_dir: &checks_dir,
+                        mode: &mode,
+                        apply,
+                        confirm,
+                        terraform_dir: &terraform_dir,
+                        _format: &harden_fmt,
+                        _check_filter: &check_filter,
+                        concurrency,
+                        continue_on_error,
+                        output_dir: &output,
+                        dry_run,
+                    },
                 )
             } else {
                 // Single-target mode (existing behavior)
                 cmd_harden(
                     &mut out,
-                    &checks_dir,
-                    &mode,
-                    apply,
-                    confirm,
-                    target.as_deref(),
-                    &terraform_dir,
-                    &harden_fmt,
-                    &check_filter,
+                    HardenParams {
+                        checks_dir: &checks_dir,
+                        mode: &mode,
+                        apply,
+                        confirm,
+                        id_filter: target.as_deref(),
+                        terraform_dir: &terraform_dir,
+                        format: &harden_fmt,
+                        check_filter: &check_filter,
+                    },
                 )
             }
         }
@@ -1022,9 +1048,7 @@ fn target_matches_module(target: &str, module_id: &str) -> bool {
 fn resolve_controls(controls_dir: &str, path: &str) -> Result<Vec<Control>> {
     let dir = std::path::Path::new(controls_dir);
     if !dir.exists() {
-        return Err(anyhow!(
-            "controls directory not found: '{controls_dir}'"
-        ));
+        return Err(anyhow!("controls directory not found: '{controls_dir}'"));
     }
 
     let mut all: Vec<Control> = Vec::new();
@@ -1512,16 +1536,26 @@ fn cmd_serve(port: u16, auth_token: Option<&str>, db: &str) -> Result<()> {
 
 // ─── ocean report --framework ─────────────────────────────────────────────────
 
-fn cmd_report_framework<W: Write>(
-    out: &mut W,
-    checks_dir: &str,
-    frameworks: &[String],
+struct ReportFrameworkParams<'a> {
+    checks_dir: &'a str,
+    frameworks: &'a [String],
     include_passing: bool,
-    format: &str,
-    check_filter: &filter::CheckFilter,
-    source_filter: Option<&str>,
-    profile_filter: Option<&str>,
-) -> Result<()> {
+    format: &'a str,
+    check_filter: &'a filter::CheckFilter,
+    source_filter: Option<&'a str>,
+    profile_filter: Option<&'a str>,
+}
+
+fn cmd_report_framework<W: Write>(out: &mut W, params: ReportFrameworkParams) -> Result<()> {
+    let ReportFrameworkParams {
+        checks_dir,
+        frameworks,
+        include_passing,
+        format,
+        check_filter,
+        source_filter,
+        profile_filter,
+    } = params;
     let dir = std::path::Path::new(checks_dir);
     let config = env_as_config();
 
@@ -1554,13 +1588,8 @@ fn cmd_report_framework<W: Write>(
 
     // Generate a ComplianceReport for each requested framework.
     for fw in &requested {
-        let report = ocean::report::generate_report(
-            dir,
-            fw,
-            &config,
-            source_filter,
-            profile_filter,
-        )?;
+        let report =
+            ocean::report::generate_report(dir, fw, &config, source_filter, profile_filter)?;
 
         // If not including passing and there are no failing/partial controls, skip.
         if !include_passing && report.summary.failing == 0 && report.summary.partial == 0 {
@@ -1585,7 +1614,10 @@ fn cmd_report_framework_sarif<W: Write>(
     let defs: Vec<_> = if check_filter.is_empty() {
         all_defs
     } else {
-        all_defs.into_iter().filter(|d| check_filter.matches(d)).collect()
+        all_defs
+            .into_iter()
+            .filter(|d| check_filter.matches(d))
+            .collect()
     };
 
     if defs.is_empty() {
@@ -1615,18 +1647,27 @@ fn cmd_report_framework_sarif<W: Write>(
                 let any_fail = evidence
                     .iter()
                     .any(|e| matches!(e.status_id, ocean::StatusId::Ineffective));
-                if any_fail { "FAIL" } else { "PASS" }
+                if any_fail {
+                    "FAIL"
+                } else {
+                    "PASS"
+                }
             }
             Err(_) => "ERROR",
         };
 
-        let sev = def.assertions.first().map(|a| a.severity.as_str()).unwrap_or(&def.severity);
+        let sev = def
+            .assertions
+            .first()
+            .map(|a| a.severity.as_str())
+            .unwrap_or(&def.severity);
         sarif_results.push(sarif::CheckResult {
             check_id: def.id.clone(),
-            check_name: def.name.clone(),
-            description: def.description.clone(),
-            severity: if sev.is_empty() { "medium".to_string() } else { sev.to_string() },
-            tags: def.tags.clone(),
+            severity: if sev.is_empty() {
+                "medium".to_string()
+            } else {
+                sev.to_string()
+            },
             status: status.to_string(),
             message: if status == "PASS" {
                 format!("{}: passed", def.name)
@@ -1644,17 +1685,28 @@ fn cmd_report_framework_sarif<W: Write>(
 
 // ─── ocean harden ─────────────────────────────────────────────────────────────
 
-fn cmd_harden<W: Write>(
-    out: &mut W,
-    checks_dir: &str,
-    mode: &str,
+struct HardenParams<'a> {
+    checks_dir: &'a str,
+    mode: &'a str,
     apply: bool,
     confirm: bool,
-    id_filter: Option<&str>,
-    terraform_dir: &str,
-    format: &str,
-    check_filter: &filter::CheckFilter,
-) -> Result<()> {
+    id_filter: Option<&'a str>,
+    terraform_dir: &'a str,
+    format: &'a str,
+    check_filter: &'a filter::CheckFilter,
+}
+
+fn cmd_harden<W: Write>(out: &mut W, params: HardenParams) -> Result<()> {
+    let HardenParams {
+        checks_dir,
+        mode,
+        apply,
+        confirm,
+        id_filter,
+        terraform_dir,
+        format,
+        check_filter,
+    } = params;
     let dir = std::path::Path::new(checks_dir);
     let rem_mode = RemediationMode::from_str(mode)?;
     let config = env_as_config();
@@ -1665,7 +1717,9 @@ fn cmd_harden<W: Write>(
     // Validate that target check ID exists if a specific one was given.
     if let Some(target) = id_filter {
         let all_defs = ocean::check::loader::load_definitions_from_dir(dir);
-        let target_exists = all_defs.iter().any(|d| d.id == target || d.source == target || d.id.starts_with(target));
+        let target_exists = all_defs
+            .iter()
+            .any(|d| d.id == target || d.source == target || d.id.starts_with(target));
         if !target_exists {
             return Err(anyhow!("Check '{}' not found in {}", target, checks_dir));
         }
@@ -1716,21 +1770,36 @@ fn cmd_harden<W: Write>(
 
 // ─── ocean harden --fleet ─────────────────────────────────────────────────────
 
-fn cmd_harden_fleet<W: Write>(
-    out: &mut W,
-    fleet_path: &std::path::Path,
-    checks_dir: &str,
-    mode: &str,
+struct HardenFleetParams<'a> {
+    fleet_path: &'a std::path::Path,
+    checks_dir: &'a str,
+    mode: &'a str,
     apply: bool,
     confirm: bool,
-    terraform_dir: &str,
-    _format: &str,
-    _check_filter: &filter::CheckFilter,
+    terraform_dir: &'a str,
+    _format: &'a str,
+    _check_filter: &'a filter::CheckFilter,
     concurrency: u8,
     continue_on_error: bool,
-    output_dir: &std::path::Path,
+    output_dir: &'a std::path::Path,
     dry_run: bool,
-) -> Result<()> {
+}
+
+fn cmd_harden_fleet<W: Write>(out: &mut W, params: HardenFleetParams) -> Result<()> {
+    let HardenFleetParams {
+        fleet_path,
+        checks_dir,
+        mode,
+        apply,
+        confirm,
+        terraform_dir,
+        _format,
+        _check_filter,
+        concurrency,
+        continue_on_error,
+        output_dir,
+        dry_run,
+    } = params;
     let rem_mode = RemediationMode::from_str(mode)?;
 
     // Load and validate the fleet manifest (F9, F10, F5, F7, F2, F1)
@@ -1764,7 +1833,10 @@ fn cmd_harden_fleet<W: Write>(
             )?;
         }
         writeln!(out)?;
-        writeln!(out, "Dry run — no checks executed, no credentials resolved beyond manifest validation.")?;
+        writeln!(
+            out,
+            "Dry run — no checks executed, no credentials resolved beyond manifest validation."
+        )?;
         return Ok(());
     }
 
@@ -1882,7 +1954,15 @@ fn cmd_build<W: Write>(
     let default_output = format!("packs/{}", build_target.slug());
     let output_dir = std::path::Path::new(output.unwrap_or(&default_output));
 
-    codegen_generate(out, source_dir, &build_target, output_dir, validate, diff, filter)?;
+    codegen_generate(
+        out,
+        source_dir,
+        &build_target,
+        output_dir,
+        validate,
+        diff,
+        filter,
+    )?;
     Ok(())
 }
 
@@ -1900,10 +1980,7 @@ fn cmd_compliance<W: Write>(
         None => {
             // Scan controls_dir for *.framework.yaml or frameworks/*.yaml files.
             let dir = std::path::Path::new(controls_dir);
-            let candidates = [
-                dir.join("frameworks"),
-                dir.to_path_buf(),
-            ];
+            let candidates = [dir.join("frameworks"), dir.to_path_buf()];
             let mut found_yaml: Option<String> = None;
             'outer: for search_dir in &candidates {
                 if !search_dir.exists() {
@@ -1927,15 +2004,12 @@ fn cmd_compliance<W: Write>(
                 }
             }
             found_yaml.ok_or_else(|| {
-                anyhow!(
-                    "no framework YAML found; use --framework to specify a path"
-                )
+                anyhow!("no framework YAML found; use --framework to specify a path")
             })?
         }
     };
 
-    let framework = Framework::load_yaml(&framework_yaml)
-        .context("parsing framework YAML")?;
+    let framework = Framework::load_yaml(&framework_yaml).context("parsing framework YAML")?;
 
     let db_store = open_store(db)?;
     let checked_at = Utc::now().to_rfc3339();
@@ -2239,8 +2313,8 @@ mod tests {
 
     #[test]
     fn load_control_cel_override() {
-        let dir = std::env::temp_dir();
-        let ctrl_path = dir.join("test_ctrl.yaml");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctrl_path = tmp.path().join("test_ctrl.yaml");
         let yaml = r#"
 id: test_ctrl
 name: Test Control
@@ -2249,7 +2323,7 @@ evaluation_logic:
   preset: all_effective
 "#;
         std::fs::write(&ctrl_path, yaml).unwrap();
-        let dir_str = dir.to_str().unwrap();
+        let dir_str = tmp.path().to_str().unwrap();
 
         let control = load_control("test_ctrl", dir_str, Some("evidence.size() > 0")).unwrap();
         assert_eq!(
@@ -2257,8 +2331,6 @@ evaluation_logic:
             "evidence.size() > 0"
         );
         assert!(control.evaluation_logic.preset.is_empty());
-
-        let _ = std::fs::remove_file(ctrl_path);
     }
 
     // --- cmd_observe + cmd_test with in-memory store ---
@@ -2327,7 +2399,11 @@ evaluation_logic:
             false,
             true, // --confirm
         );
-        assert!(result.is_ok(), "test with --confirm should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "test with --confirm should succeed: {:?}",
+            result
+        );
         let s = String::from_utf8(buf).unwrap();
         let ev: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert!(ev.as_array().unwrap().len() >= 1);
@@ -2350,8 +2426,9 @@ evaluation_logic:
 
     #[test]
     fn cmd_history_empty_db() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_hist_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2371,13 +2448,13 @@ evaluation_logic:
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["control_id"].as_str().unwrap(), "cc6.1");
         assert_eq!(v["history"].as_array().unwrap().len(), 0);
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_schedule_add_list_remove_roundtrip() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_sched_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2421,21 +2498,22 @@ evaluation_logic:
         let s3 = String::from_utf8(buf3).unwrap();
         let list3: serde_json::Value = serde_json::from_str(&s3).unwrap();
         assert_eq!(list3.as_array().unwrap().len(), 0);
-
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_observe_and_evaluate_roundtrip() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_eval_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
             .to_string();
 
         // Write a minimal control YAML
-        let ctrl_dir = dir.join(format!("ctrl_dir_{}", uuid::Uuid::new_v4()));
+        let ctrl_dir = tmp
+            .path()
+            .join(format!("ctrl_dir_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&ctrl_dir).unwrap();
         let ctrl_yaml = r#"
 id: mock.ctrl
@@ -2465,17 +2543,15 @@ evaluation_logic:
         let s2 = String::from_utf8(buf2).unwrap();
         let status: serde_json::Value = serde_json::from_str(&s2).unwrap();
         assert!(status["status"].as_str().is_some());
-
-        let _ = std::fs::remove_file(&db_path);
-        let _ = std::fs::remove_dir_all(&ctrl_dir);
     }
 
     // --- report ---
 
     #[test]
     fn cmd_report_empty_db_json() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_report_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2485,13 +2561,13 @@ evaluation_logic:
         let s = String::from_utf8(buf).unwrap();
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["evidence_count"].as_i64().unwrap(), 0);
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_report_markdown_format() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_report_md_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2508,13 +2584,13 @@ evaluation_logic:
         let s = String::from_utf8(buf).unwrap();
         assert!(s.contains("# OCEAN Compliance Report"));
         assert!(s.contains("**Period:**"));
-        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
     fn cmd_report_csv_format() {
-        let dir = std::env::temp_dir();
-        let db_path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp
+            .path()
             .join(format!("ocean_test_report_csv_{}.db", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -2523,7 +2599,6 @@ evaluation_logic:
         cmd_report(&mut buf, &db_path, "2024-01-01:2024-12-31", "csv", None).unwrap();
         let s = String::from_utf8(buf).unwrap();
         assert!(s.starts_with("id,module,status,time"));
-        let _ = std::fs::remove_file(&db_path);
     }
 
     // --- cmd_compliance ---
@@ -2533,7 +2608,12 @@ evaluation_logic:
         // Should fail gracefully when framework file doesn't exist
         let tmp = tempfile::TempDir::new().unwrap();
         let db = tmp.path().join("ocean.db").to_str().unwrap().to_string();
-        let fw = tmp.path().join("nonexistent.yaml").to_str().unwrap().to_string();
+        let fw = tmp
+            .path()
+            .join("nonexistent.yaml")
+            .to_str()
+            .unwrap()
+            .to_string();
         let mut out = Vec::new();
         let result = cmd_compliance(&mut out, &db, Some(&fw), "controls", "json");
         assert!(result.is_err());
@@ -2568,10 +2648,7 @@ controls:
         assert_eq!(v["summary"]["passing"].as_u64().unwrap(), 0);
         assert_eq!(v["summary"]["unknown"].as_u64().unwrap(), 1);
         // The requirement has no status in DB so it is "unknown"
-        assert_eq!(
-            v["requirements"][0]["status"].as_str().unwrap(),
-            "unknown"
-        );
+        assert_eq!(v["requirements"][0]["status"].as_str().unwrap(), "unknown");
     }
 
     #[test]

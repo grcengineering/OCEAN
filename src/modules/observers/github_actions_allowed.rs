@@ -74,7 +74,7 @@ impl Observer for ActionsAllowedObserver {
         let now = Utc::now();
         // First check the org-level allowed actions policy.
         let perms_path = format!("/orgs/{}/actions/permissions", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &perms_path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), perms_path);
 
         let (body, status) = github_get(token, base_url, &perms_path)?;
 

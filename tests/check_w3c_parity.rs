@@ -233,7 +233,12 @@ fn vercel102_pass_saml_configured_and_owners_minimized() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "VERCEL-1.02");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -254,9 +259,17 @@ fn vercel102_fail_no_saml_and_too_many_owners() {
 
     let evidence = run_observer(def, &vercel_config());
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "saml assertion should fail");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "saml assertion should fail"
+    );
     assert_eq!(evidence[0].findings[0].severity_id, 4); // high
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "owner-minimization assertion should fail");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "owner-minimization assertion should fail"
+    );
     assert_eq!(evidence[1].findings[0].severity_id, 3); // medium
 }
 
@@ -338,7 +351,10 @@ fn vercel303_pass_persistent_action_rule_present() {
         {"name": "hth-persistent-block-scanners", "action": {"mitigate": {"action": "deny", "actionDuration": "24h", "persistentAction": true}}}
     ]});
     let server = MockHTTPServer::new(vec![(200, config.to_string())]);
-    let def = load_vercel("VERCEL-3.03-firewall-persistent-actions.check.yaml", server.url());
+    let def = load_vercel(
+        "VERCEL-3.03-firewall-persistent-actions.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &vercel_config());
     assert_eq!(evidence.len(), 1);
@@ -351,7 +367,10 @@ fn vercel303_fail_no_persistent_action_rule() {
         {"name": "log-only", "action": {"mitigate": {"action": "log", "persistentAction": false}}}
     ]});
     let server = MockHTTPServer::new(vec![(200, config.to_string())]);
-    let def = load_vercel("VERCEL-3.03-firewall-persistent-actions.check.yaml", server.url());
+    let def = load_vercel(
+        "VERCEL-3.03-firewall-persistent-actions.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &vercel_config());
     assert_eq!(evidence.len(), 1);
@@ -365,9 +384,13 @@ fn vercel303_fail_no_persistent_action_rule() {
 
 #[test]
 fn vercel304_pass_ai_bots_active() {
-    let config = serde_json::json!({"managedRulesets": {"ai_bots": {"active": true, "action": "log"}}});
+    let config =
+        serde_json::json!({"managedRulesets": {"ai_bots": {"active": true, "action": "log"}}});
     let server = MockHTTPServer::new(vec![(200, config.to_string())]);
-    let def = load_vercel("VERCEL-3.04-ai-bots-managed-ruleset.check.yaml", server.url());
+    let def = load_vercel(
+        "VERCEL-3.04-ai-bots-managed-ruleset.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &vercel_config());
     assert_eq!(evidence.len(), 1);
@@ -378,7 +401,10 @@ fn vercel304_pass_ai_bots_active() {
 fn vercel304_fail_ai_bots_ruleset_absent() {
     let config = serde_json::json!({"managedRulesets": {"bot_protection": {"active": true, "action": "challenge"}}});
     let server = MockHTTPServer::new(vec![(200, config.to_string())]);
-    let def = load_vercel("VERCEL-3.04-ai-bots-managed-ruleset.check.yaml", server.url());
+    let def = load_vercel(
+        "VERCEL-3.04-ai-bots-managed-ruleset.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &vercel_config());
     assert_eq!(evidence.len(), 1);
@@ -472,12 +498,20 @@ fn vercel901_fail_no_matching_deny_rule() {
 
 fn jumpcloud_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("JUMPCLOUD_API_KEY".to_string(), "jc-test-api-key".to_string());
+    cfg.insert(
+        "JUMPCLOUD_API_KEY".to_string(),
+        "jc-test-api-key".to_string(),
+    );
     cfg
 }
 
 fn load_jumpcloud(filename: &str, mock_url: &str) -> ocean::check::CheckDefinition {
-    load_check_with_mock_urls("jumpcloud", filename, "https://console.jumpcloud.com", mock_url)
+    load_check_with_mock_urls(
+        "jumpcloud",
+        filename,
+        "https://console.jumpcloud.com",
+        mock_url,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -595,7 +629,10 @@ fn jc501_pass_directory_insights_enabled() {
         "settings": {"features": {"directoryInsights": {"enabled": true}}}
     });
     let server = MockHTTPServer::new(vec![(200, orgs.to_string()), (200, org.to_string())]);
-    let def = load_jumpcloud("JC-5.01-directory-insights-enabled.check.yaml", server.url());
+    let def = load_jumpcloud(
+        "JC-5.01-directory-insights-enabled.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &jumpcloud_config());
     assert_eq!(evidence.len(), 1);
@@ -610,7 +647,10 @@ fn jc501_fail_directory_insights_disabled() {
         "settings": {"features": {"directoryInsights": {"enabled": false}}}
     });
     let server = MockHTTPServer::new(vec![(200, orgs.to_string()), (200, org.to_string())]);
-    let def = load_jumpcloud("JC-5.01-directory-insights-enabled.check.yaml", server.url());
+    let def = load_jumpcloud(
+        "JC-5.01-directory-insights-enabled.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &jumpcloud_config());
     assert_eq!(evidence.len(), 1);
@@ -624,7 +664,10 @@ fn jc501_fail_directory_insights_disabled() {
 
 fn salesforce_config(mock_url: &str) -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("SF_ACCESS_TOKEN".to_string(), "sf-test-access-token".to_string());
+    cfg.insert(
+        "SF_ACCESS_TOKEN".to_string(),
+        "sf-test-access-token".to_string(),
+    );
     cfg.insert("SF_INSTANCE_URL".to_string(), mock_url.to_string());
     cfg
 }
@@ -643,7 +686,10 @@ fn sfdc101_pass_no_users_with_mfa_disabled() {
         ]
     });
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check("salesforce", "SFDC-1.01-mfa-prompt-disabled-audit.check.yaml");
+    let def = load_check(
+        "salesforce",
+        "SFDC-1.01-mfa-prompt-disabled-audit.check.yaml",
+    );
 
     let evidence = run_observer(def, &salesforce_config(server.url()));
     assert_eq!(evidence.len(), 1);
@@ -658,7 +704,10 @@ fn sfdc101_fail_user_with_mfa_prompt_disabled() {
         "records": [{"Username": "carol", "UserPreferencesDisableMFAPrompt": true}]
     });
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check("salesforce", "SFDC-1.01-mfa-prompt-disabled-audit.check.yaml");
+    let def = load_check(
+        "salesforce",
+        "SFDC-1.01-mfa-prompt-disabled-audit.check.yaml",
+    );
 
     let evidence = run_observer(def, &salesforce_config(server.url()));
     assert_eq!(evidence.len(), 1);
@@ -677,7 +726,10 @@ fn sfdc201_pass_login_ip_ranges_configured() {
         "records": [{"StartAddress": "203.0.113.0", "EndAddress": "203.0.113.255", "Description": "HQ"}]
     });
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check("salesforce", "SFDC-2.01-login-ip-ranges-configured.check.yaml");
+    let def = load_check(
+        "salesforce",
+        "SFDC-2.01-login-ip-ranges-configured.check.yaml",
+    );
 
     let evidence = run_observer(def, &salesforce_config(server.url()));
     assert_eq!(evidence.len(), 1);
@@ -688,7 +740,10 @@ fn sfdc201_pass_login_ip_ranges_configured() {
 fn sfdc201_fail_no_login_ip_ranges() {
     let body = serde_json::json!({"totalSize": 0, "records": []});
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check("salesforce", "SFDC-2.01-login-ip-ranges-configured.check.yaml");
+    let def = load_check(
+        "salesforce",
+        "SFDC-2.01-login-ip-ranges-configured.check.yaml",
+    );
 
     let evidence = run_observer(def, &salesforce_config(server.url()));
     assert_eq!(evidence.len(), 1);
@@ -708,13 +763,21 @@ fn sfdc301_pass_apps_preauthorized_and_no_stale_tokens() {
     });
     let stale = serde_json::json!({"totalSize": 0, "records": []});
     let server = MockHTTPServer::new(vec![(200, apps.to_string()), (200, stale.to_string())]);
-    let def = load_check("salesforce", "SFDC-3.01-connected-app-scopes-audit.check.yaml");
+    let def = load_check(
+        "salesforce",
+        "SFDC-3.01-connected-app-scopes-audit.check.yaml",
+    );
 
     let evidence = run_observer(def, &salesforce_config(server.url()));
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "SFDC-3.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -729,13 +792,24 @@ fn sfdc301_fail_open_app_and_stale_token() {
         "records": [{"AppName": "Old Integration", "LastUsedDate": "2025-01-01T00:00:00.000+0000"}]
     });
     let server = MockHTTPServer::new(vec![(200, apps.to_string()), (200, stale.to_string())]);
-    let def = load_check("salesforce", "SFDC-3.01-connected-app-scopes-audit.check.yaml");
+    let def = load_check(
+        "salesforce",
+        "SFDC-3.01-connected-app-scopes-audit.check.yaml",
+    );
 
     let evidence = run_observer(def, &salesforce_config(server.url()));
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "admin pre-auth assertion should fail");
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "admin pre-auth assertion should fail"
+    );
     assert_eq!(evidence[0].findings[0].severity_id, 4); // high
-    assert_eq!(evidence[1].status_id, StatusId::Ineffective, "stale-token assertion should fail");
+    assert_eq!(
+        evidence[1].status_id,
+        StatusId::Ineffective,
+        "stale-token assertion should fail"
+    );
     assert_eq!(evidence[1].findings[0].severity_id, 3); // medium
 }
 
@@ -780,7 +854,10 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
         .join(dir_name);
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one {dir_name} check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one {dir_name} check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
     for expected in expected_ids {
@@ -788,7 +865,11 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
     }
 
     for def in &defs {
-        assert_eq!(def.source, source, "{}: source should be '{source}'", def.id);
+        assert_eq!(
+            def.source, source,
+            "{}: source should be '{source}'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for {dir_name} checks",
@@ -800,7 +881,11 @@ fn assert_vendor_dir_loads(dir_name: &str, source: &str, hth_prefix: &str, expec
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
         assert!(!def.steps.is_empty(), "{}: check has no steps", def.id);
     }
 }

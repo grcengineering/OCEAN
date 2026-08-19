@@ -73,7 +73,9 @@ fn graph_get(token: &str, graph_base_url: &str, path: &str) -> Result<(Value, u1
             Ok((body, status))
         }
         Err(ureq::Error::Status(code, r)) => {
-            let body: Value = r.into_json().unwrap_or_else(|_| json!({"error": "unknown"}));
+            let body: Value = r
+                .into_json()
+                .unwrap_or_else(|_| json!({"error": "unknown"}));
             Ok((body, code))
         }
         Err(e) => Err(anyhow!("Graph API request failed: {}", e)),
@@ -387,7 +389,8 @@ mod tests {
         format!("http://127.0.0.1:{}", addr.port())
     }
 
-    const TOKEN_RESPONSE: &str = r#"{"access_token":"test_token","token_type":"Bearer","expires_in":3600}"#;
+    const TOKEN_RESPONSE: &str =
+        r#"{"access_token":"test_token","token_type":"Bearer","expires_in":3600}"#;
 
     fn base_config(base_url: &str) -> HashMap<String, String> {
         HashMap::from([

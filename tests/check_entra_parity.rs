@@ -69,8 +69,8 @@ fn azure_check_path(filename: &str) -> std::path::PathBuf {
 /// (`management.azure.com`) hosts to the mock server base URL.
 fn load_check_with_mock_urls(filename: &str, mock_base: &str) -> CheckDefinition {
     let path = azure_check_path(filename);
-    let content = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
+    let content =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
     let rewritten = content
         .replace("https://graph.microsoft.com", mock_base)
         .replace("https://management.azure.com", mock_base);
@@ -83,7 +83,10 @@ fn azure_test_config() -> HashMap<String, String> {
     cfg.insert("AZURE_CLIENT_ID".to_string(), "test-client-id".to_string());
     cfg.insert("AZURE_CLIENT_SECRET".to_string(), "test-secret".to_string());
     cfg.insert("AZURE_TENANT_ID".to_string(), "test-tenant-id".to_string());
-    cfg.insert("AZURE_SUBSCRIPTION_ID".to_string(), "test-sub-id".to_string());
+    cfg.insert(
+        "AZURE_SUBSCRIPTION_ID".to_string(),
+        "test-sub-id".to_string(),
+    );
     cfg
 }
 
@@ -124,11 +127,19 @@ fn ca206_pass_device_code_flow_blocked() {
     let policies = serde_json::json!({"value": [ca_policy_device_code_block("enabled")]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
 
-    let def = load_check_with_mock_urls("AZURE-CA-2.06-block-device-code-flow.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-2.06-block-device-code-flow.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-2.06");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
     assert!(evidence[0].findings.is_empty());
 }
 
@@ -138,11 +149,19 @@ fn ca206_fail_no_blocking_policy() {
     let policies = serde_json::json!({"value": [ca_policy_device_code_block("enabledForReportingButNotEnforced")]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
 
-    let def = load_check_with_mock_urls("AZURE-CA-2.06-block-device-code-flow.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-2.06-block-device-code-flow.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-2.06");
 
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
     assert!(!evidence[0].findings.is_empty());
 }
 
@@ -151,7 +170,10 @@ fn ca206_fail_empty_policy_list() {
     let policies = serde_json::json!({"value": []});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
 
-    let def = load_check_with_mock_urls("AZURE-CA-2.06-block-device-code-flow.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-2.06-block-device-code-flow.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-2.06");
 
     assert_eq!(evidence[0].status_id, StatusId::Ineffective);
@@ -181,10 +203,18 @@ fn ca102_pass_all_enabled_policies_exclude_group() {
         ca_policy_with_exclude_groups("enabled", vec!["break-glass-group"]),
     ]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-CA-1.02-emergency-access-exclusion.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-1.02-emergency-access-exclusion.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-1.02");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
     assert!(evidence[0].findings.is_empty());
 }
 
@@ -195,10 +225,18 @@ fn ca102_fail_enabled_policy_missing_exclusion() {
         ca_policy_with_exclude_groups("enabled", vec![]),
     ]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-CA-1.02-emergency-access-exclusion.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-1.02-emergency-access-exclusion.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-1.02");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
     assert!(!evidence[0].findings.is_empty());
 }
 
@@ -206,7 +244,11 @@ fn ca102_fail_enabled_policy_missing_exclusion() {
 // AZURE-CA-2.03 — Require Compliant Devices for Admins
 // ===========================================================================
 
-fn ca_policy_compliant_device(state: &str, include_apps: Vec<&str>, controls: Vec<&str>) -> serde_json::Value {
+fn ca_policy_compliant_device(
+    state: &str,
+    include_apps: Vec<&str>,
+    controls: Vec<&str>,
+) -> serde_json::Value {
     serde_json::json!({
         "id": "policy-admin-device",
         "displayName": "HTH-AdminPortal-ComplianceRequired",
@@ -229,10 +271,18 @@ fn ca203_pass_compliant_device_required_for_graph() {
         )
     ]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-CA-2.03-compliant-device-admins.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-2.03-compliant-device-admins.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-2.03");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -246,10 +296,18 @@ fn ca203_fail_graph_not_targeted() {
         )
     ]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-CA-2.03-compliant-device-admins.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-2.03-compliant-device-admins.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-2.03");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -272,22 +330,40 @@ fn ca_policy_risk(state: &str, risk_levels: Vec<&str>, controls: Vec<&str>) -> s
 
 #[test]
 fn ca204_pass_high_risk_blocked() {
-    let policies = serde_json::json!({"value": [ca_policy_risk("enabled", vec!["high"], vec!["block"])]});
+    let policies =
+        serde_json::json!({"value": [ca_policy_risk("enabled", vec!["high"], vec!["block"])]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-CA-2.04-block-high-risk-signins.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-2.04-block-high-risk-signins.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-2.04");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
 fn ca204_fail_only_medium_risk_covered() {
-    let policies = serde_json::json!({"value": [ca_policy_risk("enabled", vec!["medium"], vec!["mfa"])]});
+    let policies =
+        serde_json::json!({"value": [ca_policy_risk("enabled", vec!["medium"], vec!["mfa"])]});
     let server = MockHTTPServer::new(vec![(200, policies.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-CA-2.04-block-high-risk-signins.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-CA-2.04-block-high-risk-signins.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-CA-2.04");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -303,7 +379,12 @@ fn pim302_pass_review_exists() {
     let def = load_check_with_mock_urls("AZURE-PIM-3.02-access-reviews.check.yaml", server.url());
     let evidence = run_observer(def, "AZURE-PIM-3.02");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -313,7 +394,12 @@ fn pim302_fail_no_reviews() {
     let def = load_check_with_mock_urls("AZURE-PIM-3.02-access-reviews.check.yaml", server.url());
     let evidence = run_observer(def, "AZURE-PIM-3.02");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -327,10 +413,18 @@ fn pim303_pass_restricted_au_exists() {
         {"id": "au-2", "displayName": "Regional AU", "isMemberManagementRestricted": false}
     ]});
     let server = MockHTTPServer::new(vec![(200, units.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-PIM-3.03-restricted-management-au.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-PIM-3.03-restricted-management-au.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-PIM-3.03");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -339,10 +433,18 @@ fn pim303_fail_no_restricted_au() {
         {"id": "au-2", "displayName": "Regional AU", "isMemberManagementRestricted": false}
     ]});
     let server = MockHTTPServer::new(vec![(200, units.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-PIM-3.03-restricted-management-au.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-PIM-3.03-restricted-management-au.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-PIM-3.03");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -355,10 +457,18 @@ fn app401_pass_no_grant_policies_assigned() {
         "defaultUserRolePermissions": {"permissionGrantPoliciesAssigned": []}
     });
     let server = MockHTTPServer::new(vec![(200, policy.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-APP-4.01-restrict-user-consent.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-APP-4.01-restrict-user-consent.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-APP-4.01");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -367,10 +477,18 @@ fn app401_fail_grant_policy_assigned() {
         "defaultUserRolePermissions": {"permissionGrantPoliciesAssigned": ["ManagePermissionGrantsForSelf.microsoft-user-default-legacy"]}
     });
     let server = MockHTTPServer::new(vec![(200, policy.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-APP-4.01-restrict-user-consent.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-APP-4.01-restrict-user-consent.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-APP-4.01");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -381,10 +499,18 @@ fn app401_fail_grant_policy_assigned() {
 fn app403_pass_no_legacy_signins() {
     let signins = serde_json::json!({"value": []});
     let server = MockHTTPServer::new(vec![(200, signins.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-APP-4.03-retire-azure-ad-graph.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-APP-4.03-retire-azure-ad-graph.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-APP-4.03");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -393,10 +519,18 @@ fn app403_fail_legacy_signin_found() {
         {"id": "signin-1", "appId": "00000002-0000-0000-c000-000000000000", "appDisplayName": "Windows Azure Active Directory"}
     ]});
     let server = MockHTTPServer::new(vec![(200, signins.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-APP-4.03-retire-azure-ad-graph.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-APP-4.03-retire-azure-ad-graph.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-APP-4.03");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -419,7 +553,10 @@ fn mon501_pass_signin_logs_exported() {
         }
     ]});
     let server = MockHTTPServer::new(vec![(200, settings.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-MON-5.01-export-signin-audit-logs.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-MON-5.01-export-signin-audit-logs.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-MON-5.01");
 
     assert_eq!(evidence.len(), 2);
@@ -432,7 +569,10 @@ fn mon501_pass_signin_logs_exported() {
 fn mon501_fail_no_diagnostic_setting() {
     let settings = serde_json::json!({"value": []});
     let server = MockHTTPServer::new(vec![(200, settings.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-MON-5.01-export-signin-audit-logs.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-MON-5.01-export-signin-audit-logs.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-MON-5.01");
 
     assert_eq!(evidence.len(), 2);
@@ -456,7 +596,10 @@ fn mon501_fail_signin_logs_category_not_enabled() {
         }
     ]});
     let server = MockHTTPServer::new(vec![(200, settings.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-MON-5.01-export-signin-audit-logs.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-MON-5.01-export-signin-audit-logs.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-MON-5.01");
 
     assert_eq!(evidence.len(), 2);
@@ -474,10 +617,18 @@ fn mon502_pass_score_above_target() {
         {"id": "score-1", "currentScore": 75.5, "maxScore": 100.0}
     ]});
     let server = MockHTTPServer::new(vec![(200, scores.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-MON-5.02-identity-secure-score.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-MON-5.02-identity-secure-score.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-MON-5.02");
 
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
@@ -486,10 +637,18 @@ fn mon502_fail_score_below_target() {
         {"id": "score-1", "currentScore": 42.0, "maxScore": 100.0}
     ]});
     let server = MockHTTPServer::new(vec![(200, scores.to_string())]);
-    let def = load_check_with_mock_urls("AZURE-MON-5.02-identity-secure-score.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "AZURE-MON-5.02-identity-secure-score.check.yaml",
+        server.url(),
+    );
     let evidence = run_observer(def, "AZURE-MON-5.02");
 
-    assert_eq!(evidence[0].status_id, StatusId::Ineffective, "status: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Ineffective,
+        "status: {}",
+        evidence[0].status
+    );
 }
 
 // ===========================================================================
@@ -508,8 +667,8 @@ fn all_azure_checks_load_and_have_unique_ids() {
         if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
             continue;
         }
-        let def = load_check_file(&path)
-            .unwrap_or_else(|e| panic!("load {}: {}", path.display(), e));
+        let def =
+            load_check_file(&path).unwrap_or_else(|e| panic!("load {}: {}", path.display(), e));
         assert!(!def.id.is_empty(), "{} has empty id", path.display());
         assert!(
             ids.insert(def.id.clone()),
@@ -519,5 +678,8 @@ fn all_azure_checks_load_and_have_unique_ids() {
         );
         count += 1;
     }
-    assert!(count >= 8, "expected at least the original 8 azure checks, found {count}");
+    assert!(
+        count >= 8,
+        "expected at least the original 8 azure checks, found {count}"
+    );
 }
