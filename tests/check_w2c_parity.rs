@@ -171,7 +171,10 @@ fn load_check_with_mock_urls(
     serde_yaml::from_str(&rewritten).unwrap_or_else(|e| panic!("parse rewritten {filename}: {e}"))
 }
 
-fn run_observer(def: ocean::check::CheckDefinition, config: &HashMap<String, String>) -> Vec<ocean::evidence::Evidence> {
+fn run_observer(
+    def: ocean::check::CheckDefinition,
+    config: &HashMap<String, String>,
+) -> Vec<ocean::evidence::Evidence> {
     let registry = Arc::new(Registry::new());
     let id = def.id.clone();
     register_check(&registry, def);
@@ -405,7 +408,8 @@ fn sail_config(mock_url: &str) -> HashMap<String, String> {
 
 #[test]
 fn sail202_pass_no_never_expiring_non_managed_pats() {
-    let token_resp = serde_json::json!({"access_token": "tok-123", "token_type": "Bearer", "expires_in": 3600});
+    let token_resp =
+        serde_json::json!({"access_token": "tok-123", "token_type": "Bearer", "expires_in": 3600});
     let pats = serde_json::json!([
         {"id": "1", "name": "ci-integration", "owner": {"name": "svc-ci"},
          "created": "2026-01-01T00:00:00Z", "lastUsed": "2026-07-01T00:00:00Z",
@@ -419,12 +423,18 @@ fn sail202_pass_no_never_expiring_non_managed_pats() {
 
     let evidence = run_observer(def, &sail_config(server.url()));
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "expected Effective, got: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "expected Effective, got: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
 fn sail202_fail_never_expiring_non_managed_pat_found() {
-    let token_resp = serde_json::json!({"access_token": "tok-123", "token_type": "Bearer", "expires_in": 3600});
+    let token_resp =
+        serde_json::json!({"access_token": "tok-123", "token_type": "Bearer", "expires_in": 3600});
     let pats = serde_json::json!([
         {"id": "3", "name": "leaky-integration", "owner": {"name": "alice"},
          "created": "2025-06-01T00:00:00Z", "lastUsed": "2026-01-01T00:00:00Z",
@@ -446,7 +456,10 @@ fn sail202_fail_never_expiring_non_managed_pat_found() {
 fn onelogin_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
     cfg.insert("ONELOGIN_CLIENT_ID".to_string(), "ol-client-id".to_string());
-    cfg.insert("ONELOGIN_CLIENT_SECRET".to_string(), "ol-client-secret".to_string());
+    cfg.insert(
+        "ONELOGIN_CLIENT_SECRET".to_string(),
+        "ol-client-secret".to_string(),
+    );
     cfg.insert("onelogin_subdomain".to_string(), "testcorp".to_string());
     cfg
 }
@@ -455,12 +468,16 @@ const OL_HOST_TEMPLATE: &str = "https://{{onelogin_subdomain}}.onelogin.com";
 
 #[test]
 fn ol303_pass_roles_retrieved() {
-    let token_resp = serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
+    let token_resp =
+        serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
     let roles = serde_json::json!([
         {"id": 1, "name": "Super User", "admins": [10, 11], "users": [10, 11, 12]},
         {"id": 2, "name": "Help Desk", "admins": [13], "users": [13]}
     ]);
-    let server = MockHTTPServer::new(vec![(200, token_resp.to_string()), (200, roles.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, token_resp.to_string()),
+        (200, roles.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "onelogin",
         "OL-3.03-privileged-role-inventory.check.yaml",
@@ -470,14 +487,23 @@ fn ol303_pass_roles_retrieved() {
 
     let evidence = run_observer(def, &onelogin_config());
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "expected Effective, got: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "expected Effective, got: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
 fn ol303_fail_roles_api_unreachable() {
-    let token_resp = serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
+    let token_resp =
+        serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
     let error_body = serde_json::json!({"status": {"code": 401, "message": "Unauthorized"}});
-    let server = MockHTTPServer::new(vec![(200, token_resp.to_string()), (401, error_body.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, token_resp.to_string()),
+        (401, error_body.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "onelogin",
         "OL-3.03-privileged-role-inventory.check.yaml",
@@ -496,18 +522,25 @@ fn ol303_fail_roles_api_unreachable() {
 
 fn onelogin_inactive_config() -> HashMap<String, String> {
     let mut cfg = onelogin_config();
-    cfg.insert("inactive_cutoff".to_string(), "2026-05-01T00:00:00Z".to_string());
+    cfg.insert(
+        "inactive_cutoff".to_string(),
+        "2026-05-01T00:00:00Z".to_string(),
+    );
     cfg
 }
 
 #[test]
 fn ol304_pass_inactive_users_retrieved() {
-    let token_resp = serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
+    let token_resp =
+        serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
     let users = serde_json::json!([
         {"id": 100, "username": "dormant.contractor", "email": "dormant@example.com",
          "state": 1, "status": 1, "last_login": "2026-01-01T00:00:00Z"}
     ]);
-    let server = MockHTTPServer::new(vec![(200, token_resp.to_string()), (200, users.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, token_resp.to_string()),
+        (200, users.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "onelogin",
         "OL-3.04-inactive-users.check.yaml",
@@ -517,14 +550,24 @@ fn ol304_pass_inactive_users_retrieved() {
 
     let evidence = run_observer(def, &onelogin_inactive_config());
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "expected Effective, got: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "expected Effective, got: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
 fn ol304_fail_users_api_unreachable() {
-    let token_resp = serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
-    let error_body = serde_json::json!({"status": {"code": 500, "message": "Internal Server Error"}});
-    let server = MockHTTPServer::new(vec![(200, token_resp.to_string()), (500, error_body.to_string())]);
+    let token_resp =
+        serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
+    let error_body =
+        serde_json::json!({"status": {"code": 500, "message": "Internal Server Error"}});
+    let server = MockHTTPServer::new(vec![
+        (200, token_resp.to_string()),
+        (500, error_body.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "onelogin",
         "OL-3.04-inactive-users.check.yaml",
@@ -543,7 +586,8 @@ fn ol304_fail_users_api_unreachable() {
 
 #[test]
 fn ol501_pass_recent_events_present() {
-    let token_resp = serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
+    let token_resp =
+        serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
     let events = serde_json::json!({
         "data": [
             {"id": 555, "created_at": "2026-08-01T00:00:00Z", "event_type_id": 5,
@@ -551,7 +595,10 @@ fn ol501_pass_recent_events_present() {
         ],
         "pagination": {"next_link": null}
     });
-    let server = MockHTTPServer::new(vec![(200, token_resp.to_string()), (200, events.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, token_resp.to_string()),
+        (200, events.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "onelogin",
         "OL-5.01-audit-logging-active.check.yaml",
@@ -561,14 +608,23 @@ fn ol501_pass_recent_events_present() {
 
     let evidence = run_observer(def, &onelogin_config());
     assert_eq!(evidence.len(), 1);
-    assert_eq!(evidence[0].status_id, StatusId::Effective, "expected Effective, got: {}", evidence[0].status);
+    assert_eq!(
+        evidence[0].status_id,
+        StatusId::Effective,
+        "expected Effective, got: {}",
+        evidence[0].status
+    );
 }
 
 #[test]
 fn ol501_fail_no_recent_events() {
-    let token_resp = serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
+    let token_resp =
+        serde_json::json!({"access_token": "ol-tok", "token_type": "bearer", "expires_in": 36000});
     let events = serde_json::json!({"data": [], "pagination": {"next_link": null}});
-    let server = MockHTTPServer::new(vec![(200, token_resp.to_string()), (200, events.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, token_resp.to_string()),
+        (200, events.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "onelogin",
         "OL-5.01-audit-logging-active.check.yaml",
@@ -587,10 +643,15 @@ fn ol501_fail_no_recent_events() {
 // ---------------------------------------------------------------------------
 
 fn assert_vendor_dir_loads(vendor: &str, expected_ids: &[&str], hth_prefix: &str) {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("checks").join(vendor);
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("checks")
+        .join(vendor);
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one {vendor} check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one {vendor} check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
     for expected in expected_ids {
@@ -598,7 +659,11 @@ fn assert_vendor_dir_loads(vendor: &str, expected_ids: &[&str], hth_prefix: &str
     }
 
     for def in &defs {
-        assert_eq!(def.source, vendor, "{}: source should be '{vendor}'", def.id);
+        assert_eq!(
+            def.source, vendor,
+            "{}: source should be '{vendor}'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for {vendor} checks",
@@ -610,7 +675,11 @@ fn assert_vendor_dir_loads(vendor: &str, expected_ids: &[&str], hth_prefix: &str
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
         assert!(!def.steps.is_empty(), "{}: check has no steps", def.id);
     }
 }
@@ -672,9 +741,11 @@ fn oauth_mint_sends_form_urlencoded_not_json() {
                     }
                     raw.extend_from_slice(&buf[..n]);
                     let text = String::from_utf8_lossy(&raw);
-                    if let Some(header_end) = text.find("
+                    if let Some(header_end) = text.find(
+                        "
 
-") {
+",
+                    ) {
                         let content_length = text
                             .lines()
                             .find(|l| l.to_ascii_lowercase().starts_with("content-length:"))
@@ -687,8 +758,7 @@ fn oauth_mint_sends_form_urlencoded_not_json() {
                     }
                 }
                 if i == 0 {
-                    *captured_writer.lock().unwrap() =
-                        String::from_utf8_lossy(&raw).to_string();
+                    *captured_writer.lock().unwrap() = String::from_utf8_lossy(&raw).to_string();
                 }
                 let body = if i == 0 {
                     r#"{"access_token":"tok"}"#

@@ -5,7 +5,10 @@ use anyhow::Result;
 use chrono::Utc;
 use uuid::Uuid;
 
-use ocean::evidence::{ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId};
+use ocean::evidence::{
+    ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
+};
 use ocean::module::{CredentialReq, Executor, Module, Observer, Registry};
 
 // ---------------------------------------------------------------------------
@@ -14,6 +17,10 @@ use ocean::module::{CredentialReq, Executor, Module, Observer, Registry};
 
 fn make_evidence() -> Evidence {
     Evidence {
+        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+        connected_account: None,
+        population: None,
+        evaluation: None,
         id: Uuid::new_v4(),
         control_id: "test.control".to_string(),
         class_uid: 1001,
@@ -100,7 +107,10 @@ impl Observer for LocalMockObserver {
 #[test]
 fn executor_observe_returns_evidence() {
     let registry = Arc::new(Registry::new());
-    registry.register_observer(Arc::new(LocalMockObserver { id: "local.mock", fail: false }));
+    registry.register_observer(Arc::new(LocalMockObserver {
+        id: "local.mock",
+        fail: false,
+    }));
     let executor = Executor::new(Arc::clone(&registry));
 
     let result = executor.execute_observer("local.mock", &HashMap::new());
@@ -113,7 +123,10 @@ fn executor_observe_returns_evidence() {
 #[test]
 fn executor_observe_failing_module() {
     let registry = Arc::new(Registry::new());
-    registry.register_observer(Arc::new(LocalMockObserver { id: "local.fail", fail: true }));
+    registry.register_observer(Arc::new(LocalMockObserver {
+        id: "local.fail",
+        fail: true,
+    }));
     let executor = Executor::new(Arc::clone(&registry));
 
     let result = executor.execute_observer("local.fail", &HashMap::new());

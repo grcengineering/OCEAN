@@ -7,9 +7,11 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    TranscriptRecorder,
+    TranscriptRecorder, EVIDENCE_SCHEMA_VERSION,
 };
-use crate::module::{tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification};
+use crate::module::{
+    tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
+};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
 
 // ─── UnsignedCommitTester ─────────────────────────────────────────────────────
@@ -110,7 +112,7 @@ impl Tester for UnsignedCommitTester {
             "/repos/{}/{}/branches/{}/protection/required_signatures",
             owner, repo, branch
         );
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         recorder.record_action(
             "read branch protection required signatures via GitHub API",
@@ -224,6 +226,10 @@ impl Tester for UnsignedCommitTester {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-2.4".to_string(),
             class_uid: 1003,
@@ -282,10 +288,7 @@ mod tests {
 
     #[test]
     fn unsigned_commit_tester_name() {
-        assert_eq!(
-            UnsignedCommitTester.name(),
-            "GitHub Unsigned Commit Tester"
-        );
+        assert_eq!(UnsignedCommitTester.name(), "GitHub Unsigned Commit Tester");
     }
 
     #[test]
@@ -316,7 +319,10 @@ mod tests {
 
     #[test]
     fn signing_enabled_is_effective() {
-        let srv = mock_server(200, r#"{"enabled":true,"url":"https://api.github.com/repos/acme/app/branches/main/protection/required_signatures"}"#);
+        let srv = mock_server(
+            200,
+            r#"{"enabled":true,"url":"https://api.github.com/repos/acme/app/branches/main/protection/required_signatures"}"#,
+        );
         let ev = &UnsignedCommitTester.test(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert!(ev
@@ -336,13 +342,14 @@ mod tests {
             .findings
             .iter()
             .any(|f| f.title == "Commit Signing Not Configured"));
-        assert!(ev
-            .findings
-            .iter()
-            .find(|f| f.title == "Commit Signing Not Configured")
-            .unwrap()
-            .severity_id
-            > 0);
+        assert!(
+            ev.findings
+                .iter()
+                .find(|f| f.title == "Commit Signing Not Configured")
+                .unwrap()
+                .severity_id
+                > 0
+        );
     }
 
     #[test]

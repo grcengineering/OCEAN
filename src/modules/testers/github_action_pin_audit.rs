@@ -8,9 +8,11 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    TranscriptRecorder,
+    TranscriptRecorder, EVIDENCE_SCHEMA_VERSION,
 };
-use crate::module::{tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification};
+use crate::module::{
+    tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
+};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
 
 // ─── ActionPinAuditTester ─────────────────────────────────────────────────────
@@ -93,10 +95,8 @@ fn extract_uses_lines(content: &str) -> Vec<String> {
             // Handle `uses: value` and `- uses: value`
             let rest = if let Some(r) = trimmed.strip_prefix("uses:") {
                 r
-            } else if let Some(r) = trimmed.strip_prefix("- uses:") {
-                r
             } else {
-                return None;
+                trimmed.strip_prefix("- uses:")?
             };
             Some(rest.trim().to_string())
         })
@@ -140,11 +140,7 @@ impl Tester for ActionPinAuditTester {
         let safety_class = "safe".to_string();
 
         let workflows_path = format!("/repos/{}/{}/contents/.github/workflows", owner, repo);
-        let endpoint = format!(
-            "{}{}",
-            base_url.trim_end_matches('/'),
-            &workflows_path
-        );
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), workflows_path);
 
         recorder.record_action(
             "list workflow files in .github/workflows via GitHub API",
@@ -167,6 +163,10 @@ impl Tester for ActionPinAuditTester {
             let transcript = recorder.finalize();
 
             return Ok(vec![Evidence {
+                schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+                connected_account: None,
+                population: None,
+                evaluation: None,
                 id: Uuid::new_v4(),
                 control_id: "GH-3.10".to_string(),
                 class_uid: 1003,
@@ -269,7 +269,7 @@ impl Tester for ActionPinAuditTester {
                 .get("content")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            let cleaned = raw_content.replace('\n', "").replace('\r', "");
+            let cleaned = raw_content.replace(['\n', '\r'], "");
             let decoded = BASE64.decode(cleaned.as_bytes()).unwrap_or_default();
             let content = String::from_utf8_lossy(&decoded);
 
@@ -332,6 +332,10 @@ impl Tester for ActionPinAuditTester {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-3.10".to_string(),
             class_uid: 1003,
@@ -486,13 +490,7 @@ mod tests {
 
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["workflows_checked"].as_u64(), Some(1));
-        assert_eq!(
-            ev.raw_data["unpinned_actions"]
-                .as_array()
-                .unwrap()
-                .len(),
-            0
-        );
+        assert_eq!(ev.raw_data["unpinned_actions"].as_array().unwrap().len(), 0);
         assert_eq!(ev.control_id, "GH-3.10");
         assert_eq!(ev.confidence_level, ConfidenceLevel::ActiveVerification);
     }

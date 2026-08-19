@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -72,7 +73,7 @@ impl Observer for OidcConfigObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/actions/oidc/customization/sub", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -139,12 +140,22 @@ impl Observer for OidcConfigObserver {
         };
 
         let status_msg = if status_id == StatusId::Effective {
-            format!("OIDC sub-claim customization is configured for organization {}", org)
+            format!(
+                "OIDC sub-claim customization is configured for organization {}",
+                org
+            )
         } else {
-            format!("OIDC sub-claim customization is not configured for organization {}", org)
+            format!(
+                "OIDC sub-claim customization is not configured for organization {}",
+                org
+            )
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-5.2".to_string(),
             class_uid: 1003,
@@ -198,15 +209,15 @@ mod tests {
 
     #[test]
     fn oidc_configured_is_effective() {
-        let srv = mock_server(
-            200,
-            r#"{"include_claim_keys":["repo","context","ref"]}"#,
-        );
+        let srv = mock_server(200, r#"{"include_claim_keys":["repo","context","ref"]}"#);
         let ev = &OidcConfigObserver
             .observe(&test_config_with_org(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
-        assert!(ev.findings.iter().any(|f| f.title == "OIDC Sub-Claim Configured"));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.title == "OIDC Sub-Claim Configured"));
     }
 
     #[test]

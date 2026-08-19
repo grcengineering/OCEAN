@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -140,10 +141,7 @@ fn classify_user_factors(factors: &[Value]) -> UserCompliance {
             .get("factorType")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let status = factor
-            .get("status")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let status = factor.get("status").and_then(|v| v.as_str()).unwrap_or("");
 
         if status != "ACTIVE" {
             continue;
@@ -203,10 +201,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
             let (resp, status) = okta_get(token, &url)?;
 
             if status != 200 {
-                bail!(
-                    "Okta API returned status {} querying users",
-                    status
-                );
+                bail!("Okta API returned status {} querying users", status);
             }
 
             let page_users = resp
@@ -224,11 +219,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
                     if next.starts_with("http") {
                         next_url = Some(next);
                     } else {
-                        next_url = Some(format!(
-                            "{}{}",
-                            base_url.trim_end_matches('/'),
-                            next
-                        ));
+                        next_url = Some(format!("{}{}", base_url.trim_end_matches('/'), next));
                     }
                 }
             }
@@ -245,10 +236,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
         let mut non_compliant_ids: Vec<String> = Vec::new();
 
         for user in &all_users {
-            let user_id = user
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let user_id = user.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
             if user_id.is_empty() {
                 continue;
@@ -295,17 +283,16 @@ impl Observer for MfaEnrollmentPopulationObserver {
         };
 
         // Step 4: Build evidence
-        let (status_id, status_text) =
-            if coverage_pct >= 99.0 && partially_compliant_count == 0 {
-                (
-                    StatusId::Effective,
-                    format!(
-                        "{}/{} users have PR-only MFA ({:.1}% coverage)",
-                        compliant_count, total_users, coverage_pct
-                    ),
-                )
-            } else {
-                (
+        let (status_id, status_text) = if coverage_pct >= 99.0 && partially_compliant_count == 0 {
+            (
+                StatusId::Effective,
+                format!(
+                    "{}/{} users have PR-only MFA ({:.1}% coverage)",
+                    compliant_count, total_users, coverage_pct
+                ),
+            )
+        } else {
+            (
                     StatusId::Ineffective,
                     format!(
                         "{}/{} compliant, {} partially compliant, {} non-compliant ({:.1}% PR-only coverage)",
@@ -313,7 +300,7 @@ impl Observer for MfaEnrollmentPopulationObserver {
                         non_compliant_count, coverage_pct
                     ),
                 )
-            };
+        };
 
         let findings = if status_id == StatusId::Ineffective {
             vec![Finding {
@@ -361,6 +348,10 @@ impl Observer for MfaEnrollmentPopulationObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "mfa.enrollment_coverage".to_string(),
             class_uid: 1001,
@@ -502,9 +493,7 @@ mod tests {
         assert_eq!(observer.id(), "okta.mfa_enrollment_population");
         assert_eq!(observer.evidence_types(), &[1001]);
 
-        let srv = multi_mock_server(vec![
-            ("/api/v1/users", 200, EMPTY_USERS.to_string()),
-        ]);
+        let srv = multi_mock_server(vec![("/api/v1/users", 200, EMPTY_USERS.to_string())]);
         let ev = &observer.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.class_uid, 1001);
         assert_eq!(ev.activity_id, 7);
@@ -569,9 +558,7 @@ mod tests {
 
     #[test]
     fn empty_user_list_returns_effective() {
-        let srv = multi_mock_server(vec![
-            ("/api/v1/users", 200, EMPTY_USERS.to_string()),
-        ]);
+        let srv = multi_mock_server(vec![("/api/v1/users", 200, EMPTY_USERS.to_string())]);
         let ev = &MfaEnrollmentPopulationObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
@@ -590,9 +577,7 @@ mod tests {
         let ev = &MfaEnrollmentPopulationObserver
             .observe(&base_config(&srv))
             .unwrap()[0];
-        let non_compliant = ev.raw_data["iam_auth"]["non_compliant"]
-            .as_array()
-            .unwrap();
+        let non_compliant = ev.raw_data["iam_auth"]["non_compliant"].as_array().unwrap();
         let ids: Vec<&str> = non_compliant.iter().map(|v| v.as_str().unwrap()).collect();
         assert!(ids.contains(&"u3"), "u3 should be non-compliant");
     }

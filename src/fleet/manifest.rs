@@ -22,16 +22,8 @@ const MAX_TARGETS: usize = 256;
 /// Returns the set of allowed credential env var names for a given source.
 fn allowed_credentials(source: &str) -> Option<&'static [&'static str]> {
     match source {
-        "github" => Some(&[
-            "GITHUB_TOKEN",
-            "GITHUB_ORG",
-            "GITHUB_API_URL",
-        ]),
-        "okta" => Some(&[
-            "OKTA_API_TOKEN",
-            "OKTA_DOMAIN",
-            "OKTA_ORG_URL",
-        ]),
+        "github" => Some(&["GITHUB_TOKEN", "GITHUB_ORG", "GITHUB_API_URL"]),
+        "okta" => Some(&["OKTA_API_TOKEN", "OKTA_DOMAIN", "OKTA_ORG_URL"]),
         "aws" => Some(&[
             "AWS_ACCESS_KEY_ID",
             "AWS_SECRET_ACCESS_KEY",
@@ -108,9 +100,7 @@ pub fn resolve_env_ref(value: &str) -> Result<String> {
     if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
         // F1: Validate env var name format
         if !is_valid_env_var_name(inner) {
-            bail!(
-                "invalid env var name '{inner}': must match [A-Z_][A-Z0-9_]*"
-            );
+            bail!("invalid env var name '{inner}': must match [A-Z_][A-Z0-9_]*");
         }
         std::env::var(inner).with_context(|| format!("env var {inner} not set"))
     } else {

@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -73,7 +74,9 @@ fn graph_get(token: &str, graph_base_url: &str, path: &str) -> Result<(Value, u1
             Ok((body, status))
         }
         Err(ureq::Error::Status(code, r)) => {
-            let body: Value = r.into_json().unwrap_or_else(|_| json!({"error": "unknown"}));
+            let body: Value = r
+                .into_json()
+                .unwrap_or_else(|_| json!({"error": "unknown"}));
             Ok((body, code))
         }
         Err(e) => Err(anyhow!("Graph API request failed: {}", e)),
@@ -278,6 +281,10 @@ impl Observer for ConditionalAccessObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "iam.mfa_enforcement".to_string(),
             class_uid: 1001,
@@ -387,7 +394,8 @@ mod tests {
         format!("http://127.0.0.1:{}", addr.port())
     }
 
-    const TOKEN_RESPONSE: &str = r#"{"access_token":"test_token","token_type":"Bearer","expires_in":3600}"#;
+    const TOKEN_RESPONSE: &str =
+        r#"{"access_token":"test_token","token_type":"Bearer","expires_in":3600}"#;
 
     fn base_config(base_url: &str) -> HashMap<String, String> {
         HashMap::from([

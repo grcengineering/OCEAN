@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -193,8 +194,7 @@ impl Observer for PasswordPolicyObserver {
             }
 
             // OKTA-1.5: at least 3 of 4 complexity types enabled
-            let complexity_count =
-                (if min_lower > 0 { 1 } else { 0 })
+            let complexity_count = (if min_lower > 0 { 1 } else { 0 })
                 + (if min_upper > 0 { 1 } else { 0 })
                 + (if min_number > 0 { 1 } else { 0 })
                 + (if min_symbol > 0 { 1 } else { 0 });
@@ -248,6 +248,10 @@ impl Observer for PasswordPolicyObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "okta.password_policy".to_string(),
             class_uid: 1001,
@@ -372,7 +376,10 @@ mod tests {
 
     #[test]
     fn api_error_returns_err() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Unauthorized"}"#,
+        );
         let result = PasswordPolicyObserver.observe(&base_config(&srv));
         assert!(result.is_err());
     }

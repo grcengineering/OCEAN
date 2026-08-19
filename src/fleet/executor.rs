@@ -12,9 +12,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use tokio::sync::Semaphore;
 
-use crate::harden::{
-    execute_plans, plan_harden, CredentialMask, RemediationMode,
-};
+use crate::harden::{execute_plans, plan_harden, CredentialMask, RemediationMode};
 
 use super::manifest::FleetManifest;
 
@@ -108,16 +106,16 @@ pub async fn execute_fleet(
         let handle = tokio::task::spawn_blocking(move || {
             // F25: target_config is owned by this closure. It will be dropped
             // when this task completes — no credential caching or pooling.
-            let result = execute_single_target(
-                &target_id,
-                &target_source,
-                &target_config,
-                &checks_dir,
-                &mode,
+            let result = execute_single_target(SingleTargetParams {
+                target_id: &target_id,
+                target_source: &target_source,
+                config: &target_config,
+                checks_dir: &checks_dir,
+                mode: &mode,
                 apply,
-                &terraform_dir,
-                &output_dir,
-            );
+                terraform_dir: &terraform_dir,
+                output_dir: &output_dir,
+            });
             drop(permit); // Release semaphore permit
             result
         });
@@ -180,33 +178,43 @@ pub async fn execute_fleet(
     Ok(fleet_result)
 }
 
+/// Bundled parameters for [`execute_single_target`] (keeps the function's
+/// argument count within clippy's `too_many_arguments` threshold).
+struct SingleTargetParams<'a> {
+    target_id: &'a str,
+    target_source: &'a str,
+    config: &'a HashMap<String, String>,
+    checks_dir: &'a str,
+    mode: &'a RemediationMode,
+    apply: bool,
+    terraform_dir: &'a str,
+    output_dir: &'a Path,
+}
+
 /// Execute a single fleet target (runs in a blocking tokio task).
 ///
 /// F22: Does NOT call std::env::set_var(). Uses the config HashMap directly.
 /// F27: Creates its own ureq::Agent (via harden's execute_api_call which
 ///      creates a fresh request per call).
-fn execute_single_target(
-    target_id: &str,
-    target_source: &str,
-    config: &HashMap<String, String>,
-    checks_dir: &str,
-    mode: &RemediationMode,
-    apply: bool,
-    terraform_dir: &str,
-    output_dir: &Path,
-) -> TargetResult {
+fn execute_single_target(params: SingleTargetParams) -> TargetResult {
+    let SingleTargetParams {
+        target_id,
+        target_source,
+        config,
+        checks_dir,
+        mode,
+        apply,
+        terraform_dir,
+        output_dir,
+    } = params;
+
     // F26: Create credential mask for scrubbing errors
     let mask = CredentialMask::from_config(config);
 
     let result_file = output_dir.join(format!("{}.json", target_id));
 
     // Plan remediation using the target's own credential context
-    let plans = match plan_harden(
-        Path::new(checks_dir),
-        mode,
-        config,
-        Some(target_source),
-    ) {
+    let plans = match plan_harden(Path::new(checks_dir), mode, config, Some(target_source)) {
         Ok(plans) => plans,
         Err(e) => {
             let error_msg = mask.scrub(&format!("{e:#}"));
@@ -244,11 +252,7 @@ fn execute_single_target(
     }
 
     // Execute remediation plans with the target's own config
-    let results = execute_plans(
-        &plans,
-        config,
-        Some(Path::new(terraform_dir)),
-    );
+    let results = execute_plans(&plans, config, Some(Path::new(terraform_dir)));
 
     let changes_applied = results.iter().filter(|r| r.success).count();
     let errors: Vec<String> = results
@@ -306,8 +310,7 @@ fn create_output_dir(path: &Path) -> Result<()> {
 
 /// Write a per-target result file with 0600 permissions. [F28]
 fn write_target_result(result: &TargetResult, path: &Path) -> Result<()> {
-    let json = serde_json::to_string_pretty(result)
-        .context("failed to serialize target result")?;
+    let json = serde_json::to_string_pretty(result).context("failed to serialize target result")?;
     std::fs::write(path, json)
         .with_context(|| format!("cannot write result file: {}", path.display()))?;
 
@@ -324,8 +327,7 @@ fn write_target_result(result: &TargetResult, path: &Path) -> Result<()> {
 /// Write the aggregated fleet summary JSON. [F19]
 fn write_fleet_summary(result: &FleetResult, output_dir: &Path) -> Result<()> {
     let path = output_dir.join("fleet-summary.json");
-    let json = serde_json::to_string_pretty(result)
-        .context("failed to serialize fleet summary")?;
+    let json = serde_json::to_string_pretty(result).context("failed to serialize fleet summary")?;
     std::fs::write(&path, json)
         .with_context(|| format!("cannot write fleet summary: {}", path.display()))?;
 

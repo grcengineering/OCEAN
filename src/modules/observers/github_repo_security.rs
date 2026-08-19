@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -80,16 +81,12 @@ impl Observer for RepoSecurityObserver {
 
         let now = Utc::now();
         let path = format!("/repos/{}/{}", owner, repo);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
         if status == 404 {
-            return Err(anyhow!(
-                "Repository {}/{} not found (404)",
-                owner,
-                repo
-            ));
+            return Err(anyhow!("Repository {}/{} not found (404)", owner, repo));
         }
 
         if status != 200 {
@@ -204,6 +201,10 @@ impl Observer for RepoSecurityObserver {
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "scm.secret_scanning".to_string(),
             class_uid: 1003,
@@ -279,9 +280,7 @@ mod tests {
     #[test]
     fn repo_security_all_enabled_is_effective() {
         let srv = mock_server(200, ALL_ENABLED);
-        let ev = &RepoSecurityObserver
-            .observe(&test_config(&srv))
-            .unwrap()[0];
+        let ev = &RepoSecurityObserver.observe(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(
             ev.findings[0].title,
@@ -295,9 +294,7 @@ mod tests {
     #[test]
     fn repo_security_some_disabled_is_ineffective() {
         let srv = mock_server(200, SOME_DISABLED);
-        let ev = &RepoSecurityObserver
-            .observe(&test_config(&srv))
-            .unwrap()[0];
+        let ev = &RepoSecurityObserver.observe(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev
             .findings
@@ -312,9 +309,7 @@ mod tests {
     #[test]
     fn repo_security_missing_security_field_is_ineffective() {
         let srv = mock_server(200, NO_SECURITY_FIELD);
-        let ev = &RepoSecurityObserver
-            .observe(&test_config(&srv))
-            .unwrap()[0];
+        let ev = &RepoSecurityObserver.observe(&test_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert_eq!(
             ev.findings[0].title,

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
-    TranscriptRecorder,
+    TranscriptRecorder, EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{
     tester::Tester, CredentialReq, EnvironmentScope, Module, SafetyClassification,
@@ -124,6 +124,10 @@ impl Tester for PrMfaDowngradeTester {
         if !config.contains_key("OKTA_TEST_USER") || !config.contains_key("OKTA_TEST_PASSWORD") {
             let now = Utc::now();
             return Ok(vec![Evidence {
+                schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+                connected_account: None,
+                population: None,
+                evaluation: None,
                 id: Uuid::new_v4(),
                 control_id: "mfa.phishing_resistance".to_string(),
                 class_uid: 1001,
@@ -257,62 +261,60 @@ impl Tester for PrMfaDowngradeTester {
         let mut downgrade_possible = !phishable_offered.is_empty();
 
         // ── Determine outcome ───────────────────────────────────────────────
-        let (status_id, status_text, findings) =
-            if http_status == 401 || http_status == 403 {
-                downgrade_possible = false;
+        let (status_id, status_text, findings) = if http_status == 401 || http_status == 403 {
+            downgrade_possible = false;
+            (
+                StatusId::Effective,
+                "Primary authentication rejected — no factor challenge needed".to_string(),
+                vec![Finding {
+                    title: "Authentication Rejected Before Factor Challenge".to_string(),
+                    description: format!(
+                        "Authentication rejected with HTTP {} — no MFA factor challenge reached",
+                        http_status
+                    ),
+                    severity_id: 0,
+                }],
+            )
+        } else if authn_status == "SUCCESS" {
+            downgrade_possible = true;
+            (
+                StatusId::Ineffective,
+                "MFA not required at sign-in".to_string(),
+                vec![Finding {
+                    title: "MFA Not Required at Sign-In".to_string(),
+                    description: "Authentication succeeded without any MFA challenge".to_string(),
+                    severity_id: 4,
+                }],
+            )
+        } else if authn_status == "MFA_ENROLL" {
+            (
+                StatusId::Ineffective,
+                "MFA enrollment incomplete for test user".to_string(),
+                vec![Finding {
+                    title: "MFA Enrollment Incomplete".to_string(),
+                    description: "Test user not enrolled in any MFA factor".to_string(),
+                    severity_id: 2,
+                }],
+            )
+        } else if authn_status == "MFA_REQUIRED"
+            || authn_status == "MFA_CHALLENGE"
+            || http_status == 200
+        {
+            if downgrade_possible {
                 (
-                    StatusId::Effective,
-                    "Primary authentication rejected — no factor challenge needed".to_string(),
+                    StatusId::Ineffective,
+                    format!("Phishable MFA factors offered: {:?}", phishable_offered),
                     vec![Finding {
-                        title: "Authentication Rejected Before Factor Challenge".to_string(),
+                        title: "Phishable MFA Factors Available at Sign-In".to_string(),
                         description: format!(
-                            "Authentication rejected with HTTP {} — no MFA factor challenge reached",
-                            http_status
+                            "Phishable factors offered: {:?}. Downgrade attack possible.",
+                            phishable_offered
                         ),
-                        severity_id: 0,
+                        severity_id: 3,
                     }],
                 )
-            } else if authn_status == "SUCCESS" {
-                downgrade_possible = true;
+            } else {
                 (
-                    StatusId::Ineffective,
-                    "MFA not required at sign-in".to_string(),
-                    vec![Finding {
-                        title: "MFA Not Required at Sign-In".to_string(),
-                        description: "Authentication succeeded without any MFA challenge"
-                            .to_string(),
-                        severity_id: 4,
-                    }],
-                )
-            } else if authn_status == "MFA_ENROLL" {
-                (
-                    StatusId::Ineffective,
-                    "MFA enrollment incomplete for test user".to_string(),
-                    vec![Finding {
-                        title: "MFA Enrollment Incomplete".to_string(),
-                        description: "Test user not enrolled in any MFA factor".to_string(),
-                        severity_id: 2,
-                    }],
-                )
-            } else if authn_status == "MFA_REQUIRED"
-                || authn_status == "MFA_CHALLENGE"
-                || http_status == 200
-            {
-                if downgrade_possible {
-                    (
-                        StatusId::Ineffective,
-                        format!("Phishable MFA factors offered: {:?}", phishable_offered),
-                        vec![Finding {
-                            title: "Phishable MFA Factors Available at Sign-In".to_string(),
-                            description: format!(
-                                "Phishable factors offered: {:?}. Downgrade attack possible.",
-                                phishable_offered
-                            ),
-                            severity_id: 3,
-                        }],
-                    )
-                } else {
-                    (
                         StatusId::Effective,
                         "Only phishing-resistant factors offered in MFA challenge".to_string(),
                         vec![Finding {
@@ -323,34 +325,31 @@ impl Tester for PrMfaDowngradeTester {
                             severity_id: 0,
                         }],
                     )
-                }
-            } else {
-                (
-                    StatusId::Effective,
-                    format!(
-                        "Auth did not succeed: HTTP {} {:?}",
+            }
+        } else {
+            (
+                StatusId::Effective,
+                format!(
+                    "Auth did not succeed: HTTP {} {:?}",
+                    http_status, authn_status
+                ),
+                vec![Finding {
+                    title: "No Downgrade Path Detected".to_string(),
+                    description: format!(
+                        "Authentication did not succeed (HTTP {}, status: {:?})",
                         http_status, authn_status
                     ),
-                    vec![Finding {
-                        title: "No Downgrade Path Detected".to_string(),
-                        description: format!(
-                            "Authentication did not succeed (HTTP {}, status: {:?})",
-                            http_status, authn_status
-                        ),
-                        severity_id: 0,
-                    }],
-                )
-            };
+                    severity_id: 0,
+                }],
+            )
+        };
 
         // ── Observations ────────────────────────────────────────────────────
         recorder.record_observation(
             format!("HTTP {} authn_status: {:?}", http_status, authn_status),
             !downgrade_possible,
         );
-        recorder.record_observation(
-            format!("offered factors: {:?}", offered_factors),
-            true,
-        );
+        recorder.record_observation(format!("offered factors: {:?}", offered_factors), true);
         recorder.record_observation(
             format!("phishable factors offered: {:?}", phishable_offered),
             phishable_offered.is_empty(),
@@ -370,6 +369,10 @@ impl Tester for PrMfaDowngradeTester {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "mfa.phishing_resistant_enforcement".to_string(),
             class_uid: 1001,
@@ -579,7 +582,10 @@ mod tests {
 
     #[test]
     fn http_403_is_effective() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"Forbidden"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"Forbidden"}"#,
+        );
         let ev = &PrMfaDowngradeTester.test(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
     }
@@ -638,10 +644,7 @@ mod tests {
     fn offered_factors_populated() {
         let srv = mock_server(200, MFA_REQUIRED_WITH_PHISHABLE);
         let ev = &PrMfaDowngradeTester.test(&base_config(&srv)).unwrap()[0];
-        assert_eq!(
-            ev.raw_data["offered_factors"].as_array().unwrap().len(),
-            2
-        );
+        assert_eq!(ev.raw_data["offered_factors"].as_array().unwrap().len(), 2);
     }
 
     #[test]

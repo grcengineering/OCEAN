@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -69,7 +70,7 @@ impl Observer for OrgAdminAuditObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/members?role=admin", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -77,7 +78,7 @@ impl Observer for OrgAdminAuditObserver {
             return Err(anyhow!(
                 "GitHub API returned status {} for {}",
                 status,
-                &path
+                path
             ));
         }
 
@@ -125,6 +126,10 @@ impl Observer for OrgAdminAuditObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-1.4".to_string(),
             class_uid: 1003,
@@ -171,10 +176,7 @@ mod tests {
 
     #[test]
     fn two_admins_is_effective() {
-        let srv = mock_server(
-            200,
-            r#"[{"login":"alice"},{"login":"bob"}]"#,
-        );
+        let srv = mock_server(200, r#"[{"login":"alice"},{"login":"bob"}]"#);
         let ev = &OrgAdminAuditObserver
             .observe(&test_config_with_org(&srv))
             .unwrap()[0];

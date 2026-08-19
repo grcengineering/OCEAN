@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -81,7 +82,7 @@ impl Observer for DependencyReviewObserver {
 
         let now = Utc::now();
         let path = format!("/repos/{}/{}", owner, repo);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -138,6 +139,10 @@ impl Observer for DependencyReviewObserver {
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-6.1".to_string(),
             class_uid: 1003,

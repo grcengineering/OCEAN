@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -41,8 +42,7 @@ impl Module for OrgRulesetsObserver {
             CredentialReq {
                 name: "GITHUB_TOKEN".to_string(),
                 cred_type: "api_token".to_string(),
-                description: "GitHub PAT with admin:org scope for reading org rulesets"
-                    .to_string(),
+                description: "GitHub PAT with admin:org scope for reading org rulesets".to_string(),
                 required: true,
             },
             CredentialReq {
@@ -70,13 +70,17 @@ impl Observer for OrgRulesetsObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/rulesets", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
         // 404 means rulesets feature not enabled for the org.
         if status == 404 {
             return Ok(vec![Evidence {
+                schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+                connected_account: None,
+                population: None,
+                evaluation: None,
                 id: Uuid::new_v4(),
                 control_id: "GH-2.3".to_string(),
                 class_uid: 1003,
@@ -155,9 +159,9 @@ impl Observer for OrgRulesetsObserver {
                 && r.get("rules")
                     .and_then(|v| v.as_array())
                     .map(|rules| {
-                        rules
-                            .iter()
-                            .any(|rule| rule.get("type").and_then(|t| t.as_str()) == Some("deletion"))
+                        rules.iter().any(|rule| {
+                            rule.get("type").and_then(|t| t.as_str()) == Some("deletion")
+                        })
                     })
                     .unwrap_or(false)
         });
@@ -210,6 +214,10 @@ impl Observer for OrgRulesetsObserver {
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-2.3".to_string(),
             class_uid: 1003,

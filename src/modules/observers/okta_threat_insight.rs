@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -158,7 +159,10 @@ impl Observer for ThreatInsightObserver {
                 });
                 (
                     StatusId::Ineffective,
-                    format!("ThreatInsight action is {:?}; blocking is not active", action),
+                    format!(
+                        "ThreatInsight action is {:?}; blocking is not active",
+                        action
+                    ),
                 )
             }
         };
@@ -184,6 +188,10 @@ impl Observer for ThreatInsightObserver {
         let raw_data = body.clone();
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "OKTA-5.2".to_string(),
             class_uid: 1001,

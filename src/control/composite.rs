@@ -71,8 +71,10 @@ pub fn evaluate_composite_with_components(
 
     for component in components {
         let key = (component.evidence_class, component.activity_id);
-        let evidence_list: &[Evidence] =
-            evidence_by_class.get(&key).map(|v| v.as_slice()).unwrap_or(&[]);
+        let evidence_list: &[Evidence] = evidence_by_class
+            .get(&key)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
 
         // Is this component effective?
         let component_effective = evidence_list
@@ -160,8 +162,7 @@ fn evaluate_assertion(
             }
         }
         CrossCheckAssertion::SupersetOf => {
-            let missing: Vec<&String> =
-                referenced.iter().filter(|v| !local.contains(*v)).collect();
+            let missing: Vec<&String> = referenced.iter().filter(|v| !local.contains(*v)).collect();
             if missing.is_empty() {
                 (true, format!("Local values cover all of '{uses}' export"))
             } else {
@@ -177,7 +178,10 @@ fn evaluate_assertion(
         CrossCheckAssertion::ContainsAny => {
             let has_overlap = local.iter().any(|v| referenced.contains(v));
             if has_overlap {
-                (true, format!("At least one local value found in '{uses}' export"))
+                (
+                    true,
+                    format!("At least one local value found in '{uses}' export"),
+                )
             } else {
                 (
                     false,
@@ -206,6 +210,7 @@ mod tests {
     };
     use crate::evidence::{
         ConfidenceLevel, Evidence, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+        EVIDENCE_SCHEMA_VERSION,
     };
     use chrono::Utc;
 
@@ -235,6 +240,10 @@ mod tests {
         observables: Vec<Observable>,
     ) -> Evidence {
         Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: uuid::Uuid::new_v4(),
             control_id: "test.ctrl".to_string(),
             class_uid,
@@ -465,12 +474,8 @@ mod tests {
     #[test]
     fn cross_check_subset_of_fails_when_extra_ip() {
         // Firewall allows an IP not in WAF egress — cross-check fails.
-        let waf_ev = make_evidence_with_observables(
-            3002,
-            1,
-            true,
-            vec![obs("ip_range", "10.0.0.1")],
-        );
+        let waf_ev =
+            make_evidence_with_observables(3002, 1, true, vec![obs("ip_range", "10.0.0.1")]);
         let fw_ev = make_evidence_with_observables(
             3001,
             1,
@@ -519,12 +524,8 @@ mod tests {
 
     #[test]
     fn cross_check_nonempty_passes() {
-        let waf_ev = make_evidence_with_observables(
-            3002,
-            1,
-            true,
-            vec![obs("ip_range", "10.0.0.1")],
-        );
+        let waf_ev =
+            make_evidence_with_observables(3002, 1, true, vec![obs("ip_range", "10.0.0.1")]);
         let mut map = HashMap::new();
         map.insert((3002, Some(1)), vec![waf_ev]);
 
@@ -605,14 +606,13 @@ mod tests {
             3002,
             1,
             true,
-            vec![obs("domain", "example.com"), obs("domain", "cdn.example.com")],
+            vec![
+                obs("domain", "example.com"),
+                obs("domain", "cdn.example.com"),
+            ],
         );
-        let local_ev = make_evidence_with_observables(
-            3001,
-            1,
-            true,
-            vec![obs("domain", "cdn.example.com")],
-        );
+        let local_ev =
+            make_evidence_with_observables(3001, 1, true, vec![obs("domain", "cdn.example.com")]);
         let mut map = HashMap::new();
         map.insert((3002, Some(1)), vec![export_ev]);
         map.insert((3001, Some(1)), vec![local_ev]);
@@ -651,12 +651,8 @@ mod tests {
 
     #[test]
     fn cross_check_superset_of_passes() {
-        let export_ev = make_evidence_with_observables(
-            3002,
-            1,
-            true,
-            vec![obs("ip_range", "10.0.0.1")],
-        );
+        let export_ev =
+            make_evidence_with_observables(3002, 1, true, vec![obs("ip_range", "10.0.0.1")]);
         let local_ev = make_evidence_with_observables(
             3001,
             1,

@@ -11,10 +11,10 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo as EvidenceModuleInfo, Observable,
-    SourceInfo, StatusId,
+    SourceInfo, StatusId, EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{
-    AuthorizationLevel, Authorizer, Observer, CredentialReq, EnvironmentScope, Module,
+    AuthorizationLevel, Authorizer, CredentialReq, EnvironmentScope, Module, Observer,
     SafetyClassification, Tester,
 };
 
@@ -25,6 +25,10 @@ use crate::module::{
 /// Returns a minimal valid Evidence record populated with test data.
 pub fn make_evidence() -> Evidence {
     Evidence {
+        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+        connected_account: None,
+        population: None,
+        evaluation: None,
         id: Uuid::new_v4(),
         control_id: "test.control".to_string(),
         class_uid: 1001,
@@ -363,25 +367,23 @@ impl MockHTTPServer {
         let addr = listener.local_addr().expect("local addr");
         let queue = Arc::new(Mutex::new(responses));
 
-        std::thread::spawn(move || {
-            loop {
-                let resp = {
-                    let mut q = queue.lock().unwrap();
-                    if q.is_empty() {
-                        break;
-                    }
-                    q.remove(0)
-                };
-                if let Ok((mut stream, _)) = listener.accept() {
-                    let mut buf = [0u8; 8192];
-                    let _ = stream.read(&mut buf);
-                    let (status, body) = resp;
-                    let raw = format!(
+        std::thread::spawn(move || loop {
+            let resp = {
+                let mut q = queue.lock().unwrap();
+                if q.is_empty() {
+                    break;
+                }
+                q.remove(0)
+            };
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let (status, body) = resp;
+                let raw = format!(
                         "HTTP/1.1 {status} OK\r\nContent-Length: {len}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}",
                         len = body.len()
                     );
-                    let _ = stream.write_all(raw.as_bytes());
-                }
+                let _ = stream.write_all(raw.as_bytes());
             }
         });
 

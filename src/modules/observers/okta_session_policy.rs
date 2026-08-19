@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -122,22 +123,13 @@ impl Observer for SessionPolicyObserver {
         let policy = policies
             .iter()
             .find(|p| {
-                p.get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "Default Policy"
-                    && p.get("status")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        == "ACTIVE"
+                p.get("name").and_then(|v| v.as_str()).unwrap_or("") == "Default Policy"
+                    && p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE"
             })
             .or_else(|| {
-                policies.iter().find(|p| {
-                    p.get("status")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        == "ACTIVE"
-                })
+                policies
+                    .iter()
+                    .find(|p| p.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE")
             })
             .ok_or_else(|| anyhow!("No active OKTA_SIGN_ON policy found"))?;
 
@@ -166,12 +158,7 @@ impl Observer for SessionPolicyObserver {
         // Pick the first ACTIVE rule (rules are returned in priority order)
         let active_rule = rules
             .iter()
-            .find(|r| {
-                r.get("status")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    == "ACTIVE"
-            })
+            .find(|r| r.get("status").and_then(|v| v.as_str()).unwrap_or("") == "ACTIVE")
             .ok_or_else(|| anyhow!("No active rules found for policy {}", policy_id))?;
 
         let session = active_rule
@@ -267,6 +254,10 @@ impl Observer for SessionPolicyObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "okta.session_policy".to_string(),
             class_uid: 1001,

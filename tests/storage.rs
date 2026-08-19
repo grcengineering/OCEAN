@@ -1,7 +1,12 @@
 use chrono::Utc;
 use ocean::control::ControlStatus;
-use ocean::evidence::{ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId};
-use ocean::scheduler::{Schedule, ScheduleRun, ModuleRunResult, RUN_STATUS_SUCCESS, MODULE_STATUS_SUCCESS};
+use ocean::evidence::{
+    ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
+};
+use ocean::scheduler::{
+    ModuleRunResult, Schedule, ScheduleRun, MODULE_STATUS_SUCCESS, RUN_STATUS_SUCCESS,
+};
 use ocean::storage::{EvidenceQuery, SqliteStore, Store};
 use uuid::Uuid;
 
@@ -11,6 +16,10 @@ fn make_store() -> SqliteStore {
 
 fn make_evidence(control_id: &str) -> Evidence {
     Evidence {
+        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+        connected_account: None,
+        population: None,
+        evaluation: None,
         id: Uuid::new_v4(),
         control_id: control_id.to_string(),
         class_uid: 1001,

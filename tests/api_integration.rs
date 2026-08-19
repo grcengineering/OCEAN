@@ -1,5 +1,4 @@
 /// GRC-17 §5.4 — API integration tests (REST round-trip + auth enforcement)
-
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -11,6 +10,7 @@ use uuid::Uuid;
 use ocean::api::handlers::{router, AppState};
 use ocean::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use ocean::module::Registry;
 use ocean::modules::{register_all_observers, register_all_testers};
@@ -23,7 +23,11 @@ fn make_state_no_auth() -> AppState {
     let registry = Arc::new(Registry::new());
     register_all_observers(&registry);
     register_all_testers(&registry);
-    AppState { store, registry, auth_token: None }
+    AppState {
+        store,
+        registry,
+        auth_token: None,
+    }
 }
 
 fn make_state_with_auth(token: &str) -> AppState {
@@ -38,6 +42,10 @@ fn make_state_with_auth(token: &str) -> AppState {
 
 fn make_evidence(control_id: &str) -> Evidence {
     Evidence {
+        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+        connected_account: None,
+        population: None,
+        evaluation: None,
         id: Uuid::new_v4(),
         control_id: control_id.to_string(),
         class_uid: 1001,
@@ -99,7 +107,9 @@ async fn get_with_auth(state: AppState, path: &str, token: &str) -> axum::respon
 }
 
 async fn body_json(res: axum::response::Response) -> serde_json::Value {
-    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     serde_json::from_slice(&bytes).unwrap()
 }
 
@@ -140,8 +150,14 @@ async fn api_evidence_store_and_retrieve_by_id() {
 #[tokio::test]
 async fn api_evidence_list_returns_stored_records() {
     let state = make_state_no_auth();
-    state.store.store_evidence(&make_evidence("API-CTRL-2")).unwrap();
-    state.store.store_evidence(&make_evidence("API-CTRL-2")).unwrap();
+    state
+        .store
+        .store_evidence(&make_evidence("API-CTRL-2"))
+        .unwrap();
+    state
+        .store
+        .store_evidence(&make_evidence("API-CTRL-2"))
+        .unwrap();
 
     let res = get(state, "/api/v1/evidence?control_id=API-CTRL-2").await;
     assert_eq!(res.status(), StatusCode::OK);
@@ -178,12 +194,15 @@ async fn api_modules_list_includes_registered() {
 
     let body = body_json(res).await;
     let modules = body.as_array().unwrap();
-    assert!(!modules.is_empty(), "at least one module must be registered");
+    assert!(
+        !modules.is_empty(),
+        "at least one module must be registered"
+    );
 
     // Check that mock.test is present (always registered).
-    let has_mock = modules.iter().any(|m| {
-        m.get("id").and_then(|v| v.as_str()) == Some("mock.test")
-    });
+    let has_mock = modules
+        .iter()
+        .any(|m| m.get("id").and_then(|v| v.as_str()) == Some("mock.test"));
     assert!(has_mock, "mock.test observer must appear in module list");
 }
 
@@ -233,7 +252,9 @@ async fn api_schedule_create_list_delete() {
     let list_body = body_json(list_res).await;
     let schedules = list_body.as_array().unwrap();
     assert!(
-        schedules.iter().any(|s| s["id"].as_str() == Some(&schedule_id)),
+        schedules
+            .iter()
+            .any(|s| s["id"].as_str() == Some(&schedule_id)),
         "created schedule must appear in list"
     );
 
@@ -264,7 +285,9 @@ async fn api_schedule_create_list_delete() {
     let list_after_body = body_json(list_after).await;
     let schedules_after = list_after_body.as_array().unwrap();
     assert!(
-        !schedules_after.iter().any(|s| s["id"].as_str() == Some(&schedule_id)),
+        !schedules_after
+            .iter()
+            .any(|s| s["id"].as_str() == Some(&schedule_id)),
         "deleted schedule must not appear in list"
     );
 }

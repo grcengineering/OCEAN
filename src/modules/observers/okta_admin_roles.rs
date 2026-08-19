@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -115,26 +116,17 @@ impl Observer for AdminRolesObserver {
         // Okta's /api/v1/iam/roles returns {"roles": [...], "_links": {...}}.
         // Fall back to bare array for mock/test servers.
         let roles_value = body.get("roles").cloned().unwrap_or_else(|| body.clone());
-        let roles = roles_value
-            .as_array()
-            .ok_or_else(|| anyhow!("expected JSON array or {{\"roles\":[...]}} from Okta IAM roles endpoint"))?;
+        let roles = roles_value.as_array().ok_or_else(|| {
+            anyhow!("expected JSON array or {{\"roles\":[...]}} from Okta IAM roles endpoint")
+        })?;
 
         let mut super_admin_roles: Vec<Value> = Vec::new();
         let mut observables: Vec<Observable> = Vec::new();
 
         for role in roles {
-            let role_type = role
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let label = role
-                .get("label")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let role_id = role
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let role_type = role.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let label = role.get("label").and_then(|v| v.as_str()).unwrap_or("");
+            let role_id = role.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
 
             observables.push(Observable {
                 obs_type: "resource".to_string(),
@@ -194,6 +186,10 @@ impl Observer for AdminRolesObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "OKTA-1.2".to_string(),
             class_uid: 1001,
@@ -324,7 +320,10 @@ mod tests {
 
     #[test]
     fn api_returns_403_errors() {
-        let srv = mock_server(403, r#"{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}"#);
+        let srv = mock_server(
+            403,
+            r#"{"errorCode":"E0000006","errorSummary":"You do not have permission to perform the requested action"}"#,
+        );
         let result = AdminRolesObserver.observe(&base_config(&srv));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();

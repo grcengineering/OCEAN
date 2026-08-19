@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -72,7 +73,7 @@ impl Observer for InstalledAppsObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/installations", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -162,6 +163,10 @@ impl Observer for InstalledAppsObserver {
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-4.2".to_string(),
             class_uid: 1003,
@@ -224,9 +229,10 @@ mod tests {
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.raw_data["total_apps"], 2);
-        assert!(ev.observables.iter().any(|o| o.obs_type == "count"
-            && o.name == "installed_apps"
-            && o.value == "2"));
+        assert!(ev
+            .observables
+            .iter()
+            .any(|o| o.obs_type == "count" && o.name == "installed_apps" && o.value == "2"));
     }
 
     #[test]

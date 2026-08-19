@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo as EvidenceModuleInfo, Observable,
-    SourceInfo, StatusId,
+    SourceInfo, StatusId, EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{
     observer::Observer, CredentialReq, EnvironmentScope, Module, SafetyClassification, Tester,
@@ -537,6 +537,10 @@ fn evaluate_all_assertions(
             .unwrap_or_default();
 
         let ev = Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: def.id.clone(),
             class_uid: 0,
@@ -590,9 +594,7 @@ pub struct YamlObserver {
 
 impl YamlObserver {
     pub fn new(def: CheckDefinition) -> Self {
-        Self {
-            def: Arc::new(def),
-        }
+        Self { def: Arc::new(def) }
     }
 }
 
@@ -649,9 +651,7 @@ pub struct YamlTester {
 
 impl YamlTester {
     pub fn new(def: CheckDefinition) -> Self {
-        Self {
-            def: Arc::new(def),
-        }
+        Self { def: Arc::new(def) }
     }
 }
 
@@ -736,8 +736,7 @@ mod tests {
         let mut ctx = HashMap::new();
         ctx.insert("org".to_string(), "acme".to_string());
         ctx.insert("GITHUB_TOKEN".to_string(), "ghp_abc".to_string());
-        let result =
-            resolve_template("https://api.github.com/orgs/{{org}}", &ctx);
+        let result = resolve_template("https://api.github.com/orgs/{{org}}", &ctx);
         assert_eq!(result, "https://api.github.com/orgs/acme");
     }
 
@@ -1164,10 +1163,16 @@ mod tests {
         assert_eq!(resolved, serde_json::json!(42));
 
         let body_bool = serde_json::json!(true);
-        assert_eq!(resolve_json_template(&body_bool, &ctx), serde_json::json!(true));
+        assert_eq!(
+            resolve_json_template(&body_bool, &ctx),
+            serde_json::json!(true)
+        );
 
         let body_null = serde_json::json!(null);
-        assert_eq!(resolve_json_template(&body_null, &ctx), serde_json::json!(null));
+        assert_eq!(
+            resolve_json_template(&body_null, &ctx),
+            serde_json::json!(null)
+        );
     }
 
     // ── build_input_context ──────────────────────────────────────────────────
@@ -1555,10 +1560,7 @@ mod tests {
     #[test]
     fn resolve_template_no_placeholders() {
         let ctx = HashMap::new();
-        assert_eq!(
-            resolve_template("plain text here", &ctx),
-            "plain text here"
-        );
+        assert_eq!(resolve_template("plain text here", &ctx), "plain text here");
     }
 
     #[test]
@@ -1585,10 +1587,7 @@ mod tests {
             {"user": {"name": "bob"}}
         ]);
         let val = jsonpath_extract("$[*].user.name", &body).unwrap();
-        assert_eq!(
-            val,
-            serde_json::json!(["alice", "bob"])
-        );
+        assert_eq!(val, serde_json::json!(["alice", "bob"]));
     }
 
     // ── Helper functions ─────────────────────────────────────────────────────

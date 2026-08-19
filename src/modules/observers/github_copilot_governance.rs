@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -71,7 +72,7 @@ impl Observer for CopilotGovernanceObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/copilot/billing", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -147,18 +148,25 @@ impl Observer for CopilotGovernanceObserver {
 
         let status_msg = match status_id {
             StatusId::Effective => {
-                format!("Copilot access is governed by seat selection for organization {}", org)
+                format!(
+                    "Copilot access is governed by seat selection for organization {}",
+                    org
+                )
             }
             StatusId::Ineffective => {
-                format!("Copilot access is ungoverned (assign_all) for organization {}", org)
+                format!(
+                    "Copilot access is ungoverned (assign_all) for organization {}",
+                    org
+                )
             }
-            _ => format!(
-                "Copilot governance status unknown for organization {}",
-                org
-            ),
+            _ => format!("Copilot governance status unknown for organization {}", org),
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-7.1".to_string(),
             class_uid: 1003,
@@ -249,9 +257,6 @@ mod tests {
             .observe(&test_config_with_org(&srv))
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
-        assert!(ev
-            .findings
-            .iter()
-            .any(|f| f.title == "Copilot Not Enabled"));
+        assert!(ev.findings.iter().any(|f| f.title == "Copilot Not Enabled"));
     }
 }

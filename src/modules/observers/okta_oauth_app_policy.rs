@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -111,10 +112,7 @@ impl Observer for OAuthAppPolicyObserver {
         let (body, status) = okta_get(token, &base_url, path)?;
 
         if status != 200 {
-            return Err(anyhow!(
-                "Okta API returned status {} querying apps",
-                status
-            ));
+            return Err(anyhow!("Okta API returned status {} querying apps", status));
         }
 
         let apps = body
@@ -125,14 +123,8 @@ impl Observer for OAuthAppPolicyObserver {
         let oidc_apps: Vec<&Value> = apps
             .iter()
             .filter(|app| {
-                let sign_on_mode = app
-                    .get("signOnMode")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let name = app
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let sign_on_mode = app.get("signOnMode").and_then(|v| v.as_str()).unwrap_or("");
+                let name = app.get("name").and_then(|v| v.as_str()).unwrap_or("");
                 sign_on_mode == "OPENID_CONNECT" || name.to_lowercase().contains("oidc")
             })
             .collect();
@@ -140,6 +132,10 @@ impl Observer for OAuthAppPolicyObserver {
         // If no OIDC apps exist, return unknown/informational evidence
         if oidc_apps.is_empty() {
             return Ok(vec![Evidence {
+                schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+                connected_account: None,
+                population: None,
+                evaluation: None,
                 id: Uuid::new_v4(),
                 control_id: "OKTA-3.1".to_string(),
                 class_uid: 1001,
@@ -174,7 +170,9 @@ impl Observer for OAuthAppPolicyObserver {
                 }),
                 findings: vec![Finding {
                     title: "No OIDC Apps Found".to_string(),
-                    description: "No active OIDC apps were found; OAuth consent controls are not applicable.".to_string(),
+                    description:
+                        "No active OIDC apps were found; OAuth consent controls are not applicable."
+                            .to_string(),
                     severity_id: 0,
                 }],
                 test_transcript: None,
@@ -188,10 +186,7 @@ impl Observer for OAuthAppPolicyObserver {
         let mut findings: Vec<Finding> = Vec::new();
 
         for app in &oidc_apps {
-            let app_id = app
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let app_id = app.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
             let app_label = app
                 .get("label")
                 .and_then(|v| v.as_str())
@@ -232,9 +227,7 @@ impl Observer for OAuthAppPolicyObserver {
                 .and_then(|o| o.get("refresh_token"));
 
             let has_refresh_token_config = refresh_token
-                .map(|rt| {
-                    rt.get("leeway").is_some() || rt.get("rotation_type").is_some()
-                })
+                .map(|rt| rt.get("leeway").is_some() || rt.get("rotation_type").is_some())
                 .unwrap_or(false);
 
             if !has_refresh_token_config {
@@ -292,6 +285,10 @@ impl Observer for OAuthAppPolicyObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "OKTA-3.1".to_string(),
             class_uid: 1001,
@@ -415,9 +412,7 @@ mod tests {
     #[test]
     fn oidc_app_with_consent_required_is_effective() {
         let srv = mock_server(200, OIDC_APP_CONSENT_REQUIRED);
-        let ev = &OAuthAppPolicyObserver
-            .observe(&base_config(&srv))
-            .unwrap()[0];
+        let ev = &OAuthAppPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Effective);
         assert_eq!(ev.control_id, "OKTA-3.1");
         let raw = &ev.raw_data;
@@ -430,9 +425,7 @@ mod tests {
     #[test]
     fn oidc_app_with_consent_trusted_is_ineffective_with_finding() {
         let srv = mock_server(200, OIDC_APP_CONSENT_TRUSTED);
-        let ev = &OAuthAppPolicyObserver
-            .observe(&base_config(&srv))
-            .unwrap()[0];
+        let ev = &OAuthAppPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Ineffective);
         assert!(ev
             .findings
@@ -447,9 +440,7 @@ mod tests {
     #[test]
     fn no_oidc_apps_returns_unknown_evidence() {
         let srv = mock_server(200, NO_OIDC_APPS);
-        let ev = &OAuthAppPolicyObserver
-            .observe(&base_config(&srv))
-            .unwrap()[0];
+        let ev = &OAuthAppPolicyObserver.observe(&base_config(&srv)).unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
         assert_eq!(ev.raw_data["oidc_app_count"], 0);
         assert!(ev.findings.iter().any(|f| f.title == "No OIDC Apps Found"));

@@ -19,8 +19,8 @@
 use std::collections::HashMap;
 use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
-use std::time::Duration;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use ocean::check::register_check;
 use ocean::evidence::StatusId;
@@ -154,7 +154,10 @@ fn load_check_with_mock_urls(
     serde_yaml::from_str(&rewritten).unwrap_or_else(|e| panic!("parse rewritten {filename}: {e}"))
 }
 
-fn run_observer(def: ocean::check::CheckDefinition, config: &HashMap<String, String>) -> Vec<ocean::evidence::Evidence> {
+fn run_observer(
+    def: ocean::check::CheckDefinition,
+    config: &HashMap<String, String>,
+) -> Vec<ocean::evidence::Evidence> {
     let registry = Arc::new(Registry::new());
     let id = def.id.clone();
     register_check(&registry, def);
@@ -201,10 +204,19 @@ fn notion201_pass_reachable_and_bots_named() {
     );
 
     let evidence = run_observer(def, &notion_config());
-    assert_eq!(evidence.len(), 2, "expected 2 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "expected 2 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.control_id, "NOTION-2.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
@@ -263,7 +275,11 @@ fn notion201_fail_403_no_results_key() {
     );
 
     let evidence = run_observer(def, &notion_config());
-    assert_eq!(evidence.len(), 2, "should still produce evidence even when the payload field is absent");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "should still produce evidence even when the payload field is absent"
+    );
     assert_eq!(evidence[0].status_id, StatusId::Ineffective);
     assert_eq!(evidence[1].status_id, StatusId::Ineffective);
 }
@@ -292,7 +308,12 @@ fn notion301_pass_no_public_pages() {
     let evidence = run_observer(def, &notion_config());
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -341,7 +362,12 @@ fn pm204_pass_no_public_workspaces() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "PM-2.04");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -385,7 +411,12 @@ fn pm304_pass_no_unresolved_findings() {
     let evidence = run_observer(def, &postman_config());
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -473,14 +504,27 @@ fn all_notion_checks_load_and_have_hth_references() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("checks/notion");
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one Notion check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one Notion check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
-    assert!(ids.contains(&"NOTION-2.01"), "missing NOTION-2.01, got: {ids:?}");
-    assert!(ids.contains(&"NOTION-3.01"), "missing NOTION-3.01, got: {ids:?}");
+    assert!(
+        ids.contains(&"NOTION-2.01"),
+        "missing NOTION-2.01, got: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"NOTION-3.01"),
+        "missing NOTION-3.01, got: {ids:?}"
+    );
 
     for def in &defs {
-        assert_eq!(def.source, "notion", "{}: source should be 'notion'", def.id);
+        assert_eq!(
+            def.source, "notion",
+            "{}: source should be 'notion'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for Notion checks",
@@ -492,7 +536,11 @@ fn all_notion_checks_load_and_have_hth_references() {
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
     }
 }
 
@@ -501,7 +549,10 @@ fn all_postman_checks_load_and_have_hth_references() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("checks/postman");
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one Postman check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one Postman check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
     assert!(ids.contains(&"PM-2.04"), "missing PM-2.04, got: {ids:?}");
@@ -509,7 +560,11 @@ fn all_postman_checks_load_and_have_hth_references() {
     assert!(ids.contains(&"PM-4.01"), "missing PM-4.01, got: {ids:?}");
 
     for def in &defs {
-        assert_eq!(def.source, "postman", "{}: source should be 'postman'", def.id);
+        assert_eq!(
+            def.source, "postman",
+            "{}: source should be 'postman'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for Postman checks",
@@ -521,6 +576,10 @@ fn all_postman_checks_load_and_have_hth_references() {
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
     }
 }

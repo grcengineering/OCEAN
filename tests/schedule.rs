@@ -5,12 +5,15 @@ use anyhow::Result;
 use chrono::Utc;
 use uuid::Uuid;
 
-use ocean::evidence::{ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId};
+use ocean::evidence::{
+    ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
+};
 use ocean::module::{CredentialReq, Module, Observer, Registry};
+use ocean::scheduler::runner::execute_schedule;
 use ocean::scheduler::{
     Schedule, MODULE_STATUS_FAILURE, MODULE_STATUS_SUCCESS, RUN_STATUS_FAILURE, RUN_STATUS_SUCCESS,
 };
-use ocean::scheduler::runner::execute_schedule;
 use ocean::storage::SqliteStore;
 
 // ---------------------------------------------------------------------------
@@ -19,6 +22,10 @@ use ocean::storage::SqliteStore;
 
 fn make_evidence() -> Evidence {
     Evidence {
+        schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+        connected_account: None,
+        population: None,
+        evaluation: None,
         id: Uuid::new_v4(),
         control_id: "test.control".to_string(),
         class_uid: 1001,

@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -74,7 +75,7 @@ impl Observer for RunnerConfigObserver {
 
         let now = Utc::now();
         let path = format!("/orgs/{}/actions/runners", org);
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
@@ -104,9 +105,9 @@ impl Observer for RunnerConfigObserver {
                 r.get("labels")
                     .and_then(|l| l.as_array())
                     .map(|labels| {
-                        labels
-                            .iter()
-                            .any(|label| label.get("name").and_then(|n| n.as_str()) == Some("self-hosted"))
+                        labels.iter().any(|label| {
+                            label.get("name").and_then(|n| n.as_str()) == Some("self-hosted")
+                        })
                     })
                     .unwrap_or(false)
             })
@@ -147,13 +148,14 @@ impl Observer for RunnerConfigObserver {
         let status_msg = if status_id == StatusId::Effective {
             format!("Runner configuration safe for organization {}", org)
         } else {
-            format!(
-                "Self-hosted runners present for organization {}",
-                org
-            )
+            format!("Self-hosted runners present for organization {}", org)
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "GH-3.2".to_string(),
             class_uid: 1003,

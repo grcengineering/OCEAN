@@ -168,8 +168,9 @@ mod tests {
 
     #[test]
     fn load_parses_yaml_file() {
-        let dir = std::env::temp_dir();
-        let path = dir
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp
+            .path()
             .join(format!("ocean_cfg_test_{}.yaml", uuid::Uuid::new_v4()))
             .to_str()
             .unwrap()
@@ -194,8 +195,6 @@ server:
         assert_eq!(cfg.output_format, "yaml");
         assert_eq!(cfg.server.port, 9090);
         assert_eq!(cfg.server.auth_token, "secret");
-
-        let _ = std::fs::remove_file(path);
     }
 
     #[test]

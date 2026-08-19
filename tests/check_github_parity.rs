@@ -137,10 +137,19 @@ fn gh506_pass_required_property_defined() {
     let def = load_check_with_mock_urls("GH-5.06-repo-custom-properties.check.yaml", server.url());
 
     let evidence = run_observer(def, &org_config());
-    assert_eq!(evidence.len(), 2, "expected 2 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "expected 2 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.control_id, "GH-5.06");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
@@ -154,10 +163,18 @@ fn gh506_fail_no_custom_properties() {
     let evidence = run_observer(def, &org_config());
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
-        assert_eq!(ev.status_id, StatusId::Ineffective, "expected Ineffective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Ineffective,
+            "expected Ineffective, got: {}",
+            ev.status
+        );
         assert!(!ev.findings.is_empty());
     }
-    assert_eq!(evidence[0].findings[0].title, "Organization Custom Properties Defined");
+    assert_eq!(
+        evidence[0].findings[0].title,
+        "Organization Custom Properties Defined"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +202,8 @@ fn gh605_pass_dependency_review_ruleset_active() {
         }
     ]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check_with_mock_urls("GH-6.05-dependency-review-ruleset.check.yaml", server.url());
+    let def =
+        load_check_with_mock_urls("GH-6.05-dependency-review-ruleset.check.yaml", server.url());
 
     let evidence = run_observer(def, &org_config());
     assert_eq!(evidence.len(), 1);
@@ -208,7 +226,8 @@ fn gh605_fail_ruleset_exists_but_no_dependency_review_workflow() {
         }
     ]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check_with_mock_urls("GH-6.05-dependency-review-ruleset.check.yaml", server.url());
+    let def =
+        load_check_with_mock_urls("GH-6.05-dependency-review-ruleset.check.yaml", server.url());
 
     let evidence = run_observer(def, &org_config());
     assert_eq!(evidence.len(), 1);
@@ -277,7 +296,10 @@ fn gh703_pass_required_workflow_ruleset_active() {
         }
     ]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check_with_mock_urls("GH-7.03-required-workflow-rulesets.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "GH-7.03-required-workflow-rulesets.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &org_config());
     assert_eq!(evidence.len(), 1);
@@ -298,7 +320,10 @@ fn gh703_fail_no_active_workflow_ruleset() {
         }
     ]);
     let server = MockHTTPServer::new(vec![(200, body.to_string())]);
-    let def = load_check_with_mock_urls("GH-7.03-required-workflow-rulesets.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "GH-7.03-required-workflow-rulesets.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &org_config());
     assert_eq!(evidence.len(), 1);
@@ -318,13 +343,25 @@ fn gh802_pass_no_open_alerts_org_wide() {
         (200, empty.to_string()), // secret scanning
         (200, empty.to_string()), // code scanning
     ]);
-    let def = load_check_with_mock_urls("GH-8.02-security-overview-dashboard.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "GH-8.02-security-overview-dashboard.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &org_config());
-    assert_eq!(evidence.len(), 3, "expected 3 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        3,
+        "expected 3 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.control_id, "GH-8.02");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -339,7 +376,10 @@ fn gh802_fail_critical_dependabot_alerts_open() {
         (200, empty.to_string()),             // secret scanning: none
         (200, empty.to_string()),             // code scanning: none
     ]);
-    let def = load_check_with_mock_urls("GH-8.02-security-overview-dashboard.check.yaml", server.url());
+    let def = load_check_with_mock_urls(
+        "GH-8.02-security-overview-dashboard.check.yaml",
+        server.url(),
+    );
 
     let evidence = run_observer(def, &org_config());
     assert_eq!(evidence.len(), 3);
@@ -371,7 +411,12 @@ fn gh201_pass_secret_scanning_and_push_protection_enabled() {
     assert_eq!(evidence.len(), 2);
     for ev in &evidence {
         assert_eq!(ev.control_id, "GH-2.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -416,7 +461,12 @@ fn gh205_pass_branch_protection_fully_configured() {
     assert_eq!(evidence.len(), 3);
     for ev in &evidence {
         assert_eq!(ev.control_id, "GH-2.05");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
     }
 }
 
@@ -499,17 +549,25 @@ fn all_github_checks_load_and_have_hth_references() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("checks/github");
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one GitHub check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one GitHub check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
-    for expect_id in [
-        "GH-5.06", "GH-6.05", "GH-7.02", "GH-7.03", "GH-8.02",
-    ] {
-        assert!(ids.contains(&expect_id), "missing {expect_id}, got: {ids:?}");
+    for expect_id in ["GH-5.06", "GH-6.05", "GH-7.02", "GH-7.03", "GH-8.02"] {
+        assert!(
+            ids.contains(&expect_id),
+            "missing {expect_id}, got: {ids:?}"
+        );
     }
 
     for def in &defs {
-        assert_eq!(def.source, "github", "{}: source should be 'github'", def.id);
+        assert_eq!(
+            def.source, "github",
+            "{}: source should be 'github'",
+            def.id
+        );
         assert!(
             !def.references.hth.is_empty(),
             "{}: references.hth is mandatory for GitHub checks",
@@ -521,6 +579,10 @@ fn all_github_checks_load_and_have_hth_references() {
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
     }
 }

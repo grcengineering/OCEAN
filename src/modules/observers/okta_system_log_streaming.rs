@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -194,6 +195,10 @@ impl Observer for SystemLogStreamingObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "OKTA-5.1".to_string(),
             class_uid: 1001,
@@ -290,17 +295,14 @@ mod tests {
 
     #[test]
     fn okta_system_log_streaming_all_inactive_is_ineffective() {
-        let body =
-            r#"[{"id":"ls1","type":"splunk_cloud_logstreaming","status":"INACTIVE"},{"id":"ls2","type":"aws_eventbridge","status":"INACTIVE"}]"#;
+        let body = r#"[{"id":"ls1","type":"splunk_cloud_logstreaming","status":"INACTIVE"},{"id":"ls2","type":"aws_eventbridge","status":"INACTIVE"}]"#;
         let url = mock_server(200, body);
         let cfg = base_config(&url);
         let ev = SystemLogStreamingObserver.observe(&cfg).unwrap();
         assert_eq!(ev[0].status_id, StatusId::Ineffective);
-        assert!(
-            ev[0]
-                .findings
-                .iter()
-                .any(|f| f.title.contains("All Log Streams Inactive"))
-        );
+        assert!(ev[0]
+            .findings
+            .iter()
+            .any(|f| f.title.contains("All Log Streams Inactive")));
     }
 }

@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -180,8 +181,8 @@ impl Observer for RecoveryPolicyObserver {
         if findings.is_empty() {
             findings.push(Finding {
                 title: "Recovery Policy Compliant".to_string(),
-                description:
-                    "Account recovery uses secure factors only (no SMS); OKTA-1.10 met".to_string(),
+                description: "Account recovery uses secure factors only (no SMS); OKTA-1.10 met"
+                    .to_string(),
                 severity_id: 0,
             });
         }
@@ -206,6 +207,10 @@ impl Observer for RecoveryPolicyObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "okta.recovery_policy".to_string(),
             class_uid: 1001,

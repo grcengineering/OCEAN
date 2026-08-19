@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 
@@ -39,12 +40,8 @@ fn okta_get(token: &str, base_url: &str, path: &str) -> Result<(Value, u16)> {
 
 // ─── Critical behavior rule type fragments ───────────────────────────────────
 
-const CRITICAL_RULE_TYPES: [&str; 4] = [
-    "NEW_DEVICE",
-    "NEW_IP",
-    "ANOMALOUS_LOCATION",
-    "GEO_VELOCITY",
-];
+const CRITICAL_RULE_TYPES: [&str; 4] =
+    ["NEW_DEVICE", "NEW_IP", "ANOMALOUS_LOCATION", "GEO_VELOCITY"];
 
 // ─── BehaviorDetectionObserver ────────────────────────────────────────────────
 
@@ -205,6 +202,10 @@ impl Observer for BehaviorDetectionObserver {
         });
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "OKTA-5.4".to_string(),
             class_uid: 1001,
@@ -304,12 +305,7 @@ mod tests {
         let cfg = base_config(&url);
         let ev = BehaviorDetectionObserver.observe(&cfg).unwrap();
         assert_eq!(ev[0].status_id, StatusId::Ineffective);
-        assert!(
-            ev[0]
-                .findings
-                .iter()
-                .any(|f| f.title.contains("No Active"))
-        );
+        assert!(ev[0].findings.iter().any(|f| f.title.contains("No Active")));
         assert_eq!(ev[0].findings[0].severity_id, 4);
     }
 
@@ -323,11 +319,9 @@ mod tests {
         let cfg = base_config(&url);
         let ev = BehaviorDetectionObserver.observe(&cfg).unwrap();
         assert_eq!(ev[0].status_id, StatusId::Ineffective);
-        assert!(
-            ev[0]
-                .findings
-                .iter()
-                .any(|f| f.title.contains("Insufficient"))
-        );
+        assert!(ev[0]
+            .findings
+            .iter()
+            .any(|f| f.title.contains("Insufficient")));
     }
 }

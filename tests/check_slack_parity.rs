@@ -75,14 +75,21 @@ fn slack_check_path(filename: &str) -> std::path::PathBuf {
 }
 
 /// Load a bundled Slack check, rewriting its real API host to the mock server.
-fn load_check_with_mock_urls(filename: &str, real_host: &str, mock_base: &str) -> ocean::check::CheckDefinition {
+fn load_check_with_mock_urls(
+    filename: &str,
+    real_host: &str,
+    mock_base: &str,
+) -> ocean::check::CheckDefinition {
     let content = std::fs::read_to_string(slack_check_path(filename))
         .unwrap_or_else(|e| panic!("read {filename}: {e}"));
     let rewritten = content.replace(real_host, mock_base);
     serde_yaml::from_str(&rewritten).unwrap_or_else(|e| panic!("parse rewritten {filename}: {e}"))
 }
 
-fn run_observer(def: ocean::check::CheckDefinition, config: &HashMap<String, String>) -> Vec<ocean::evidence::Evidence> {
+fn run_observer(
+    def: ocean::check::CheckDefinition,
+    config: &HashMap<String, String>,
+) -> Vec<ocean::evidence::Evidence> {
     let registry = Arc::new(Registry::new());
     let id = def.id.clone();
     register_check(&registry, def);
@@ -94,13 +101,19 @@ fn run_observer(def: ocean::check::CheckDefinition, config: &HashMap<String, Str
 
 fn slack_admin_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("SLACK_ADMIN_TOKEN".to_string(), "xoxp-test-admin".to_string());
+    cfg.insert(
+        "SLACK_ADMIN_TOKEN".to_string(),
+        "xoxp-test-admin".to_string(),
+    );
     cfg
 }
 
 fn slack_audit_config() -> HashMap<String, String> {
     let mut cfg = HashMap::new();
-    cfg.insert("SLACK_AUDIT_TOKEN".to_string(), "xoxp-test-audit".to_string());
+    cfg.insert(
+        "SLACK_AUDIT_TOKEN".to_string(),
+        "xoxp-test-audit".to_string(),
+    );
     cfg
 }
 
@@ -174,7 +187,10 @@ fn slack301_pass_no_admin_scope_apps() {
         "restricted_apps": [],
         "response_metadata": {"next_cursor": ""}
     });
-    let server = MockHTTPServer::new(vec![(200, approved.to_string()), (200, restricted.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, approved.to_string()),
+        (200, restricted.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "SLACK-3.01-app-approval.check.yaml",
         "https://slack.com",
@@ -182,10 +198,19 @@ fn slack301_pass_no_admin_scope_apps() {
     );
 
     let evidence = run_observer(def, &slack_admin_config());
-    assert_eq!(evidence.len(), 2, "expected 2 evidence items (one per assertion)");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "expected 2 evidence items (one per assertion)"
+    );
     for ev in &evidence {
         assert_eq!(ev.control_id, "SLACK-3.01");
-        assert_eq!(ev.status_id, StatusId::Effective, "expected Effective, got: {}", ev.status);
+        assert_eq!(
+            ev.status_id,
+            StatusId::Effective,
+            "expected Effective, got: {}",
+            ev.status
+        );
         assert!(ev.findings.is_empty());
     }
 }
@@ -204,7 +229,10 @@ fn slack301_fail_admin_scope_app_found() {
         "restricted_apps": [],
         "response_metadata": {"next_cursor": ""}
     });
-    let server = MockHTTPServer::new(vec![(200, approved.to_string()), (200, restricted.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, approved.to_string()),
+        (200, restricted.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "SLACK-3.01-app-approval.check.yaml",
         "https://slack.com",
@@ -218,7 +246,10 @@ fn slack301_fail_admin_scope_app_found() {
     assert_eq!(evidence[0].status_id, StatusId::Effective);
     // Second assertion (no admin-scope app) fails.
     assert_eq!(evidence[1].status_id, StatusId::Ineffective);
-    assert_eq!(evidence[1].findings[0].title, "No Approved App Holds Admin-Level OAuth Scope");
+    assert_eq!(
+        evidence[1].findings[0].title,
+        "No Approved App Holds Admin-Level OAuth Scope"
+    );
     assert_eq!(evidence[1].findings[0].severity_id, 4); // high
 }
 
@@ -236,7 +267,10 @@ fn slack301_fail_ok_envelope_false_no_payload() {
         "ok": false,
         "error": "not_allowed_token_type"
     });
-    let server = MockHTTPServer::new(vec![(200, approved.to_string()), (200, restricted.to_string())]);
+    let server = MockHTTPServer::new(vec![
+        (200, approved.to_string()),
+        (200, restricted.to_string()),
+    ]);
     let def = load_check_with_mock_urls(
         "SLACK-3.01-app-approval.check.yaml",
         "https://slack.com",
@@ -244,7 +278,11 @@ fn slack301_fail_ok_envelope_false_no_payload() {
     );
 
     let evidence = run_observer(def, &slack_admin_config());
-    assert_eq!(evidence.len(), 2, "should still produce evidence even when the payload field is absent");
+    assert_eq!(
+        evidence.len(),
+        2,
+        "should still produce evidence even when the payload field is absent"
+    );
 
     // ok-envelope assertion fails honestly.
     assert_eq!(evidence[0].status_id, StatusId::Ineffective);
@@ -316,12 +354,24 @@ fn all_slack_checks_load_and_have_hth_references() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("checks/slack");
     let defs = ocean::check::loader::load_definitions_from_dir(&dir);
 
-    assert!(!defs.is_empty(), "expected at least one Slack check to load");
+    assert!(
+        !defs.is_empty(),
+        "expected at least one Slack check to load"
+    );
 
     let ids: Vec<&str> = defs.iter().map(|d| d.id.as_str()).collect();
-    assert!(ids.contains(&"SLACK-1.02"), "missing SLACK-1.02, got: {ids:?}");
-    assert!(ids.contains(&"SLACK-3.01"), "missing SLACK-3.01, got: {ids:?}");
-    assert!(ids.contains(&"SLACK-5.01"), "missing SLACK-5.01, got: {ids:?}");
+    assert!(
+        ids.contains(&"SLACK-1.02"),
+        "missing SLACK-1.02, got: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"SLACK-3.01"),
+        "missing SLACK-3.01, got: {ids:?}"
+    );
+    assert!(
+        ids.contains(&"SLACK-5.01"),
+        "missing SLACK-5.01, got: {ids:?}"
+    );
 
     for def in &defs {
         assert_eq!(def.source, "slack", "{}: source should be 'slack'", def.id);
@@ -336,6 +386,10 @@ fn all_slack_checks_load_and_have_hth_references() {
             def.id,
             def.references.hth
         );
-        assert!(!def.assertions.is_empty(), "{}: check has no assertions", def.id);
+        assert!(
+            !def.assertions.is_empty(),
+            "{}: check has no assertions",
+            def.id
+        );
     }
 }

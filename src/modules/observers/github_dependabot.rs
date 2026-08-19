@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::evidence::{
     ConfidenceLevel, Evidence, Finding, Metadata, ModuleInfo, Observable, SourceInfo, StatusId,
+    EVIDENCE_SCHEMA_VERSION,
 };
 use crate::module::{observer::Observer, CredentialReq, Module};
 use crate::modules::github_common::{github_get, DEFAULT_GITHUB_API};
@@ -81,13 +82,17 @@ impl Observer for DependabotAlertsObserver {
             "/repos/{}/{}/dependabot/alerts?state=open&severity=critical&per_page=1",
             owner, repo
         );
-        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), &path);
+        let endpoint = format!("{}{}", base_url.trim_end_matches('/'), path);
 
         let (body, status) = github_get(token, base_url, &path)?;
 
         // 404 means Dependabot alerts are not enabled for the repository.
         if status == 404 {
             return Ok(vec![Evidence {
+                schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+                connected_account: None,
+                population: None,
+                evaluation: None,
                 id: Uuid::new_v4(),
                 control_id: "scm.dependency_management".to_string(),
                 class_uid: 1003,
@@ -123,10 +128,7 @@ impl Observer for DependabotAlertsObserver {
                     },
                 ],
                 status_id: StatusId::Unknown,
-                status: format!(
-                    "Dependabot alerts not enabled on {}/{}",
-                    owner, repo
-                ),
+                status: format!("Dependabot alerts not enabled on {}/{}", owner, repo),
                 raw_data: body,
                 findings: vec![Finding {
                     title: "Dependabot Alerts Not Enabled".to_string(),
@@ -154,10 +156,7 @@ impl Observer for DependabotAlertsObserver {
         let (status_id, status_msg, findings) = if alert_count == 0 {
             (
                 StatusId::Effective,
-                format!(
-                    "No critical open Dependabot alerts on {}/{}",
-                    owner, repo
-                ),
+                format!("No critical open Dependabot alerts on {}/{}", owner, repo),
                 vec![Finding {
                     title: "No Critical Dependabot Alerts".to_string(),
                     description: format!(
@@ -186,6 +185,10 @@ impl Observer for DependabotAlertsObserver {
         };
 
         Ok(vec![Evidence {
+            schema_version: EVIDENCE_SCHEMA_VERSION.to_string(),
+            connected_account: None,
+            population: None,
+            evaluation: None,
             id: Uuid::new_v4(),
             control_id: "scm.dependency_management".to_string(),
             class_uid: 1003,
@@ -273,7 +276,9 @@ mod tests {
             .unwrap()[0];
         assert_eq!(ev.status_id, StatusId::Unknown);
         assert_eq!(ev.findings[0].title, "Dependabot Alerts Not Enabled");
-        assert!(ev.findings[0].description.contains("Dependabot alerts not enabled"));
+        assert!(ev.findings[0]
+            .description
+            .contains("Dependabot alerts not enabled"));
     }
 
     #[test]

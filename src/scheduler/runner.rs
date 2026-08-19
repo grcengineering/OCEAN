@@ -244,7 +244,11 @@ mod tests {
     use chrono::Utc;
 
     fn make_store() -> SqliteStore {
-        let dir = std::env::temp_dir();
+        // Leaked intentionally: `SqliteStore` doesn't carry the `TempDir` guard,
+        // and this test fixture is (as before) never cleaned up — `.keep()`
+        // just swaps the insecure shared temp-dir base for a securely-created
+        // unique one without changing that lifetime behavior.
+        let dir = tempfile::TempDir::new().unwrap().keep();
         let path = dir
             .join(format!("ocean_runner_{}.db", Uuid::new_v4()))
             .to_str()

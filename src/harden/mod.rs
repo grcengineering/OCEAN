@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
+use std::str::FromStr;
 
 use anyhow::{Context, Result};
 
@@ -225,8 +226,10 @@ pub enum RemediationMode {
     All,
 }
 
-impl RemediationMode {
-    pub fn from_str(s: &str) -> Result<Self> {
+impl FromStr for RemediationMode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "api" => Ok(Self::Api),
             "terraform" | "tf" => Ok(Self::Terraform),
@@ -237,7 +240,9 @@ impl RemediationMode {
             )),
         }
     }
+}
 
+impl RemediationMode {
     fn includes_api(&self) -> bool {
         matches!(self, Self::Api | Self::All)
     }
@@ -628,7 +633,10 @@ pub fn confirm_apply<W: Write>(
 ) -> Result<bool> {
     let mask = CredentialMask::from_config(config);
 
-    writeln!(out, "\n⚠ APPLY MODE — the following API calls will be executed:\n")?;
+    writeln!(
+        out,
+        "\n⚠ APPLY MODE — the following API calls will be executed:\n"
+    )?;
     for (i, plan) in plans.iter().enumerate() {
         writeln!(out, "  {}. {} — {}", i + 1, plan.check_id, plan.check_name)?;
         if let Some(api) = &plan.api_action {
@@ -642,7 +650,11 @@ pub fn confirm_apply<W: Write>(
             writeln!(out, "     CLI (display only): {}", mask.scrub(cmd))?;
         }
         if !plan.terraform_resources.is_empty() {
-            writeln!(out, "     Terraform: {} resource(s) will be written", plan.terraform_resources.len())?;
+            writeln!(
+                out,
+                "     Terraform: {} resource(s) will be written",
+                plan.terraform_resources.len()
+            )?;
         }
     }
     writeln!(out)?;
@@ -667,7 +679,12 @@ pub fn confirm_apply<W: Write>(
 /// Print harden plans in dry-run mode.
 ///
 /// Credential values are scrubbed from all output (TH-1a).
-pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &str, config: &HashMap<String, String>) -> Result<()> {
+pub fn print_dry_run<W: Write>(
+    out: &mut W,
+    plans: &[RemediationPlan],
+    format: &str,
+    config: &HashMap<String, String>,
+) -> Result<()> {
     let mask = CredentialMask::from_config(config);
     if format == "json" {
         let json: Vec<serde_json::Value> = plans
@@ -697,7 +714,10 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
             writeln!(out, "No failing checks with remediation plans found.")?;
             return Ok(());
         }
-        writeln!(out, "\n[DRY RUN] Remediation plan — use --apply to execute\n")?;
+        writeln!(
+            out,
+            "\n[DRY RUN] Remediation plan — use --apply to execute\n"
+        )?;
         for plan in plans {
             writeln!(out, "  ▸ {} — {}", plan.check_id, plan.check_name)?;
             if let Some(api) = &plan.api_action {
@@ -719,7 +739,11 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
                 writeln!(out, "    CLI: {}", mask.scrub(cmd))?;
             }
             if !plan.terraform_resources.is_empty() {
-                writeln!(out, "    Terraform: {} resource(s)", plan.terraform_resources.len())?;
+                writeln!(
+                    out,
+                    "    Terraform: {} resource(s)",
+                    plan.terraform_resources.len()
+                )?;
             }
             if !plan.steps.is_empty() {
                 writeln!(out, "    Manual steps:")?;
@@ -735,7 +759,12 @@ pub fn print_dry_run<W: Write>(out: &mut W, plans: &[RemediationPlan], format: &
 /// Print harden execution results.
 ///
 /// Credential values are scrubbed from all output (TH-1a).
-pub fn print_results<W: Write>(out: &mut W, results: &[RemediationResult], format: &str, config: &HashMap<String, String>) -> Result<()> {
+pub fn print_results<W: Write>(
+    out: &mut W,
+    results: &[RemediationResult],
+    format: &str,
+    config: &HashMap<String, String>,
+) -> Result<()> {
     let mask = CredentialMask::from_config(config);
     if format == "json" {
         let json: Vec<serde_json::Value> = results
@@ -900,11 +929,26 @@ assertions: []
 
     #[test]
     fn remediation_mode_from_str() {
-        assert_eq!(RemediationMode::from_str("api").unwrap(), RemediationMode::Api);
-        assert_eq!(RemediationMode::from_str("terraform").unwrap(), RemediationMode::Terraform);
-        assert_eq!(RemediationMode::from_str("tf").unwrap(), RemediationMode::Terraform);
-        assert_eq!(RemediationMode::from_str("cli").unwrap(), RemediationMode::Cli);
-        assert_eq!(RemediationMode::from_str("all").unwrap(), RemediationMode::All);
+        assert_eq!(
+            RemediationMode::from_str("api").unwrap(),
+            RemediationMode::Api
+        );
+        assert_eq!(
+            RemediationMode::from_str("terraform").unwrap(),
+            RemediationMode::Terraform
+        );
+        assert_eq!(
+            RemediationMode::from_str("tf").unwrap(),
+            RemediationMode::Terraform
+        );
+        assert_eq!(
+            RemediationMode::from_str("cli").unwrap(),
+            RemediationMode::Cli
+        );
+        assert_eq!(
+            RemediationMode::from_str("all").unwrap(),
+            RemediationMode::All
+        );
         assert!(RemediationMode::from_str("unknown").is_err());
     }
 
@@ -1038,7 +1082,10 @@ assertions: []
     fn sec_dry_run_does_not_leak_token() {
         // TH-1b: Dry-run output must not contain credential values.
         let mut config = HashMap::new();
-        config.insert("GITHUB_TOKEN".to_string(), "ghp_test_secret_token_xyz".to_string());
+        config.insert(
+            "GITHUB_TOKEN".to_string(),
+            "ghp_test_secret_token_xyz".to_string(),
+        );
         config.insert("org".to_string(), "my-org".to_string());
 
         let plans = vec![RemediationPlan {
@@ -1048,7 +1095,8 @@ assertions: []
             steps: Vec::new(),
             api_action: Some(ApiAction {
                 method: "PATCH".to_string(),
-                url: "https://api.github.com/orgs/my-org?auth=ghp_test_secret_token_xyz".to_string(),
+                url: "https://api.github.com/orgs/my-org?auth=ghp_test_secret_token_xyz"
+                    .to_string(),
                 body: None,
                 ..Default::default()
             }),
@@ -1060,13 +1108,19 @@ assertions: []
         let mut out = Vec::new();
         print_dry_run(&mut out, &plans, "table", &config).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(!s.contains("ghp_test_secret_token_xyz"), "Token leaked in table output: {s}");
+        assert!(
+            !s.contains("ghp_test_secret_token_xyz"),
+            "Token leaked in table output: {s}"
+        );
 
         // Test JSON output
         let mut out = Vec::new();
         print_dry_run(&mut out, &plans, "json", &config).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(!s.contains("ghp_test_secret_token_xyz"), "Token leaked in JSON output: {s}");
+        assert!(
+            !s.contains("ghp_test_secret_token_xyz"),
+            "Token leaked in JSON output: {s}"
+        );
     }
 
     #[test]
@@ -1083,7 +1137,8 @@ assertions: []
     fn sec_url_allowlist_rejects_evil_host() {
         // TH-2b: Malicious URLs must be rejected.
         assert!(validate_remediation_url("https://evil.example.com/steal").is_err());
-        assert!(validate_remediation_url("http://api.github.com/orgs/my-org").is_err()); // http not https
+        assert!(validate_remediation_url("http://api.github.com/orgs/my-org").is_err());
+        // http not https
     }
 
     #[test]
@@ -1092,7 +1147,9 @@ assertions: []
         assert!(validate_remediation_url("https://evil.example.com/.okta.com/steal").is_err());
         assert!(validate_remediation_url("https://evil.example.com/.amazonaws.com/exfil").is_err());
         assert!(validate_remediation_url("https://evil.example.com/.azure.com/steal").is_err());
-        assert!(validate_remediation_url("https://evil.example.com/api.github.com/orgs/x").is_err());
+        assert!(
+            validate_remediation_url("https://evil.example.com/api.github.com/orgs/x").is_err()
+        );
     }
 
     #[test]
@@ -1113,8 +1170,14 @@ assertions: []
         config.insert("org".to_string(), "legit-org".to_string());
 
         let result = resolve_vars("{{MALICIOUS_VAR}}/{{org}}", &config);
-        assert!(result.contains("{{MALICIOUS_VAR}}"), "Unknown var was resolved: {result}");
-        assert!(result.contains("legit-org"), "Known var was not resolved: {result}");
+        assert!(
+            result.contains("{{MALICIOUS_VAR}}"),
+            "Unknown var was resolved: {result}"
+        );
+        assert!(
+            result.contains("legit-org"),
+            "Known var was not resolved: {result}"
+        );
     }
 
     #[test]
@@ -1124,8 +1187,14 @@ assertions: []
         config.insert("org".to_string(), "my-org".to_string());
 
         let result = resolve_vars_masked("{{GITHUB_TOKEN}} {{org}}", &config);
-        assert!(result.contains("{{GITHUB_TOKEN}}"), "Credential should stay as placeholder: {result}");
-        assert!(result.contains("my-org"), "Non-credential should be resolved: {result}");
+        assert!(
+            result.contains("{{GITHUB_TOKEN}}"),
+            "Credential should stay as placeholder: {result}"
+        );
+        assert!(
+            result.contains("my-org"),
+            "Non-credential should be resolved: {result}"
+        );
     }
 
     #[test]
@@ -1205,7 +1274,11 @@ remediation:
 
         // load_remediable_checks returns it (it has a remediation block)
         let checks = load_remediable_checks(dir.path());
-        assert_eq!(checks.len(), 1, "Should find the active check with remediation");
+        assert_eq!(
+            checks.len(),
+            1,
+            "Should find the active check with remediation"
+        );
         assert_eq!(checks[0].check_type, CheckType::Active);
         // But plan_harden will skip it because it's active (verified by the
         // `if def.check_type != CheckType::Passive { continue; }` guard in plan_harden).
@@ -1307,7 +1380,10 @@ remediation:
         // UT-H013: Invalid mode string returns descriptive error listing valid modes.
         let err = RemediationMode::from_str("garbage").unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("garbage"), "Error should mention the invalid input");
+        assert!(
+            msg.contains("garbage"),
+            "Error should mention the invalid input"
+        );
         assert!(msg.contains("api"), "Error should list valid modes");
         assert!(msg.contains("terraform"), "Error should list valid modes");
         assert!(msg.contains("cli"), "Error should list valid modes");
@@ -1319,13 +1395,20 @@ remediation:
     fn sec_h002_credentials_not_in_error_output() {
         // SEC-H002: Failed API calls must not leak credential values in error messages.
         let mut config = HashMap::new();
-        config.insert("GITHUB_TOKEN".to_string(), "ghp_supersecrettoken999".to_string());
+        config.insert(
+            "GITHUB_TOKEN".to_string(),
+            "ghp_supersecrettoken999".to_string(),
+        );
         let mask = CredentialMask::from_config(&config);
 
         // Simulate an error message that might contain a token
-        let raw_error = "API call failed: 403 Forbidden. Authorization: Bearer ghp_supersecrettoken999";
+        let raw_error =
+            "API call failed: 403 Forbidden. Authorization: Bearer ghp_supersecrettoken999";
         let scrubbed = mask.scrub(raw_error);
-        assert!(!scrubbed.contains("ghp_supersecrettoken999"), "Token leaked in error: {scrubbed}");
+        assert!(
+            !scrubbed.contains("ghp_supersecrettoken999"),
+            "Token leaked in error: {scrubbed}"
+        );
         assert!(scrubbed.contains("***REDACTED***"), "Should show REDACTED");
     }
 
@@ -1333,7 +1416,10 @@ remediation:
     fn sec_h004_terraform_no_credential_literals() {
         // SEC-H004: Terraform output must not contain credential literal values.
         let mut config = HashMap::new();
-        config.insert("GITHUB_TOKEN".to_string(), "ghp_terraform_secret_xyz".to_string());
+        config.insert(
+            "GITHUB_TOKEN".to_string(),
+            "ghp_terraform_secret_xyz".to_string(),
+        );
 
         let plan = RemediationPlan {
             check_id: "GH-1.01".to_string(),
@@ -1349,18 +1435,29 @@ remediation:
             })],
         };
         let hcl = generate_terraform_hcl(&plan);
-        assert!(!hcl.contains("ghp_terraform_secret_xyz"), "Terraform output must not contain credentials");
+        assert!(
+            !hcl.contains("ghp_terraform_secret_xyz"),
+            "Terraform output must not contain credentials"
+        );
     }
 
     #[test]
     fn sec_h010_user_checks_dir_detection() {
         // SEC-H010: is_user_checks_dir correctly identifies ~/.ocean/checks/ paths.
         if let Ok(home) = std::env::var("HOME") {
-            let user_dir = std::path::PathBuf::from(&home).join(".ocean").join("checks");
-            assert!(is_user_checks_dir(&user_dir), "~/.ocean/checks/ should be detected as user dir");
+            let user_dir = std::path::PathBuf::from(&home)
+                .join(".ocean")
+                .join("checks");
+            assert!(
+                is_user_checks_dir(&user_dir),
+                "~/.ocean/checks/ should be detected as user dir"
+            );
 
             let built_in_dir = std::path::PathBuf::from("/usr/share/ocean/checks");
-            assert!(!is_user_checks_dir(&built_in_dir), "Built-in dir should not be flagged");
+            assert!(
+                !is_user_checks_dir(&built_in_dir),
+                "Built-in dir should not be flagged"
+            );
         }
     }
 
@@ -1368,28 +1465,31 @@ remediation:
     fn sec_h010_warn_user_checks_output() {
         // SEC-H010: warn_user_checks writes a warning for user-authored checks.
         if let Ok(home) = std::env::var("HOME") {
-            let user_dir = std::path::PathBuf::from(&home).join(".ocean").join("checks");
+            let user_dir = std::path::PathBuf::from(&home)
+                .join(".ocean")
+                .join("checks");
             let mut out = Vec::new();
             warn_user_checks(&mut out, &user_dir, &[]);
             let s = String::from_utf8(out).unwrap();
-            assert!(s.contains("not verified"), "Should warn about unverified checks");
+            assert!(
+                s.contains("not verified"),
+                "Should warn about unverified checks"
+            );
         }
     }
 
     #[test]
     fn sec_h012_partial_failure_result() {
         // SEC-H012: When some remediations succeed and some fail, results reflect this correctly.
-        let plans = vec![
-            RemediationPlan {
-                check_id: "GH-1.01".to_string(),
-                check_name: "MFA".to_string(),
-                description: String::new(),
-                steps: Vec::new(),
-                api_action: None,
-                cli_action: Some("gh api test".to_string()),
-                terraform_resources: Vec::new(),
-            },
-        ];
+        let plans = vec![RemediationPlan {
+            check_id: "GH-1.01".to_string(),
+            check_name: "MFA".to_string(),
+            description: String::new(),
+            steps: Vec::new(),
+            api_action: None,
+            cli_action: Some("gh api test".to_string()),
+            terraform_resources: Vec::new(),
+        }];
         let config = HashMap::new();
         let results = execute_plans(&plans, &config, None);
 
@@ -1436,7 +1536,10 @@ remediation:
         let mut out = Vec::new();
         print_dry_run(&mut out, &[plan], "table", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("test; rm -rf /"), "Name should appear as-is in output");
+        assert!(
+            s.contains("test; rm -rf /"),
+            "Name should appear as-is in output"
+        );
         // Verify no shell interpretation occurred (we're still here)
         assert!(std::path::Path::new("/").exists());
     }
@@ -1482,8 +1585,14 @@ remediation:
         let s = String::from_utf8(out).unwrap();
         assert!(s.contains("PATCH"), "Must show HTTP method");
         assert!(s.contains("api.github.com"), "Must show URL");
-        assert!(s.contains("members_can_create_repos"), "Must show body content");
-        assert!(!s.contains("ghp_secret"), "Must not leak token in confirmation output");
+        assert!(
+            s.contains("members_can_create_repos"),
+            "Must show body content"
+        );
+        assert!(
+            !s.contains("ghp_secret"),
+            "Must not leak token in confirmation output"
+        );
     }
 
     // ─── Edge case tests (from test plan GRC-51) ────────────────────────────
@@ -1494,7 +1603,10 @@ remediation:
         let mut out = Vec::new();
         print_dry_run(&mut out, &[], "table", &empty_config()).unwrap();
         let s = String::from_utf8(out).unwrap();
-        assert!(s.contains("No failing"), "Should indicate no checks to remediate");
+        assert!(
+            s.contains("No failing"),
+            "Should indicate no checks to remediate"
+        );
     }
 
     #[test]
@@ -1536,7 +1648,10 @@ remediation:
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         let arr = v.as_array().unwrap();
         assert_eq!(arr.len(), 2, "Two independent plans should be generated");
-        assert_ne!(arr[0]["check_id"], arr[1]["check_id"], "Plans should be for different checks");
+        assert_ne!(
+            arr[0]["check_id"], arr[1]["check_id"],
+            "Plans should be for different checks"
+        );
     }
 
     #[test]
