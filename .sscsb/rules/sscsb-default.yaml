@@ -15,6 +15,14 @@ rules:
           - pattern-regex: 'wget[^|;\n]*\|\s*(sudo\s+)?(ba|z|da)?sh'
     paths:
       include: ["*.sh", "*.bash", "*.zsh", "Makefile", "*.yml", "*.yaml"]
+      # checks/ holds declarative .check.yaml data interpreted by
+      # src/check/interpreter.rs (HTTP + CEL — no field ever reaches a shell),
+      # and its description prose legitimately NAMES attacks like `curl | sh`
+      # when documenting what a control defends against. A match there is false
+      # by construction — same rationale as the workflow's .sscsb/rules
+      # exclusion — while every executable surface stays covered. Broke the
+      # ona PR (run 32213773362) on exactly such prose.
+      exclude: ["checks/**"]
 
   - id: sscsb.git-protocol-insecure
     languages: [generic]
