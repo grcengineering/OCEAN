@@ -1,0 +1,54 @@
+# sscsb: CodeQL — deep interprocedural analysis on PRs and the default branch.
+#
+# Two languages are analysed, and both are real source in this repo:
+#   rust    — the OCEAN crate itself (build-mode: none, CodeQL's buildless Rust extractor)
+#   actions — the workflows under .github/workflows (every sscsb-bootstrapped repo has these)
+#
+# CodeQL is kept ALONGSIDE OpenGrep (sast-opengrep.yml), not instead of it: they
+# model different vulnerability classes. OpenGrep is pattern/dataflow matching over
+# a rule corpus; CodeQL does interprocedural taint tracking over a compiled database
+# and finds classes an OpenGrep default ruleset does not express at all.
+name: CodeQL
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "45 3 * * 2"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: rust
+            build-mode: none
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - name: Analyze
+        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          category: "/language:${{ matrix.language }}"

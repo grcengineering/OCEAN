@@ -15,11 +15,17 @@ github_repo = "grcengineering/ocean"
 
 # ── Phase 1 — Local source integrity ──
 
-# Secret scanning hooks: TruffleHog + Gitleaks block secrets at pre-commit and pre-push
+# Secret scanning hooks: TruffleHog blocks secrets at pre-commit and pre-push.
+# gitleaks deliberately OFF (2026-09-12): TruffleHog is the single strongest
+# option for this control because it VALIDATES candidate credentials against the
+# issuing provider (--results=verified,unknown), which gitleaks cannot do. Running
+# both produced two entropy-regex engines where only one of them can tell a live
+# key from a fixture, at the cost of a second scan and a second allowlist file to
+# keep honest. One control, one tool.
 [controls.secrets]
 enabled = true
 trufflehog = true
-gitleaks = true
+gitleaks = false
 pre_push_range_scan = true
 
 # CommitSigningGuard: human-only signing enforced on protected branches at pre-push.
@@ -141,9 +147,10 @@ enabled = false
 enabled = true
 
 # Harden-Runner: StepSecurity Harden-Runner egress/tamper monitoring in every workflow
+# egress_policy is NOT an option of this control in sscsb 0.4.0 (it warned on every
+# invocation and was ignored); the policy lives in each workflow's harden-runner step.
 [controls.harden-runner]
 enabled = true
-egress_policy = "audit"
 
 # Witness (optional): Richer in-toto attestation capture and policy around build steps
 [controls.witness]
