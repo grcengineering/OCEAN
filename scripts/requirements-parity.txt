@@ -1,0 +1,17 @@
+# Pinned, hash-locked inputs for the CI `parity` job (scripts/hth_parity.py).
+#
+# Installed with `pip install --require-hashes -r scripts/requirements-parity.txt`,
+# so pip refuses any artifact whose SHA-256 is not listed here — a compromised or
+# substituted PyPI artifact fails the install instead of executing in CI.
+# PyYAML has no runtime dependencies, so this file is the complete closure.
+#
+# Wheel hashes cover the interpreters/architectures GitHub-hosted runners use for
+# this job (setup-python pins 3.12); the sdist hash is the source fallback.
+# Renovate keeps the version current; regenerate hashes with:
+#   pip download pyyaml==<version> --no-binary :none: -d /tmp/pyyaml && sha256sum /tmp/pyyaml/*
+pyyaml==6.0.3 \
+    --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc \
+    --hash=sha256:9149cad251584d5fb4981be1ecde53a1ca46c891a79788c0df828d2f166bda28 \
+    --hash=sha256:41715c910c881bc081f1e8872880d3c650acf13dfa8214bad49ed4cede7c34ea \
+    --hash=sha256:8dc52c23056b9ddd46818a57b78404882310fb473d63f17b07d5c40421e47f8e \
+    --hash=sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f

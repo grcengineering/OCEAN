@@ -62,3 +62,6 @@ id_ed25519
 .serena/memories/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+
+# sscsb: generated output (SBOMs, scan records, receipts, VEX), not policy
+.sscsb/out/

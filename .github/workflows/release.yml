@@ -5,11 +5,12 @@ on:
     tags:
       - 'v*'
 
+# Least privilege at the top: every write grant is declared by the ONE job that
+# needs it, so `build` and `sbom` no longer inherit contents/packages/id-token
+# write. `attestations: write` was dropped outright — no job in this workflow
+# uses actions/attest* (that lives in release-attest*.yml).
 permissions:
-  contents: write
-  id-token: write
-  packages: write
-  attestations: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,6 +23,8 @@ jobs:
   build:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -159,6 +162,8 @@ jobs:
     name: Generate SBOM
     needs: [build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:

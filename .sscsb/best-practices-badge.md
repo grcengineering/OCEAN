@@ -21,7 +21,7 @@ badge API for this repo, so earning the badge also lifts your Scorecard score.
 | Static analysis (SAST) applied | `sast` control (OpenGrep/CodeQL) | ☑ |
 | Vulnerability scanning of dependencies | `vuln-scan` (Trivy + OSV-Scanner) | ☑ |
 | No unpatched medium+/high vulns | `vuln-scan` gate (`fail_on = high`) | ☑ |
-| Secrets not committed; scanned | `secrets` (TruffleHog + Gitleaks) | ☑ |
+| Secrets not committed; scanned | `secrets` (TruffleHog, verified+unknown, + Gitleaks) | ☑ |
 | Vulnerability reporting process documented | `SECURITY.md` | ☐ confirm |
 | Cryptographic signing of releases | `sigstore-signing` / `github-attestations` | ☑ |
 | Delivery over TLS / pinned deps | `renovate` + pinned Actions (`actions-audit`) | ☑ |
