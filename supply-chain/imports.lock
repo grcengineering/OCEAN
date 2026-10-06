@@ -246,11 +246,11 @@ user-login = "djc"
 user-name = "Dirkjan Ochtman"
 
 [[publisher.rustls-webpki]]
-version = "0.103.13"
-when = "2026-04-21"
-user-id = 2751
-user-login = "ctz"
-user-name = "Joe Birr-Pixton"
+version = "0.103.15"
+when = "2026-08-21"
+user-id = 209038
+user-login = "cpu"
+user-name = "Daniel McCarney"
 
 [[publisher.ryu]]
 version = "1.0.23"
@@ -912,6 +912,16 @@ change.
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.29 -> 0.3.32"
+
+[[audits.bytecode-alliance.audits.rustls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.23.37 -> 0.23.45"
+notes = """
+A relatively large update, but no new `unsafe` and nothing awry here. Lots of
+protocol/etc updates which I'm not personally an expert within but the rustls
+maintainers are relatively well trusted as well.
+"""
 
 [[audits.bytecode-alliance.audits.sharded-slab]]
 who = "Pat Hickey <phickey@fastly.com>"
