@@ -374,6 +374,7 @@ mod tests {
         use std::io::{Read, Write};
         use std::net::TcpListener;
         use std::thread;
+        use std::time::Duration;
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -381,8 +382,30 @@ mod tests {
         thread::spawn(move || {
             for (status, body) in responses {
                 if let Ok((mut stream, _)) = listener.accept() {
+                    // Fully drain whatever the client sent before responding.
+                    // A single `read()` can capture only part of the request
+                    // when the client's write is split across TCP segments
+                    // (this request carries Authorization + Content-Type
+                    // headers and a JSON body, so it's more likely to span
+                    // more than one segment than a bare GET). Closing the
+                    // stream while bytes remain unread in the kernel's
+                    // receive buffer makes some platforms answer with an RST
+                    // instead of a graceful close, which corrupts the
+                    // client's read of the response written below -- this
+                    // was observed as an intermittent "Failed to read JSON"
+                    // error on the client side. A short read timeout bounds
+                    // the drain without needing to parse HTTP framing: keep
+                    // reading until nothing more arrives within the window.
+                    let _ = stream.set_read_timeout(Some(Duration::from_millis(50)));
                     let mut buf = [0u8; 8192];
-                    let _ = stream.read(&mut buf);
+                    loop {
+                        match stream.read(&mut buf) {
+                            Ok(0) | Err(_) => break,
+                            Ok(_) => continue,
+                        }
+                    }
+                    let _ = stream.set_read_timeout(None);
+
                     let resp = format!(
                         "HTTP/1.1 {} OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                         status,
