@@ -93,10 +93,7 @@ fn pem_to_der(pem: &str) -> Result<Vec<u8>> {
 
 /// Create a signed JWT and exchange it for an OAuth2 access token.
 /// Uses RS256 (RSA + SHA-256) signing per Google's service account auth flow.
-fn get_access_token(
-    sa_key: &ServiceAccountKey,
-    token_endpoint: &str,
-) -> Result<String> {
+fn get_access_token(sa_key: &ServiceAccountKey, token_endpoint: &str) -> Result<String> {
     let now = Utc::now().timestamp();
     let header = json!({"alg": "RS256", "typ": "JWT"});
     let claims = json!({
@@ -144,11 +141,7 @@ struct IamBinding {
     members: Vec<String>,
 }
 
-fn fetch_iam_policy(
-    access_token: &str,
-    project_id: &str,
-    base_url: &str,
-) -> Result<IamPolicy> {
+fn fetch_iam_policy(access_token: &str, project_id: &str, base_url: &str) -> Result<IamPolicy> {
     let url = format!(
         "{}/{}/projects/{}:getIamPolicy",
         base_url.trim_end_matches('/'),
@@ -231,10 +224,8 @@ impl Observer for GcpIamPolicyObserver {
                 .ok_or_else(|| anyhow!("GCP_SERVICE_ACCOUNT_KEY is required"))?;
 
             // Try parsing as JSON directly; if that fails, treat as file path.
-            let sa_key: ServiceAccountKey =
-                serde_json::from_str(sa_key_raw).map_err(|e| {
-                    anyhow!("failed to parse GCP_SERVICE_ACCOUNT_KEY as JSON: {}", e)
-                })?;
+            let sa_key: ServiceAccountKey = serde_json::from_str(sa_key_raw)
+                .map_err(|e| anyhow!("failed to parse GCP_SERVICE_ACCOUNT_KEY as JSON: {}", e))?;
 
             let token_endpoint = sa_key
                 .token_uri
@@ -515,18 +506,14 @@ mod tests {
 
     #[test]
     fn gcp_observer_missing_project_id_errors() {
-        let config = HashMap::from([
-            ("GCP_ACCESS_TOKEN".to_string(), "token".to_string()),
-        ]);
+        let config = HashMap::from([("GCP_ACCESS_TOKEN".to_string(), "token".to_string())]);
         let err = GcpIamPolicyObserver.observe(&config).unwrap_err();
         assert!(err.to_string().contains("GCP_PROJECT_ID"));
     }
 
     #[test]
     fn gcp_observer_missing_both_key_and_token_errors() {
-        let config = HashMap::from([
-            ("GCP_PROJECT_ID".to_string(), "proj".to_string()),
-        ]);
+        let config = HashMap::from([("GCP_PROJECT_ID".to_string(), "proj".to_string())]);
         let err = GcpIamPolicyObserver.observe(&config).unwrap_err();
         assert!(err.to_string().contains("GCP_SERVICE_ACCOUNT_KEY"));
     }
@@ -669,7 +656,10 @@ ov1H0cUpiPKA7JNquiJ6sWJg
             .findings
             .iter()
             .any(|f| f.title == "Overly Permissive IAM Binding"));
-        assert!(ev.findings.iter().any(|f| f.description.contains("roles/owner")));
+        assert!(ev
+            .findings
+            .iter()
+            .any(|f| f.description.contains("roles/owner")));
     }
 
     #[test]
