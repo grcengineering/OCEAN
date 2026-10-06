@@ -41,6 +41,7 @@
           { "context": "SAST (Semgrep)" },
           { "context": "opengrep" },
           { "context": "trufflehog" },
+          { "context": "gitleaks" },
           { "context": "trivy" },
           { "context": "osv-scanner / osv-scan" }
         ]

@@ -83,9 +83,9 @@ repo config is applied either way, and restoring it would not unblock anything.)
 
 Two consequences here:
 
-1. Turning gitleaks off in `.sscsb/config.toml` silences it on commit but not on
-   push, so this repository cannot actually reach "TruffleHog only" on a machine
-   that has gitleaks installed until sscsb is fixed.
+1. sscsb 0.4.0 runs gitleaks at push whenever it is installed, whatever
+   `.sscsb/config.toml` says (fixed in p4gs/sscs-bootstrapper#77). Gitleaks is
+   enabled here anyway, so the toggle bug no longer changes what runs.
 2. When the pushed branch does not yet exist on the remote, `remote_sha` is the
    zero sha and the scan range collapses to `--log-opts=<local_sha>` — the branch's
    ENTIRE history rather than the commits being pushed. On this repository that
@@ -93,8 +93,7 @@ Two consequences here:
    `main` for months: Go file-path strings (`ocean-ed25519.key`) from the
    implementation deleted in `81a7e3f`, `Authorization:` header examples in
    `docs/quickstart.md`, a research note, and the masking helper in
-   `src/harden/mod.rs`. TruffleHog over the identical range reports nothing, which is
-   the whole argument for preferring it. Over the range actually being pushed
+   `src/harden/mod.rs`. TruffleHog over the identical range reports nothing. Over the range actually being pushed
    (`f565d53..HEAD`) BOTH scanners report nothing — the findings are an artifact of
    the range, not of the change.
 
@@ -117,5 +116,5 @@ default branch when the remote ref does not exist yet.
   keys in that gap. The two tools are complementary, not redundant.
 - **SAST runs three engines on purpose.** CodeQL (interprocedural taint tracking over a
   compiled database), OpenGrep, and Semgrep model different vulnerability classes;
-  CodeQL surfaces findings an OpenGrep default ruleset does not express at all. This is
-  not redundancy of the kind gitleaks was.
+  CodeQL surfaces findings an OpenGrep default ruleset does not express at all. Like the
+  two secret scanners, they are complementary rather than redundant.

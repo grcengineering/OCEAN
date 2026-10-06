@@ -173,7 +173,8 @@ jobs:
   # a strictly stronger configuration: a newer pinned release and
   # `--results=verified,unknown` instead of `--only-verified`, so unvalidatable
   # candidates are reported rather than dropped. The weaker duplicate that used to
-  # sit here was removed on 2026-09-12 — one control, one scanner, the strong one.
+  # sit here was removed on 2026-09-12. secrets-scan.yml runs TruffleHog and
+  # Gitleaks side by side; only the duplicate TruffleHog job is gone from here.
   # -------------------------------------------------------------------------
 
   # -------------------------------------------------------------------------
