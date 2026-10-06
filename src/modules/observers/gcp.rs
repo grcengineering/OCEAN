@@ -548,67 +548,80 @@ mod tests {
     // These tests prove the `ring`-based replacement actually produces a
     // valid RS256 signature, not just that it compiles and runs.
 
-    /// A 2048-bit PKCS#8 RSA key generated solely for this test fixture via
-    /// `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048
-    /// -pkeyopt rsa_keygen_pubexp:65537`. Not used anywhere outside this
-    /// test module. `pem_to_der` only strips lines starting with `-----`
-    /// (it does not care what text is between the dashes), so this uses a
-    /// non-standard "TEST FIXTURE" armor label rather than the standard PEM
-    /// label real keys ship with -- same parsing, but nothing here can be
-    /// mistaken for (or pattern-matched as) real credential material.
-    const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN TEST FIXTURE-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDB2NvM/M8GWdsM
-J+5GDIU2j2PUf1Y+mLpqJTGOkMXZPr2nHIHBpD01zTybfgvNjO5dgY2hjK8h/Xg0
-02aTn/oP/E3l4CmxtiBHFXGMmN5hhOEaJ/6ytp/oaEkVdReyCL7La9RKMPVTnX6o
-uklLFmvZDARleyl0yOc2eQY3J5MDvhdFs0aYq2DpIYUktdlfkE9s9oFbBmNNkN8v
-+yU2OD5dTg9hjwOce/dYIqxdHWaYtiKPHcOQTwKmEcHiiW3ZrRTGRKEZymkDSGwt
-I1HKAjWSjt5GO+v/eq+wZI5o4vSBbTOcSdnmPp2lt7F/4jA8lhINCWLSJ0R/xL3l
-jWsuPNQdAgMBAAECggEBAJNnPwTqfNacf2gH+TVFEgtCECynQ8LHyoEqlTuOtRQU
-lIy9raG9LVp7HYoz1+/PKfbqq/NbklUrdDvfQRIixTlgpy+VPL9I+dRz5ut91ySa
-sb19Cj2Fh6Vnn6N0bbdQ1RzEeyKLhhG2InlVZqR1gT8D11f/xq9qkf8nGmXYbv+Z
-OTFOnZ+YdXdLBXe3C4ikKUqsWKR9VoVZwAMOBcfVAjTz1jNciMTtGAdTG8CeezOE
-/JhnMTjh/zsVKDToGixDQw8uqQg59K5SKR7h/TDPsOe8llbkzvg9D7a7GVgNU/X5
-rFzjKIUZiUBj8zFqvw6xlyhIbY/bg03BAneXePO1+TUCgYEA+IDDlCGQEqFAG3Aj
-a3x3e26j8uYbo7BYsj5GTW/+LdvRcMc4jjtrJ7sacGsI1rGhn7+ps/6om9WtnuMm
-1N9rVfomIKC2U3+eVAPeSK5tpLjah3UYUZeMb6asAs2gRsp/H9kxUJf9fjbL8e2v
-lkxVhD2ujeEZQSj7yTt46oMOFzcCgYEAx7H6EFjcIEfY4bS2k6KRcv+VOOLeT9c+
-u8x1TLPOiaAD9keEGYM/ZfME1pb+7mwtdeeCw8M3H9dr8YIEKNDDb6+dmraNa1ii
-DDJwRd5eeFRcr9pvqqyptUJXYSdokZPzAHWt5sLLzvP6KNx+Y7SWmUF5baQk10CX
-fFlGsWbpsUsCgYA3ZuWzmcP4E1EqjNaouQgeUa1lkt2oocE0g+PCkexWJwLLpO67
-7w1Vv0YGuCYxT0rcRau9AFJw47Ogj73xiZnxgiKL9aiQdwxCaNZe19yD895sgrOY
-RTQ/FCaXPWa1QaIT5KU09Z3DTM4tMrOJy5zpLaND6GJr/4oa9BJiHjO/AwKBgB2s
-4hdJzTRy2NT5sOQRlYG8X2V7uUOuHeF0ib3jPn8PK2eOyx+rdGFnEsH84Fd39e1+
-gN0shmWR8rWJ96pFE7XmKAqUtEFOg45CdJK9b9Z72uY7FLsNO473E9sZKx3vGX5o
-/nW7XuQbN4KY+aNBc9vEchIMAXmHXLua3LmCLJovAoGBAOY5x7W2NsoYUFp5Jpbe
-pjRr6H0dqHhhkzdGHbtthF+I/hW7ZHV5ge7+SymWhooBlFObdOWN0mVWcJxMgRPH
-0B/nQ+EcgFNh2Ansrxd6+Hf3TZ0rzaxL0VYIDeA+TH0KjIl3/ulf2p2TgGG+Qg/c
-ov1H0cUpiPKA7JNquiJ6sWJg
------END TEST FIXTURE-----
-";
+    /// A throwaway 2048-bit RSA key pair, generated once per test run with the
+    /// `openssl` CLI rather than checked in, so the repository stores no private
+    /// key that secret scanners would have to be told to ignore. `ring` cannot
+    /// generate RSA keys, and the `rsa` crate is what `sign_rs256` exists to
+    /// avoid. Returns the PKCS#8 PEM private key and the matching public key as
+    /// ASN.1 `RSAPublicKey` DER, the form `ring::signature::UnparsedPublicKey`
+    /// expects for `RSA_PKCS1_*` verification. The public half is derived by
+    /// `openssl`, independently of the code under test. Panics if `openssl` is
+    /// missing, so these tests fail loudly instead of silently skipping.
+    fn test_rsa_keypair() -> &'static (String, Vec<u8>) {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        use std::sync::OnceLock;
 
-    /// The matching public key, as an ASN.1 `RSAPublicKey` DER blob
-    /// (base64), which is the form `ring::signature::UnparsedPublicKey`
-    /// expects for `RSA_PKCS1_*` verification. Derived from the key above
-    /// via `openssl rsa -pubin -RSAPublicKey_out -outform DER`.
-    const TEST_PUBLIC_KEY_RSAPUB_DER_B64: &str = "MIIBCgKCAQEAwdjbzPzPBlnbDCfuRgyFNo9j1H9WPpi6aiUxjpDF2T69pxyBwaQ9Nc08m34LzYzuXYGNoYyvIf14NNNmk5/6D/xN5eApsbYgRxVxjJjeYYThGif+sraf6GhJFXUXsgi+y2vUSjD1U51+qLpJSxZr2QwEZXspdMjnNnkGNyeTA74XRbNGmKtg6SGFJLXZX5BPbPaBWwZjTZDfL/slNjg+XU4PYY8DnHv3WCKsXR1mmLYijx3DkE8CphHB4olt2a0UxkShGcppA0hsLSNRygI1ko7eRjvr/3qvsGSOaOL0gW0znEnZ5j6dpbexf+IwPJYSDQli0idEf8S95Y1rLjzUHQIDAQAB";
+        static KEYPAIR: OnceLock<(String, Vec<u8>)> = OnceLock::new();
+        KEYPAIR.get_or_init(|| {
+            let generated = Command::new("openssl")
+                .args([
+                    "genpkey",
+                    "-algorithm",
+                    "RSA",
+                    "-pkeyopt",
+                    "rsa_keygen_bits:2048",
+                    "-pkeyopt",
+                    "rsa_keygen_pubexp:65537",
+                ])
+                .output()
+                .expect("the RS256 tests need the `openssl` CLI to generate a throwaway key");
+            assert!(
+                generated.status.success(),
+                "openssl genpkey failed: {}",
+                String::from_utf8_lossy(&generated.stderr)
+            );
+            let private_pem =
+                String::from_utf8(generated.stdout).expect("openssl genpkey emits ASCII PEM");
+
+            let mut child = Command::new("openssl")
+                .args(["rsa", "-RSAPublicKey_out", "-outform", "DER"])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("the RS256 tests need the `openssl` CLI to derive the public key");
+            child
+                .stdin
+                .take()
+                .expect("stdin is piped")
+                .write_all(private_pem.as_bytes())
+                .expect("writing the key to openssl must succeed");
+            let derived = child
+                .wait_with_output()
+                .expect("openssl rsa must run to completion");
+            assert!(
+                derived.status.success(),
+                "openssl rsa failed: {}",
+                String::from_utf8_lossy(&derived.stderr)
+            );
+            (private_pem, derived.stdout)
+        })
+    }
 
     #[test]
     fn sign_rs256_produces_a_signature_verifiable_against_the_matching_public_key() {
-        use base64::engine::general_purpose::STANDARD;
-        use base64::Engine;
         use ring::signature::{UnparsedPublicKey, RSA_PKCS1_2048_8192_SHA256};
 
+        let (private_pem, public_der) = test_rsa_keypair();
         let message = b"header.claims";
-        let signature = sign_rs256(TEST_PRIVATE_KEY_PEM, message)
-            .expect("signing with a valid PKCS#8 key must succeed");
+        let signature =
+            sign_rs256(private_pem, message).expect("signing with a valid PKCS#8 key must succeed");
 
         // A 2048-bit RSA PKCS#1v1.5 signature is exactly 256 bytes.
         assert_eq!(signature.len(), 256);
 
-        let pub_der = STANDARD
-            .decode(TEST_PUBLIC_KEY_RSAPUB_DER_B64)
-            .expect("fixture public key must be valid base64");
-        let public_key = UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA256, &pub_der);
+        let public_key = UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA256, public_der);
 
         public_key.verify(message, &signature).expect(
             "signature produced by sign_rs256 must cryptographically verify \
@@ -618,14 +631,12 @@ ov1H0cUpiPKA7JNquiJ6sWJg
 
     #[test]
     fn sign_rs256_signature_does_not_verify_against_a_tampered_message() {
-        use base64::engine::general_purpose::STANDARD;
-        use base64::Engine;
         use ring::signature::{UnparsedPublicKey, RSA_PKCS1_2048_8192_SHA256};
 
-        let signature = sign_rs256(TEST_PRIVATE_KEY_PEM, b"original message").unwrap();
+        let (private_pem, public_der) = test_rsa_keypair();
+        let signature = sign_rs256(private_pem, b"original message").unwrap();
 
-        let pub_der = STANDARD.decode(TEST_PUBLIC_KEY_RSAPUB_DER_B64).unwrap();
-        let public_key = UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA256, &pub_der);
+        let public_key = UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA256, public_der);
 
         assert!(public_key.verify(b"tampered message", &signature).is_err());
     }
@@ -638,9 +649,8 @@ ov1H0cUpiPKA7JNquiJ6sWJg
 
     #[test]
     fn sign_rs256_rejects_base64_that_is_not_a_pkcs8_key() {
-        // Valid base64, but not a PKCS#8-encoded RSA private key. Uses the
-        // same non-standard "TEST FIXTURE" armor label as above.
-        let bogus_pem = "-----BEGIN TEST FIXTURE-----\nQUJDRA==\n-----END TEST FIXTURE-----\n";
+        // Valid base64 ("ABCD"), but not a PKCS#8-encoded RSA private key.
+        let bogus_pem = "-----BEGIN PRIVATE KEY-----\nQUJDRA==\n-----END PRIVATE KEY-----\n";
         let err = sign_rs256(bogus_pem, b"message").unwrap_err();
         assert!(err
             .to_string()
