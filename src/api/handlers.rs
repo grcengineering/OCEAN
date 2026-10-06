@@ -13,7 +13,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::module::Registry;
-use crate::storage::{EvidenceQuery, SqliteStore, Store};
+use crate::storage::{EvidenceQuery, Store};
 
 // ---------------------------------------------------------------------------
 // Application state
@@ -22,7 +22,7 @@ use crate::storage::{EvidenceQuery, SqliteStore, Store};
 /// Shared state injected into every axum handler.
 #[derive(Clone)]
 pub struct AppState {
-    pub store: Arc<SqliteStore>,
+    pub store: Arc<dyn Store>,
     pub registry: Arc<Registry>,
     /// When `Some`, all requests must carry `Authorization: Bearer <token>`.
     pub auth_token: Option<String>,
@@ -341,7 +341,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::modules::{register_all_observers, register_all_testers};
-    use crate::storage::SqliteStore;
+    use crate::storage::{SqliteStore, Store};
 
     fn make_state() -> AppState {
         // Leaked intentionally: `AppState` doesn't carry the `TempDir` guard,
@@ -354,7 +354,7 @@ mod tests {
             .to_str()
             .unwrap()
             .to_string();
-        let store = Arc::new(SqliteStore::open(&path).unwrap());
+        let store: Arc<dyn Store> = Arc::new(SqliteStore::open(&path).unwrap());
         let registry = Arc::new(Registry::new());
         register_all_observers(&registry);
         register_all_testers(&registry);
@@ -529,7 +529,7 @@ mod tests {
             .unwrap()
             .to_string();
         let state = AppState {
-            store: Arc::new(SqliteStore::open(&path).unwrap()),
+            store: Arc::new(SqliteStore::open(&path).unwrap()) as Arc<dyn Store>,
             registry: Arc::new(Registry::new()),
             auth_token: Some("secret-token".to_string()),
         };
@@ -547,7 +547,7 @@ mod tests {
             .unwrap()
             .to_string();
         let state = AppState {
-            store: Arc::new(SqliteStore::open(&path).unwrap()),
+            store: Arc::new(SqliteStore::open(&path).unwrap()) as Arc<dyn Store>,
             registry: Arc::new(Registry::new()),
             auth_token: Some("my-token".to_string()),
         };

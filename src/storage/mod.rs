@@ -1,7 +1,10 @@
 // Storage — Store trait + SqliteStore implementation.
 pub mod sqlite;
+pub mod postgres;
 
 pub use sqlite::SqliteStore;
+#[cfg(feature = "postgres")]
+pub use postgres::PostgresStore;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -54,6 +57,25 @@ pub trait Store: Send + Sync {
     // --- Lifecycle ---
     fn prune_evidence(&self, older_than: DateTime<Utc>) -> Result<u64>;
     fn close(&self) -> Result<()>;
+}
+
+/// Open the configured storage backend.
+///
+/// - If `OCEAN_POSTGRES_URL` is set (and the `postgres` feature is enabled),
+///   returns a [`PostgresStore`] connected to that URL.
+/// - Otherwise returns a [`SqliteStore`] at the given `sqlite_path`.
+pub fn open_store(sqlite_path: &str) -> Result<Box<dyn Store>> {
+    #[cfg(feature = "postgres")]
+    if let Ok(url) = std::env::var("OCEAN_POSTGRES_URL") {
+        if !url.is_empty() {
+            let pool_size: u32 = std::env::var("OCEAN_POSTGRES_POOL_SIZE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(10);
+            return Ok(Box::new(PostgresStore::connect(&url, pool_size)?));
+        }
+    }
+    Ok(Box::new(SqliteStore::open(sqlite_path)?))
 }
 
 #[cfg(test)]
