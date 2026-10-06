@@ -159,10 +159,7 @@ impl Tester for GcpPublicBucketTester {
                     raw_data: raw,
                     findings: vec![Finding {
                         title: "GCS Public Access Check Failed".to_string(),
-                        description: format!(
-                            "Could not connect to bucket {}: {}",
-                            bucket_name, e
-                        ),
+                        description: format!("Could not connect to bucket {}: {}", bucket_name, e),
                         severity_id: 1,
                     }],
                     test_transcript: Some(transcript),
@@ -271,10 +268,7 @@ fn classify_response(
         }
         other => {
             recorder.record_observation(
-                format!(
-                    "unauthenticated request returned unexpected HTTP {}",
-                    other
-                ),
+                format!("unauthenticated request returned unexpected HTTP {}", other),
                 false,
             );
             (
@@ -473,14 +467,8 @@ mod tests {
     fn gcp_tester_unique_ids() {
         let srv1 = mock_server(403, "D");
         let srv2 = mock_server(403, "D");
-        let id1 = GcpPublicBucketTester
-            .test(&base_config(&srv1))
-            .unwrap()[0]
-            .id;
-        let id2 = GcpPublicBucketTester
-            .test(&base_config(&srv2))
-            .unwrap()[0]
-            .id;
+        let id1 = GcpPublicBucketTester.test(&base_config(&srv1)).unwrap()[0].id;
+        let id2 = GcpPublicBucketTester.test(&base_config(&srv2)).unwrap()[0].id;
         assert_ne!(id1, id2);
     }
 }
