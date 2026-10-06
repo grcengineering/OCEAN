@@ -22,7 +22,7 @@ skipped" and changes nothing.
 |------|-----|
 | `pull_request` (0 approvals required) | Nothing reaches `main` without a pull request, so every change has a reviewable record and CI runs against it before merge. 0 approvals is the solo-safe setting — a maintainer cannot approve their own PR, so requiring 1 would deadlock a single-maintainer repo. Raise it to 1 as soon as there is a second maintainer. |
 | `required_signatures` | Every commit that lands on `main` is cryptographically attributable. |
-| `required_status_checks` | The 13 checks listed must pass before merge. They were taken from checks that actually ran on a real pull request (`34117a7`), not guessed. `Behavioral Analysis (Socket.dev)` is deliberately excluded because it is conditional and reports `skipped`; `Test (nightly)` because a nightly-toolchain regression is not a reason to block a merge. |
+| `required_status_checks` | The 14 checks listed must pass before merge. Thirteen were taken from checks that actually ran on a real pull request (`34117a7`), not guessed; `gitleaks` was added when Gitleaks was kept alongside TruffleHog, and it reported green on this branch at `8daf695`. `Behavioral Analysis (Socket.dev)` is deliberately excluded because it is conditional and reports `skipped`; `Test (nightly)` because a nightly-toolchain regression is not a reason to block a merge. |
 
 `allowed_merge_methods` is `squash` and `rebase`, and that is not cosmetic. With
 `required_signatures` active, GitHub signs the squashed or rebased commit with its
