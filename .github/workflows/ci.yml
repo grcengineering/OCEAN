@@ -171,8 +171,8 @@ jobs:
   # That workflow runs the same tool (TruffleHog) on a SUPERSET of these triggers
   # (push to main + every pull_request, vs. pull_request targeting main here) with
   # a strictly stronger configuration: a newer pinned release and
-  # `--results=verified,unknown` instead of `--only-verified`, so unvalidatable
-  # candidates are reported rather than dropped. The weaker duplicate that used to
+  # `--results=verified,unknown` instead of `--only-verified`, so candidates
+  # whose verification errors out are reported rather than dropped. The weaker duplicate that used to
   # sit here was removed on 2026-09-12. secrets-scan.yml runs TruffleHog and
   # Gitleaks side by side; only the duplicate TruffleHog job is gone from here.
   # -------------------------------------------------------------------------
