@@ -1,8 +1,10 @@
 # sscsb: CodeQL — deep interprocedural analysis on PRs and the default branch.
 #
-# Two languages are analysed, and both are real source in this repo:
+# Three languages are analysed, and all are real source in this repo:
 #   rust    — the OCEAN crate itself (build-mode: none, CodeQL's buildless Rust extractor)
 #   actions — the workflows under .github/workflows (every sscsb-bootstrapped repo has these)
+#   python  — scripts/hth_parity.py; GitHub's default setup scanned it, and this advanced
+#             config replaces default setup, so dropping python would shrink coverage.
 #
 # CodeQL is kept ALONGSIDE OpenGrep (sast-opengrep.yml), not instead of it: they
 # model different vulnerability classes. OpenGrep is pattern/dataflow matching over
@@ -33,6 +35,8 @@ jobs:
           - language: rust
             build-mode: none
           - language: actions
+            build-mode: none
+          - language: python
             build-mode: none
     steps:
       - name: Harden runner
