@@ -15,17 +15,11 @@ github_repo = "grcengineering/ocean"
 
 # ── Phase 1 — Local source integrity ──
 
-# Secret scanning hooks: TruffleHog blocks secrets at pre-commit and pre-push.
-# gitleaks deliberately OFF (2026-09-12): TruffleHog is the single strongest
-# option for this control because it VALIDATES candidate credentials against the
-# issuing provider (--results=verified,unknown), which gitleaks cannot do. Running
-# both produced two entropy-regex engines where only one of them can tell a live
-# key from a fixture, at the cost of a second scan and a second allowlist file to
-# keep honest. One control, one tool.
+# Secret scanning hooks: TruffleHog + Gitleaks block secrets at pre-commit and pre-push
 [controls.secrets]
 enabled = true
 trufflehog = true
-gitleaks = false
+gitleaks = true
 pre_push_range_scan = true
 
 # CommitSigningGuard: human-only signing enforced on protected branches at pre-push.

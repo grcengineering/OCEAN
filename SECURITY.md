@@ -70,8 +70,8 @@ receive security fixes; there are no maintained release branches yet.
 These are enforced in CI and by the local git hooks, not aspirational:
 
 - **Secret scanning** — TruffleHog, with provider validation
-  (`--results=verified,unknown`), at pre-commit, pre-push, and on every pull request,
-  plus GitHub secret scanning with push protection.
+  (`--results=verified,unknown`), and Gitleaks, at pre-commit, pre-push, and on every
+  pull request, plus GitHub secret scanning with push protection.
 - **SAST** — CodeQL (interprocedural taint analysis), OpenGrep, and Semgrep. They
   model different vulnerability classes and are run together deliberately.
 - **Dependencies** — `cargo audit`, `cargo deny`, `cargo vet`, Trivy, OSV-Scanner,

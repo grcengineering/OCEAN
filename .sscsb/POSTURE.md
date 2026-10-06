@@ -108,12 +108,13 @@ default branch when the remote ref does not exist yet.
 
 ## Deliberate tool choices
 
-- **Secret scanning is TruffleHog only.** gitleaks was removed on 2026-09-12 (config,
-  CI job, and `.gitleaks.toml`). TruffleHog *validates* a candidate against the issuing
-  provider, so `verified` means a live credential; gitleaks matches entropy and regex
-  and cannot make that distinction. Running both bought a second scan and a second
-  allowlist file to keep honest, for no detection the stronger tool did not already
-  make. One control, one scanner.
+- **Secret scanning runs TruffleHog and Gitleaks together.** gitleaks was removed on
+  2026-09-12 and restored on 2026-10-06 (owner decision). TruffleHog *validates* a
+  candidate against the issuing provider, so `verified` means a live credential, and
+  that stays the stronger signal where it applies. But `--results=verified,unknown`
+  drops anything TruffleHog cannot validate, and gitleaks' entropy/regex matching
+  catches generic secrets (e.g. a bare `api_key = "..."` literal) and unverifiable
+  keys in that gap. The two tools are complementary, not redundant.
 - **SAST runs three engines on purpose.** CodeQL (interprocedural taint tracking over a
   compiled database), OpenGrep, and Semgrep model different vulnerability classes;
   CodeQL surfaces findings an OpenGrep default ruleset does not express at all. This is
